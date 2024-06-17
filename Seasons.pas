@@ -6,7 +6,7 @@ unit Seasons;
 var
   slBaseRefs, slOld, slNew, slFull, slFall, slWinter, slSpring, slSummer, slOutdoorNonPrecombinedOld, slOutdoorNonPrecombinedFull, slOutdoorOppositeWinterDecals, slOutdoorAutumnDecals, slOutdoorNonPrecombinedSwaps, slSkipEditorIDs : TStringList;
   SeasonsMainFile, SeasonsPatch, ICurrentPlugin: IInterface;
-  
+
 
 const
   sSeasonsFileName = 'Seasons.esm';
@@ -35,7 +35,7 @@ procedure Shuffle(Strings: TStrings);
 var
   i: Integer;
 begin
-  for i := Strings.Count - 1 downto 1 do 
+  for i := Strings.Count - 1 downto 1 do
     Strings.Exchange(i, Random(i + 1));
 end;
 
@@ -44,12 +44,12 @@ var
   i, n, C: Integer;
   formLists, formids: IInterface;
   f, editorID, s: String;
-  
+
 begin
   slBaseRefs := TStringList.Create;
   slBaseRefs.Sorted := true;
   slBaseRefs.Duplicates := dupIgnore;
-  
+
   slOld := TStringList.Create;
   slNew := TStringList.Create;
   slFull := TStringList.Create;
@@ -63,7 +63,7 @@ begin
   slOutdoorAutumnDecals := TStringList.Create;
   slSkipEditorIDs := TStringList.Create;
   slOutdoorNonPrecombinedSwaps := TStringList.Create;
-  
+
   //Skip these worldspaces
   slSkipEditorIDs.add('DiamondCityFX');
   slSkipEditorIDs.add('SanctuaryHillsWorld');
@@ -71,7 +71,7 @@ begin
   slSkipEditorIDs.add('TestMadCoast');
   slSkipEditorIDs.add('DLC03VRWorldspace');
   slSkipEditorIDs.add('TestMadWorld');
-  
+
   //Skip these interior cells
   slSkipEditorIDs.add('kgSIMIndRevStaging');
   slSkipEditorIDs.add('PackInTreeThicket01StorageCell');
@@ -80,7 +80,7 @@ begin
   slSkipEditorIDs.add('NavMeshGenCell');
   slSkipEditorIDs.add('PackInTreeMapleForestsmall1CrowMarkerPackinStorageCell');
   slSkipEditorIDs.add('PackInDirtSlope01Forest01StorageCell');
-  
+
   for i := 0 to Pred(FileCount) do begin
     f := GetFileName(FileByIndex(i));
     if SameText(f, sSeasonsFileName) then
@@ -88,27 +88,27 @@ begin
     else if SameText(f, sSeasonsPatchPluginName) then
       SeasonsPatch := FileByIndex(i);
   end;
-  
+
   ICurrentPlugin := SeasonsMainFile;
-  
+
   if not Assigned(SeasonsMainFile) then begin
     MessageDlg('Seasons.esm is not loaded: ' + SeasonsMainFile, mtError, [mbOk], 0);
     Result := 1;
   end;
-  
+
   if not Assigned(SeasonsPatch) then
     SeasonsPatch := AddNewFileName(sSeasonsPatchPluginName, False);
-    
+
   AddMasterIfMissing(SeasonsPatch, 'Fallout4.esm');
   AddMasterIfMissing(SeasonsPatch, sSeasonsFileName);
-  
+
   formLists := GroupBySignature(SeasonsMainFile, 'FLST');
   if not Assigned(formLists) then begin
     AddMessage('No Formlists found');
     Result := 1;
     Exit;
   end;
-  
+
   for i := 0 to ElementCount(formLists) - 1 do begin
     //AddMessage(Name(ElementByIndex(formLists, i)));
     formids := ElementByName(WinningOverride(ElementByIndex(formLists, i)), 'FormIDs');
@@ -160,7 +160,7 @@ begin
       end;
     end;
   end;
-  
+
 end;
 
 procedure ProcessTXST(e: IInterface; season: String);
@@ -173,7 +173,7 @@ begin
   idx := slOutdoorOppositeWinterDecals.IndexOf(Name(e));
   if idx = -1 then Exit;
   baseRecordId := GetFileName(e) + #9 + ShortName(e);
-  
+
   if Pos(ShortName(e), slBaseRefs.Text) <> 0 then begin
     //AddMessage('Already processed ' + baseRecordId);
     Exit;
@@ -181,13 +181,13 @@ begin
   slBaseRefs.Add(baseRecordId);
   AddMessage(Name(e));
   tlReferences := TList.Create;
-  
+
   //make list of references to work on
   m := MasterOrSelf(e);
   for i := 0 to ReferencedByCount(m) - 1 do begin
     r := ReferencedByIndex(m, i);
     recordId := GetFileName(r) + #9 + Name(r);
-    
+
     if Signature(r) <> 'REFR' then begin
       //AddMessage('Skipping non-reference: ' + recordId);
       continue;
@@ -204,18 +204,18 @@ begin
       //AddMessage('Skipping reference with pre-existing XESP - Enable Parent: ' + recordId);
       continue;
     end;
-    
+
     rCell := LinksTo(ElementByIndex(r, 0));
     if slSkipEditorIDs.IndexOf(GetElementEditValues(rCell, 'EDID')) <> -1 then begin
       //AddMessage('Skipped reference in blacklisted cell: ' + recordId);
       continue;
     end;
-    
+
     if (GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1) then begin
       //AddMessage('Skipped reference in interior cell: ' + recordId);
       continue;
     end;
-    
+
     wrld := LinksTo(ElementByIndex(rCell, 0));
     if slSkipEditorIDs.IndexOf(GetElementEditValues(wrld, 'EDID')) <> -1 then begin
       //AddMessage('Skipped reference in blacklisted world: ' + recordId);
@@ -223,18 +223,18 @@ begin
     end;
     tlReferences.Add(r);
   end;
-  
+
   //process the references
   for i := 0 to tlReferences.Count - 1 do begin
-    
+
     r := ObjectToElement(tlReferences[i]);
     recordId := GetFileName(r) + #9 + Name(r);
-    
+
     ICurrentPlugin := RefMastersDeterminePlugin(r);
     n := wbCopyElementToFile(r, ICurrentPlugin, False, True);
 
     Add(n, 'XESP', True);
-    
+
     if season = 'winter' then begin
       sSeason := '000995D6'; //winter
       SetElementEditValues(n, 'XESP\Reference', sSeason);
@@ -245,7 +245,7 @@ begin
       SetElementEditValues(n, 'XESP\Reference', sSeason);
     end;
   end;
-  
+
   tlReferences.Free
 end;
 
@@ -262,7 +262,7 @@ var
 begin
   if Pos(Signature(e), sReferenceSignatures) = 0 then
     Exit;
-    
+
   if Signature(e) = 'TXST' then begin
     idx := slOutdoorOppositeWinterDecals.IndexOf(Name(e));
     if idx > -1 then
@@ -272,7 +272,7 @@ begin
       ProcessTXST(e, 'autumn');
     Exit;
   End;
-  
+
   //AddMessage(Name(e));
   idx := slOld.IndexOf(Name(e));
   OutDoorOnly := false;
@@ -284,9 +284,9 @@ begin
     OutDoorOnly := true;
     NotPrecombinedOnly := true;
   end;
-  
+
   baseRecordId := GetFileName(e) + #9 + ShortName(e);
-  
+
   if Pos(ShortName(e), slBaseRefs.Text) <> 0 then begin
     //AddMessage('Already processed ' + baseRecordId);
     Exit;
@@ -295,12 +295,12 @@ begin
   AddMessage(Name(e));
   tlReferences := TList.Create;
   tlCells := TList.Create;
-  
+
   m := MasterOrSelf(e);
   for i := 0 to ReferencedByCount(m) - 1 do begin
     r := ReferencedByIndex(m, i);
     recordId := GetFileName(r) + #9 + Name(r);
-    
+
     if Signature(r) <> 'REFR' then begin
       //AddMessage('Skipping non-reference: ' + recordId);
       continue;
@@ -317,18 +317,18 @@ begin
       //AddMessage('Skipping reference with pre-existing XESP - Enable Parent: ' + recordId);
       continue;
     end;
-    
+
     rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
     if slSkipEditorIDs.IndexOf(GetElementEditValues(rCell, 'EDID')) <> -1 then begin
       //AddMessage('Skipped reference in blacklisted cell: ' + recordId);
       continue;
     end;
-    
+
     if (GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1) and OutDoorOnly then begin
       AddMessage('Skipped reference in interior cell: ' + recordId);
       continue;
     end;
-    
+
     wrld := LinksTo(ElementByIndex(rCell, 0));
     if slSkipEditorIDs.IndexOf(GetElementEditValues(wrld, 'EDID')) <> -1 then begin
       //AddMessage('Skipped reference in blacklisted world: ' + recordId);
@@ -336,18 +336,18 @@ begin
     end;
 
     tlReferences.Add(r);
-    
+
     if tlCells.IndexOf(rCell) < 0 then begin
       tlCells.Add(rCell);
       ICellPlugin := RefMastersDeterminePlugin(rCell);
       wbCopyElementToFile(rCell, ICellPlugin, False, True);
     end;
   end;
-  
+
   countPrecombined := 0;
   countNotPrecombined := 0;
   for i := 0 to tlReferences.Count - 1 do begin
-    
+
     r := ObjectToElement(tlReferences[i]);
     ICurrentPlugin := RefMastersDeterminePlugin(r);
     rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
@@ -356,7 +356,7 @@ begin
     except
       on E : Exception do ICurrentPlugin := RefMastersDeterminePlugin(rCell);
     end;
-    
+
     recordId := GetFileName(r) + #9 + Name(r);
     if IsRefPrecombined(r) then
       begin
@@ -414,7 +414,7 @@ begin
   end;
   Add(r, 'XESP', True);
   SetElementEditValues(r, 'XESP\Reference', sSeason);
-  
+
   if s = 0 then Shuffle(slSpring);
   if s = 1 then Shuffle(slSummer);
   if s = 2 then Shuffle(slFall);
