@@ -7,13 +7,15 @@ var
   slBaseRefs, slOld, slNew, slFull, slFall, slWinter, slSpring, slSummer, slOutdoorNonPrecombinedOld, slOutdoorNonPrecombinedFull, slOutdoorOppositeWinterDecals, slOutdoorAutumnDecals, slOutdoorNonPrecombinedSwaps, slSkipEditorIDs : TStringList;
   SeasonsMainFile, SeasonsPatch, ICurrentPlugin: IInterface;
 
-
 const
   sSeasonsFileName = 'Seasons.esm';
   sSeasonsPatchPluginName = 'Seasons - Patch.esp';
   sReferenceSignatures = 'STAT,SCOL,TXST';
 
 function IsRefPrecombined(r: IInterface): Boolean;
+{
+  Checks if a reference is precombined.
+}
 var
   i, t, preCombinedRefsCount, rc: Integer;
   c, refs: IInterface;
@@ -32,6 +34,9 @@ begin
 end;
 
 procedure Shuffle(Strings: TStrings);
+{
+  Shuffles the order of strings.
+}
 var
   i: Integer;
 begin
@@ -40,6 +45,9 @@ begin
 end;
 
 function Initialize: Integer;
+{
+    This function is called at the beginning.
+}
 var
   i, n, C: Integer;
   formLists, formids: IInterface;
@@ -164,6 +172,9 @@ begin
 end;
 
 procedure ProcessTXST(e: IInterface; season: String);
+{
+  Process decals.
+}
 var
   m, n, r, rCell, wrld : IInterface;
   i, idx : Integer;
@@ -249,9 +260,10 @@ begin
   tlReferences.Free
 end;
 
-
-
 function Process(e: IInterface): Integer;
+{
+  Called on all selected references.
+}
 var
   b, m, r, n, rCell, wrld, ICellPlugin: IInterface;
   i, idx, s, P, countPrecombined, countNotPrecombined : Integer;
@@ -388,6 +400,9 @@ begin
 end;
 
 function RefMastersDeterminePlugin(r: IInterface): IInterface;
+{
+    Sets the output file to either the ESM file or the ESP file based on the required masters for the given reference.
+}
 begin
   try
     AddRequiredElementMasters(r, SeasonsMainFile, False, True);
@@ -403,6 +418,9 @@ begin
 end;
 
 procedure AssignSeason(r: IInterface; s: Integer);
+{
+  Assign season to reference.
+}
 var
   sSeason, sMaterial : String;
 begin
@@ -430,6 +448,9 @@ begin
 end;
 
 procedure ReplaceBase(r: IInterface; P, idx: integer);
+{
+  Replace Base of reference.
+}
 begin
   Case P of
     0 : SetElementEditValues(r, 'NAME', slFull[idx]);
@@ -439,6 +460,9 @@ begin
 end;
 
 procedure AddSeasonalVersion(r, PluginFile: IInterface; P, idx: Integer);
+{
+  Add seasonal versions.
+}
 var
   season, sMaterial: String;
   n: IInterface;
@@ -453,6 +477,9 @@ begin
 end;
 
 function AddLinkedReference(e: IInterface; keyword, ref: String): Integer;
+{
+  Add a linked reference.
+}
 var
   el, linkedrefs, lref: IInterface;
   i: Integer;
@@ -473,6 +500,9 @@ begin
 end;
 
 function Finalize: integer;
+{
+    This function is called at the end.
+}
 begin
   slBaseRefs.Free;
   slOld.Free;
