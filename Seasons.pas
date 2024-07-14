@@ -12,47 +12,31 @@ const
   sSeasonsPatchPluginName = 'Seasons - Patch.esp';
   sReferenceSignatures = 'STAT,SCOL,TXST';
 
-function IsRefPrecombined(r: IInterface): Boolean;
+function Finalize: integer;
 {
-  Checks if a reference is precombined.
+    This function is called at the end.
 }
-var
-  i, t, preCombinedRefsCount, rc: Integer;
-  c, refs: IInterface;
 begin
-  Result := false;
-  t := ReferencedByCount(r) - 1;
-  if t < 0 then Exit;
-  for i := 0 to t do begin
-    c := ReferencedByIndex(r, i);
-    if Signature(c) <> 'CELL' then continue;
-    if not IsWinningOverride(c) then continue;
-    //AddMessage(ShortName(r) + ' is referenced in ' + Name(c));
-    Result := true;
-    Exit;
-  end;
+  slBaseRefs.Free;
+  slOld.Free;
+  slNew.Free;
+  slFull.Free;
+  slFall.Free;
+  slWinter.Free;
+  slSpring.Free;
+  slSummer.Free;
+  slOutdoorNonPrecombinedOld.Free;
+  slOutdoorNonPrecombinedFull.Free;
+  slOutdoorOppositeWinterDecals.Free;
+  slOutdoorAutumnDecals.Free;
+  slSkipEditorIDs.Free;
+  slOutdoorNonPrecombinedSwaps.Free;
 end;
 
-procedure Shuffle(Strings: TStrings);
+procedure CreateObjects;
 {
-  Shuffles the order of strings.
+    Create objects.
 }
-var
-  i: Integer;
-begin
-  for i := Strings.Count - 1 downto 1 do
-    Strings.Exchange(i, Random(i + 1));
-end;
-
-function Initialize: Integer;
-{
-    This function is called at the beginning.
-}
-var
-  i, n, C: Integer;
-  formLists, formids: IInterface;
-  f, editorID, s: String;
-
 begin
   slBaseRefs := TStringList.Create;
   slBaseRefs.Sorted := true;
@@ -71,7 +55,18 @@ begin
   slOutdoorAutumnDecals := TStringList.Create;
   slSkipEditorIDs := TStringList.Create;
   slOutdoorNonPrecombinedSwaps := TStringList.Create;
+end;
 
+function Initialize: Integer;
+{
+    This function is called at the beginning.
+}
+var
+  i, n, C: Integer;
+  formLists, formids: IInterface;
+  f, editorID, s: String;
+
+begin
   //Skip these worldspaces
   slSkipEditorIDs.add('DiamondCityFX');
   slSkipEditorIDs.add('SanctuaryHillsWorld');
@@ -499,25 +494,36 @@ begin
     end;
 end;
 
-function Finalize: integer;
+function IsRefPrecombined(r: IInterface): Boolean;
 {
-    This function is called at the end.
+  Checks if a reference is precombined.
 }
+var
+  i, t, preCombinedRefsCount, rc: Integer;
+  c, refs: IInterface;
 begin
-  slBaseRefs.Free;
-  slOld.Free;
-  slNew.Free;
-  slFull.Free;
-  slFall.Free;
-  slWinter.Free;
-  slSpring.Free;
-  slSummer.Free;
-  slOutdoorNonPrecombinedOld.Free;
-  slOutdoorNonPrecombinedFull.Free;
-  slOutdoorOppositeWinterDecals.Free;
-  slOutdoorAutumnDecals.Free;
-  slSkipEditorIDs.Free;
-  slOutdoorNonPrecombinedSwaps.Free;
+  Result := false;
+  t := ReferencedByCount(r) - 1;
+  if t < 0 then Exit;
+  for i := 0 to t do begin
+    c := ReferencedByIndex(r, i);
+    if Signature(c) <> 'CELL' then continue;
+    if not IsWinningOverride(c) then continue;
+    //AddMessage(ShortName(r) + ' is referenced in ' + Name(c));
+    Result := true;
+    Exit;
+  end;
+end;
+
+procedure Shuffle(Strings: TStrings);
+{
+  Shuffles the order of strings.
+}
+var
+  i: Integer;
+begin
+  for i := Strings.Count - 1 downto 1 do
+    Strings.Exchange(i, Random(i + 1));
 end;
 
 end.
