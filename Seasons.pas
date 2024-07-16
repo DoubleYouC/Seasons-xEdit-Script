@@ -3,14 +3,23 @@
 }
 unit Seasons;
 
+// ----------------------------------------------------
+//Create variables that will need to be used accross multiple functions/procedures.
+// ----------------------------------------------------
+
 var
   slBaseRefs, slOld, slNew, slFull, slFall, slWinter, slSpring, slSummer, slOutdoorNonPrecombinedOld, slOutdoorNonPrecombinedFull, slOutdoorOppositeWinterDecals, slOutdoorAutumnDecals, slOutdoorNonPrecombinedSwaps, slSkipEditorIDs : TStringList;
-  SeasonsMainFile, SeasonsPatch, ICurrentPlugin: IInterface;
+  SeasonsMainFile, SeasonsPatch, iCurrentPlugin: IInterface;
+  joRules: TJsonObject;
 
 const
   sSeasonsFileName = 'Seasons.esm';
   sSeasonsPatchPluginName = 'Seasons - Patch.esp';
   sReferenceSignatures = 'STAT,SCOL,TXST';
+
+// ----------------------------------------------------
+// Main functions and procedures go immediately below.
+// ----------------------------------------------------
 
 function Finalize: integer;
 {
@@ -31,6 +40,8 @@ begin
   slOutdoorAutumnDecals.Free;
   slSkipEditorIDs.Free;
   slOutdoorNonPrecombinedSwaps.Free;
+
+  Result := 0;
 end;
 
 procedure CreateObjects;
@@ -38,6 +49,9 @@ procedure CreateObjects;
     Create objects.
 }
 begin
+  //TLists
+
+  //TStringLists
   slBaseRefs := TStringList.Create;
   slBaseRefs.Sorted := true;
   slBaseRefs.Duplicates := dupIgnore;
@@ -55,35 +69,68 @@ begin
   slOutdoorAutumnDecals := TStringList.Create;
   slSkipEditorIDs := TStringList.Create;
   slOutdoorNonPrecombinedSwaps := TStringList.Create;
+
+  //TJsonObjects
+  joRules := TJsonObject.Create;
 end;
 
-function Initialize: Integer;
+procedure LoadRules(f: string);
 {
-    This function is called at the beginning.
+  Load JSON rules
 }
 var
-  i, n, C: Integer;
-  formLists, formids: IInterface;
-  f, editorID, s: String;
-
+  sub: TJsonObject;
+  c, a: integer;
+  j, key: string;
+  bFirstRuleJson: Boolean;
 begin
-  //Skip these worldspaces
-  slSkipEditorIDs.add('DiamondCityFX');
-  slSkipEditorIDs.add('SanctuaryHillsWorld');
-  slSkipEditorIDs.add('TestClaraCoast');
-  slSkipEditorIDs.add('TestMadCoast');
-  slSkipEditorIDs.add('DLC03VRWorldspace');
-  slSkipEditorIDs.add('TestMadWorld');
+  j := 'Seasons\' + TrimLeftChars(f, 4) + '.json';
+  if ResourceExists(j) then begin
+    AddMessage('Loaded Rule File: ' + j);
+    if bFirstRuleJson then begin
+      bFirstRuleJson := False;
+      joRules.LoadFromResource(j);
+    end
+    else begin
+      sub := TJsonObject.Create;
+      sub.LoadFromResource(j);
+      for c := 0 to Pred(sub.Count) do begin
+        key := sub.Names[c];
+        for a := 0 to Pred(sub.A[key].Count) do joRules.A[key].Add(sub.A[key].S[a]);
+      end;
+      sub.Free;
+    end;
+  end;
+end;
 
-  //Skip these interior cells
-  slSkipEditorIDs.add('kgSIMIndRevStaging');
-  slSkipEditorIDs.add('PackInTreeThicket01StorageCell');
-  slSkipEditorIDs.add('PackInTreeMapleForest01CrowMarkerPackinStorageCell');
-  slSkipEditorIDs.add('COPY0073');
-  slSkipEditorIDs.add('NavMeshGenCell');
-  slSkipEditorIDs.add('PackInTreeMapleForestsmall1CrowMarkerPackinStorageCell');
-  slSkipEditorIDs.add('PackInDirtSlope01Forest01StorageCell');
+function MainProgram: Boolean;
+{
+  Main program.
+}
+begin
+  CreateObjects;
 
+  if not LoadPlugins then begin
+    Result := False;
+    Exit;
+  end;
+
+  if not LoadFormLists then begin
+    Result := False;
+    Exit;
+  end;
+
+  Result := True;
+end;
+
+function LoadPlugins: boolean;
+{
+  Load plugins
+}
+var
+  i: integer;
+  f: string;
+begin
   for i := 0 to Pred(FileCount) do begin
     f := GetFileName(FileByIndex(i));
     if SameText(f, sSeasonsFileName) then
@@ -92,11 +139,12 @@ begin
       SeasonsPatch := FileByIndex(i);
   end;
 
-  ICurrentPlugin := SeasonsMainFile;
+  iCurrentPlugin := SeasonsMainFile;
 
   if not Assigned(SeasonsMainFile) then begin
     MessageDlg('Seasons.esm is not loaded: ' + SeasonsMainFile, mtError, [mbOk], 0);
-    Result := 1;
+    Result := False;
+    Exit;
   end;
 
   if not Assigned(SeasonsPatch) then
@@ -104,15 +152,26 @@ begin
 
   AddMasterIfMissing(SeasonsPatch, 'Fallout4.esm');
   AddMasterIfMissing(SeasonsPatch, sSeasonsFileName);
+  Result := True;
+end;
 
+function LoadFormLists: boolean;
+{
+  Load the formlists in Seasons
+}
+var
+  formLists, formids: IInterface;
+  i, n, C: Integer;
+  f, editorID, s: String;
+begin
   formLists := GroupBySignature(SeasonsMainFile, 'FLST');
   if not Assigned(formLists) then begin
     AddMessage('No Formlists found');
-    Result := 1;
+    Result := False;
     Exit;
   end;
 
-  for i := 0 to ElementCount(formLists) - 1 do begin
+  for i := 0 to Pred(ElementCount(formLists)) do begin
     //AddMessage(Name(ElementByIndex(formLists, i)));
     formids := ElementByName(WinningOverride(ElementByIndex(formLists, i)), 'FormIDs');
     editorID := GetElementEditValues(ElementByIndex(formLists, i), 'EDID');
@@ -143,7 +202,7 @@ begin
     else
       C := 99;
     //AddMessage(editorID);
-    for n := 0 to ElementCount(formids) - 1 do begin
+    for n := 0 to Pred(ElementCount(formids)) do begin
       s := GetEditValue(ElementByIndex(formids, n));
       //AddMessage(s);
       Case C of
@@ -163,8 +222,141 @@ begin
       end;
     end;
   end;
-
+  Result := True;
 end;
+
+function Initialize: Integer;
+{
+  This function is called at the beginning.
+}
+var
+  i, n, C: Integer;
+  formLists, formids: IInterface;
+  f, editorID, s: String;
+begin
+  if not MainMenuForm then begin
+    Result := 1;
+    Exit;
+  end;
+
+  if not MainProgram then begin
+    Result := 1;
+    Exit;
+  end;
+end;
+
+// ----------------------------------------------------
+// UI functions and procedures go below.
+// ----------------------------------------------------
+
+function MainMenuForm: Boolean;
+{
+  Main menu form.
+}
+var
+  frm: TForm;
+  btnStart, btnCancel: TButton;
+  pnl: TPanel;
+  picSeasons: TPicture;
+  fImage: TImage;
+  gbOptions: TGroupBox;
+begin
+  frm := TForm.Create(nil);
+  try
+    frm.Caption := 'Seasons Change';
+    frm.Width := 580;
+    frm.Height := 480;
+    frm.Position := poMainFormCenter;
+    frm.BorderStyle := bsDialog;
+    frm.KeyPreview := True;
+    frm.OnClose := frmOptionsFormClose;
+    frm.OnKeyDown := FormKeyDown;
+
+    picSeasons := TPicture.Create;
+    picSeasons.LoadFromFile(DataPath() + 'Seasons\Seasons Change.jpg');
+
+    fImage := TImage.Create(frm);
+    fImage.Picture := picSeasons;
+    fImage.Parent := frm;
+    fImage.Width := 549;
+    fImage.Height := 300;
+    fImage.Left := 10;
+    fImage.Top := 12;
+
+    gbOptions := TGroupBox.Create(frm);
+    gbOptions.Parent := frm;
+    gbOptions.Left := 10;
+    gbOptions.Top := fImage.Top + fImage.Height + 24;
+    gbOptions.Width := frm.Width - 30;
+    gbOptions.Caption := 'Seasons Change';
+    gbOptions.Height := 94;
+
+    btnStart := TButton.Create(gbOptions);
+    btnStart.Parent := gbOptions;
+    btnStart.Caption := 'Start';
+    btnStart.ModalResult := mrOk;
+    btnStart.Top := 62;
+
+    btnCancel := TButton.Create(gbOptions);
+    btnCancel.Parent := gbOptions;
+    btnCancel.Caption := 'Cancel';
+    btnCancel.ModalResult := mrCancel;
+    btnCancel.Top := btnStart.Top;
+
+    btnStart.Left := gbOptions.Width - btnStart.Width - btnCancel.Width - 16;
+    btnCancel.Left := btnStart.Left + btnStart.Width + 8;
+
+    pnl := TPanel.Create(gbOptions);
+    pnl.Parent := gbOptions;
+    pnl.Left := 8;
+    pnl.Top := btnStart.Top - 12;
+    pnl.Width := gbOptions.Width - 16;
+    pnl.Height := 2;
+
+    frm.ActiveControl := btnStart;
+
+    if frm.ShowModal <> mrOk then begin
+      Result := False;
+      Exit;
+    end
+    else Result := True;
+
+  finally
+    frm.Free;
+  end;
+end;
+
+procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+{
+    Cancel if Escape key is pressed.
+}
+begin
+    if Key = VK_ESCAPE then TForm(Sender).ModalResult := mrCancel;
+end;
+
+procedure frmOptionsFormClose(Sender: TObject; var Action: TCloseAction);
+{
+    Close form handler.
+}
+begin
+    if TForm(Sender).ModalResult <> mrOk then Exit
+end;
+
+function CreateLabel(aParent: TControl; x, y: Integer; aCaption: string): TLabel;
+{
+    Create a label.
+}
+begin
+    Result := TLabel.Create(aParent);
+    Result.Parent := aParent;
+    Result.Left := x;
+    Result.Top := y;
+    Result.Caption := aCaption;
+end;
+
+// ----------------------------------------------------
+// Record processing Functions and Procedures go below.
+// ----------------------------------------------------
 
 procedure ProcessTXST(e: IInterface; season: String);
 {
@@ -255,9 +447,9 @@ begin
   tlReferences.Free
 end;
 
-function Process(e: IInterface): Integer;
+function ProcessRef(e: IInterface): Integer;
 {
-  Called on all selected references.
+  a
 }
 var
   b, m, r, n, rCell, wrld, ICellPlugin: IInterface;
