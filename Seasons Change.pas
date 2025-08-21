@@ -8,7 +8,13 @@ unit Seasons;
 // ----------------------------------------------------
 
 var
+    uiScale: integer;
+    sIgnoredWorldspaces: string;
+
     SeasonsMainFile: IwbFile;
+
+    slPluginFiles: TStringList;
+    joSeasons: TJsonObject;
 
 const
     sSeasonsFileName = 'Seasons.esm';
@@ -17,11 +23,23 @@ const
 // Main functions and procedures go immediately below.
 // ----------------------------------------------------
 
+procedure CreateObjects;
+{
+    Creates objects.
+}
+begin
+    slPluginFiles := TStringList.Create;
+    joSeasons := TJsonObject.Create;
+end;
+
 function Finalize: integer;
 {
     This function is called at the end.
 }
 begin
+    slPluginFiles.Free;
+    joSeasons.Free;
+
     Result := 0;
 end;
 
@@ -30,9 +48,110 @@ function Initialize: Integer;
   This function is called at the beginning.
 }
 begin
+    Result := 0;
+
+    //Get scaling
+    uiScale := Screen.PixelsPerInch * 100 / 96;
+    AddMessage('UI scale: ' + IntToStr(uiScale));
+
+    CreateObjects;
+    FetchRules;
+
     if not MainMenuForm then begin
         Result := 1;
         Exit;
+    end;
+
+    CollectRecords;
+end;
+
+procedure CollectRecords;
+{
+    Collect records;
+}
+var
+    i, j, blockidx, subblockidx, cellidx: integer;
+    recordid: string;
+
+    f: IwbFile;
+    g, wrldgroup: IwbGroupRecord;
+    r, rWrld, block, subblock, rCell, land: IwbElement;
+begin
+    for i := 0 to Pred(FileCount) do begin
+        f := FileByIndex(i);
+
+        //Collect LAND
+        g := GroupBySignature(f, 'WRLD');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            rWrld := ElementByIndex(g, j);
+            recordid := RecordFormIdFileId(rWrld);
+            if Pos(recordid, sIgnoredWorldspaces) <> 0 then continue;
+
+            wrldgroup := ChildGroup(rWrld);
+            for blockidx := 0 to Pred(ElementCount(wrldgroup)) do begin
+                block := ElementByIndex(wrldgroup, blockidx);
+                for subblockidx := 0 to Pred(ElementCount(block)) do begin
+                    subblock := ElementByIndex(block, subblockidx);
+                    for cellidx := 0 to Pred(ElementCount(subblock)) do begin
+                        rCell := ElementByIndex(subblock, cellidx);
+                        if (Signature(rCell) <> 'CELL') or GetIsPersistent(rCell) then continue;
+                        land := GetLandscapeForCell(rCell);
+                        if not Assigned(land) then continue;
+                        if not IsWinningOverride(land) then continue;
+
+                        AddMessage(ShortName(land));
+                    end;
+                end;
+            end;
+        end;
+
+
+    end;
+end;
+
+procedure FetchRules;
+{
+    Loads the Rule JSON files.
+}
+var
+    i: integer;
+    f: string;
+begin
+    for i := 0 to Pred(FileCount) do begin
+        f := GetFileName(FileByIndex(i));
+        slPluginFiles.Add(f);
+        LoadRules(f);
+    end;
+end;
+
+procedure LoadRules(f: string);
+{
+    Load Rules
+}
+var
+    sub: TJsonObject;
+    c, a: integer;
+    j, key: string;
+begin
+    //Ignore Worldspaces
+    j := 'Seasons\' + TrimLeftChars(f, 4) + ' - Ignore Worldspaces.json';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded Ignore Worldspaces File: ' + j);
+        sub := TJsonObject.Create;
+        try
+            sub.LoadFromResource(j);
+            key := 'Ignore Worldspaces';
+            for a := 0 to Pred(sub.A[key].Count) do begin
+                if sIgnoredWorldspaces = '' then
+                    sIgnoredWorldspaces := sub.A[key].S[a]
+                else
+                    sIgnoredWorldspaces := sIgnoredWorldspaces + ',' + sub.A[key].S[a];
+            end;
+        except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
+        finally
+            sub.Free;
+            AddMessage('Ignored Worldspaces: ' + sIgnoredWorldspaces);
+        end;
     end;
 end;
 
@@ -64,7 +183,7 @@ begin
         frm.OnKeyDown := FormKeyDown;
 
         picSeasons := TPicture.Create;
-        picSeasons.LoadFromFile(wbDataPath + 'Seasons\Seasons Change.jpg');
+        picSeasons.LoadFromFile(wbScriptsPath + 'Seasons\Seasons Change.jpg');
 
         fImage := TImage.Create(frm);
         fImage.Picture := picSeasons;
@@ -73,6 +192,7 @@ begin
         fImage.Height := 300;
         fImage.Left := 10;
         fImage.Top := 12;
+        fImage.Stretch := True;
 
         gbOptions := TGroupBox.Create(frm);
         gbOptions.Parent := frm;
@@ -82,14 +202,14 @@ begin
         gbOptions.Caption := 'Seasons Change';
         gbOptions.Height := 94;
 
-        btnStart := TButton.Create(gbOptions);
-        btnStart.Parent := gbOptions;
+        btnStart := TButton.Create(frm);
+        btnStart.Parent := frm;
         btnStart.Caption := 'Start';
         btnStart.ModalResult := mrOk;
-        btnStart.Top := 62;
+        btnStart.Top := gbOptions.Top + gbOptions.Height + 24;
 
-        btnCancel := TButton.Create(gbOptions);
-        btnCancel.Parent := gbOptions;
+        btnCancel := TButton.Create(frm);
+        btnCancel.Parent := frm;
         btnCancel.Caption := 'Cancel';
         btnCancel.ModalResult := mrCancel;
         btnCancel.Top := btnStart.Top;
@@ -97,14 +217,17 @@ begin
         btnStart.Left := gbOptions.Width - btnStart.Width - btnCancel.Width - 16;
         btnCancel.Left := btnStart.Left + btnStart.Width + 8;
 
-        pnl := TPanel.Create(gbOptions);
-        pnl.Parent := gbOptions;
-        pnl.Left := 8;
+        pnl := TPanel.Create(frm);
+        pnl.Parent := frm;
+        pnl.Left := gbOptions.Left;
         pnl.Top := btnStart.Top - 12;
-        pnl.Width := gbOptions.Width - 16;
+        pnl.Width := gbOptions.Width;
         pnl.Height := 2;
 
         frm.ActiveControl := btnStart;
+        frm.ScaleBy(uiScale, 100);
+        frm.Font.Size := 8;
+        frm.Height := btnStart.Top + btnStart.Height + btnStart.Height + 30;
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
@@ -136,12 +259,37 @@ end;
 // Record processing Functions and Procedures go below.
 // ----------------------------------------------------
 
-function AddLinkedReference(e: IInterface; keyword, ref: String): Integer;
+function RecordFormIdFileId(e: IwbElement): string;
+{
+    Returns the record ID of an element.
+}
+begin
+    Result := TrimRightChars(IntToHex(FixedFormID(e), 8), 2) + ':' + GetFileName(GetFile(MasterOrSelf(e)));
+end;
+
+function GetRecordFromFormIdFileId(recordId: string): IwbElement;
+{
+    Returns the record from the given formid:filename.
+}
+var
+    colonPos, recordFormId, c: integer;
+    f: IwbFile;
+    fileMasterIndex: string;
+begin
+    colonPos := Pos(':', recordId);
+    f := FileByIndex(slPluginFiles.IndexOf(Copy(recordId, Succ(colonPos), Length(recordId))));
+    c := MasterCount(f);
+    if c > 9 then fileMasterIndex := IntToStr(c) else fileMasterIndex := '0' + IntToStr(c);
+    recordFormId := StrToInt('$' + fileMasterIndex + Copy(recordId, 1, Pred(colonPos)));
+    Result := RecordByFormID(f, recordFormId, False);
+end;
+
+function AddLinkedReference(e: IwbElement; keyword, ref: String): Integer;
 {
   Add a linked reference.
 }
 var
-    el, linkedrefs, lref: IInterface;
+    el, linkedrefs, lref: IwbElement;
     i: Integer;
 begin
     if not ElementExists(e, 'Linked References') then begin
@@ -179,6 +327,23 @@ begin
     end;
 end;
 
+function GetLandscapeForCell(rCell: IwbElement): IwbElement;
+var
+    i: integer;
+    cellchild: IwbGroupRecord;
+    r: IwbElement;
+begin
+    Result := nil;
+    cellchild := FindChildGroup(ChildGroup(rCell), 9, rCell); // get Temporary group of cell
+    for i := 0 to Pred(ElementCount(cellchild)) do begin
+        r := ElementByIndex(cellchild, i);
+        if Signature(r) <> 'LAND' then continue;
+        Result := r;
+        Exit;
+    end;
+end;
+
+
 procedure Shuffle(Strings: TStrings);
 {
   Shuffles the order of strings.
@@ -187,6 +352,22 @@ var
     i: Integer;
 begin
     for i := Pred(Strings.Count) downto 1 do Strings.Exchange(i, Random(i + 1));
+end;
+
+function TrimRightChars(s: string; chars: integer): string;
+{
+    Returns right string - chars
+}
+begin
+    Result := RightStr(s, Length(s) - chars);
+end;
+
+function TrimLeftChars(s: string; chars: integer): string;
+{
+    Returns left string - chars
+}
+begin
+    Result := LeftStr(s, Length(s) - chars);
 end;
 
 end.
