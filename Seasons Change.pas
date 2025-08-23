@@ -8,16 +8,18 @@ unit Seasons;
 // ----------------------------------------------------
 
 var
+    bSaveLandHeights: boolean;
     uiScale: integer;
     sIgnoredWorldspaces: string;
 
     SeasonsMainFile: IwbFile;
 
     slPluginFiles: TStringList;
-    joSeasons: TJsonObject;
+    joSeasons, joLandscapeHeights: TJsonObject;
 
 const
     sSeasonsFileName = 'Seasons.esm';
+    SCALE_FACTOR_TERRAIN = 8;
 
 // ----------------------------------------------------
 // Main functions and procedures go immediately below.
@@ -30,6 +32,9 @@ procedure CreateObjects;
 begin
     slPluginFiles := TStringList.Create;
     joSeasons := TJsonObject.Create;
+    joLandscapeHeights := TJsonObject.Create;
+    if FileExists(wbScriptsPath + 'Seasons\LandHeights.json') then
+        joLandscapeHeights.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights.json');
 end;
 
 function Finalize: integer;
@@ -40,15 +45,18 @@ begin
     slPluginFiles.Free;
     joSeasons.Free;
 
+    if bSaveLandHeights then joLandscapeHeights.SaveToFile(wbScriptsPath + 'Seasons\LandHeights.json', False, TEncoding.UTF8, True);
+    joLandscapeHeights.Free;
     Result := 0;
 end;
 
-function Initialize: Integer;
+function Initialize: integer;
 {
   This function is called at the beginning.
 }
 begin
     Result := 0;
+    bSaveLandHeights := False;
 
     //Get scaling
     uiScale := Screen.PixelsPerInch * 100 / 96;
@@ -70,13 +78,14 @@ procedure CollectRecords;
     Collect records;
 }
 var
-    i, j, blockidx, subblockidx, cellidx: integer;
+    i, j, count, blockidx, subblockidx, cellidx: integer;
     recordid: string;
 
     f: IwbFile;
     g, wrldgroup: IwbGroupRecord;
     r, rWrld, block, subblock, rCell, land: IwbElement;
 begin
+    count := 0;
     for i := 0 to Pred(FileCount) do begin
         f := FileByIndex(i);
 
@@ -98,14 +107,85 @@ begin
                         land := GetLandscapeForCell(rCell);
                         if not Assigned(land) then continue;
                         if not IsWinningOverride(land) then continue;
-
-                        AddMessage(ShortName(land));
+                        if not ElementExists(land, 'VHGT') then continue;
+                        count := count + CreateLandscapeSnow(land, WinningOverride(rCell), WinningOverride(rWrld));
+                        //if count = 30 then Exit;
                     end;
                 end;
             end;
         end;
 
+    end;
+end;
 
+function CreateLandscapeSnow(land, rCell, rWrld: IwbElement): integer;
+var
+    bFoundInJSON: boolean;
+    landOffsetZ, rowColumnOffsetZ, rowStartVal, landValue, landValueScaled: single;
+    cellX, CellY, unitsX, unitsY, row, column: integer;
+    fileProvidingLand, rowColumn, editorIdSnowNif: string;
+
+    landHeightData: IwbElement;
+
+    snowNif: TwbNifFile;
+begin
+    Result := 0;
+    cellX := GetElementNativeValues(rCell, 'XCLC\X');
+    cellY := GetElementNativeValues(rCell, 'XCLC\Y');
+    unitsX := cellX * 4096;
+    unitsY := cellY * 4096;
+    fileProvidingLand := GetFileName(GetFile(land));
+    editorIdSnowNif := EditorID(rWrld) + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
+
+    landOffsetZ := GetElementNativeValues(land, 'VHGT\Offset');
+    landHeightData := ElementByPath(land, 'VHGT\Height Data');
+
+    snowNif := TwbNifFile.Create;
+    try
+        for row := 0 to 32 do begin
+            for column := 0 to 32 do begin
+                bFoundInJSON := False;
+
+                rowColumn := 'Row #' + IntToStr(row) + '\Column #' + IntToStr(column);
+                if joLandscapeHeights.Contains(fileProvidingLand) then begin
+                    if joLandscapeHeights.O[fileProvidingLand].Contains(editorIdSnowNif) then begin
+                        if joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].Contains(rowColumn) then begin
+                            landValueScaled := joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn];
+                            bFoundInJSON := True;
+                        end;
+                    end;
+                end;
+                if not bFoundInJSON then begin
+                    rowColumnOffsetZ := GetElementNativeValues(landHeightData, rowColumn);
+                    if rowColumnOffsetZ > 127 then rowColumnOffsetZ := rowColumnOffsetZ - 256;
+
+                    if(column = 0) then begin //check if first column
+                        if(row = 0) then begin // check if first row of first column
+                            rowStartVal := rowColumnOffsetZ; //rowColumnOffsetZ + landOffsetZ; //if first column, first row, height is the LAND's offset + the offset value. We are omitting landOffsetZ since we want to simply place the landscape snow at z height of landOffsetZ.
+                        end else begin
+                            rowStartVal := rowColumnOffsetZ + rowStartVal; //if first column, but 2nd or higher row, height is the 1st row's offset + the current offset value
+                        end;
+                        landValue := rowStartVal;
+                    end else begin
+                        // If it is the 2nd or higher column, height is the previous rowColumn's height + the current offset value.
+                        landValue := landValue + rowColumnOffsetZ;
+                    end;
+                    landValueScaled := landValue * SCALE_FACTOR_TERRAIN; //This will be the Z height we apply to the vertex of the nif.
+                    joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S['offset'] := Round(landOffsetZ) * SCALE_FACTOR_TERRAIN;
+                    joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn] := landValueScaled;
+                    bSaveLandHeights := True;
+                    Result := 1;
+                end;
+
+                // X Y Z coordinates. Shouldn't need these.
+                // pX := FloatToStr(column * 128);
+                // pY := FloatToStr(row * 128);
+                // pZ := FloatToStr(landValueScaled);
+            end;
+        end;
+        //AddMessage(editorIdSnowNif);
+    finally
+        snowNif.Free;
     end;
 end;
 
@@ -129,9 +209,10 @@ procedure LoadRules(f: string);
     Load Rules
 }
 var
-    sub: TJsonObject;
     c, a: integer;
     j, key: string;
+
+    sub: TJsonObject;
 begin
     //Ignore Worldspaces
     j := 'Seasons\' + TrimLeftChars(f, 4) + ' - Ignore Worldspaces.json';
@@ -147,7 +228,6 @@ begin
                 else
                     sIgnoredWorldspaces := sIgnoredWorldspaces + ',' + sub.A[key].S[a];
             end;
-        except on E: Exception do AddMessage(#9 + 'Error: ' + E.Message);
         finally
             sub.Free;
             AddMessage('Ignored Worldspaces: ' + sIgnoredWorldspaces);
@@ -164,12 +244,12 @@ function MainMenuForm: Boolean;
   Main menu form.
 }
 var
-    frm: TForm;
     btnStart, btnCancel: TButton;
+    frm: TForm;
+    gbOptions: TGroupBox;
+    fImage: TImage;
     pnl: TPanel;
     picSeasons: TPicture;
-    fImage: TImage;
-    gbOptions: TGroupBox;
 begin
     frm := TForm.Create(nil);
     try
@@ -273,8 +353,9 @@ function GetRecordFromFormIdFileId(recordId: string): IwbElement;
 }
 var
     colonPos, recordFormId, c: integer;
-    f: IwbFile;
     fileMasterIndex: string;
+
+    f: IwbFile;
 begin
     colonPos := Pos(':', recordId);
     f := FileByIndex(slPluginFiles.IndexOf(Copy(recordId, Succ(colonPos), Length(recordId))));
@@ -284,13 +365,14 @@ begin
     Result := RecordByFormID(f, recordFormId, False);
 end;
 
-function AddLinkedReference(e: IwbElement; keyword, ref: String): Integer;
+function AddLinkedReference(e: IwbElement; keyword, ref: string): integer;
 {
   Add a linked reference.
 }
 var
+    i: integer;
+
     el, linkedrefs, lref: IwbElement;
-    i: Integer;
 begin
     if not ElementExists(e, 'Linked References') then begin
         linkedrefs := Add(e, 'Linked References', True);
@@ -306,12 +388,13 @@ begin
     end;
 end;
 
-function IsRefPrecombined(r: IwbElement): Boolean;
+function IsRefPrecombined(r: IwbElement): boolean;
 {
     Checks if a reference is precombined.
 }
 var
-    i, t, preCombinedRefsCount, rc: Integer;
+    i, t, preCombinedRefsCount, rc: integer;
+
     rCell, refs: IwbElement;
 begin
     Result := false;
@@ -330,8 +413,9 @@ end;
 function GetLandscapeForCell(rCell: IwbElement): IwbElement;
 var
     i: integer;
-    cellchild: IwbGroupRecord;
+
     r: IwbElement;
+    cellchild: IwbGroupRecord;
 begin
     Result := nil;
     cellchild := FindChildGroup(ChildGroup(rCell), 9, rCell); // get Temporary group of cell
