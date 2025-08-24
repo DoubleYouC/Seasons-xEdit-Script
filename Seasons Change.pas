@@ -153,6 +153,8 @@ begin
 
     snowModel := 'LandscapeSnow\' + editorIdSnowNif + '.nif';
     snowLodModel := 'LOD\LandscapeSnow\' + editorIdSnowNif + '_lod.nif';
+    if not FileExists(wbScriptsPath + 'Seasons\output\Meshes\' + snowLodModel) then
+        snowLodModel := 'LOD\LandscapeSnow\LandscapeSnow_lod.nif';
     if not FileExists(wbScriptsPath + 'Seasons\output\Meshes\' + snowModel) then begin
         snowModel := 'LandscapeSnow\LandscapeSnow.nif';
         snowLodModel := 'LOD\LandscapeSnow\LandscapeSnow_lod.nif';
