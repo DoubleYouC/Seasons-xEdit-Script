@@ -12,7 +12,9 @@ var
     uiScale: integer;
     sIgnoredWorldspaces: string;
 
-    SeasonsMainFile: IwbFile;
+    SeasonsMainFile, plugin: IwbFile;
+    statGroup, scolGroup: IwbGroupRecord;
+    flatSnowStatic: IwbElement;
 
     slPluginFiles: TStringList;
     joSeasons, joLandscapeHeights: TJsonObject;
@@ -64,6 +66,7 @@ begin
 
     CreateObjects;
     FetchRules;
+    CreatePlugin;
 
     if not MainMenuForm then begin
         Result := 1;
@@ -73,6 +76,15 @@ begin
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
     CollectRecords;
+end;
+
+procedure CreatePlugin;
+begin
+    plugin := AddNewFile;
+    AddMasterIfMissing(plugin, GetFileName(FileByIndex(0)));
+    statGroup := Add(plugin, 'STAT', True);
+    scolGroup := Add(plugin, 'SCOL', True);
+    slPluginFiles.Add(GetFileName(plugin));
 end;
 
 procedure CollectRecords;
@@ -110,19 +122,81 @@ begin
                         if not Assigned(land) then continue;
                         if not IsWinningOverride(land) then continue;
                         if not ElementExists(land, 'VHGT') then continue;
+                        AddMessage(ShortName(land));
                         //count := count + CreateLandscapeHeights(land, WinningOverride(rCell), WinningOverride(rWrld));
-                        count := count + CreateLandscapeSnow(land, WinningOverride(rCell), WinningOverride(rWrld));
-                        if count = 30 then Exit;
+                        //count := count + CreateLandscapeSnow(land, WinningOverride(rCell), WinningOverride(rWrld));
+                        count := count + 1;
+                        PlaceLandscapeSnow(land, WinningOverride(rCell), WinningOverride(rWrld));
+                        //if count = 30 then Exit;
                     end;
                 end;
             end;
         end;
 
     end;
+    AddMessage(IntToStr(count));
+end;
+
+function PlaceLandscapeSnow(land, rCell, rWrld: IwbElement): integer;
+var
+    cellX, cellY, unitsX, unitsY, landOffsetZ: integer;
+    editorIdSnowNif, fileProvidingLand, snowModel, snowLodModel, snowStaticFormid: string;
+
+    snowStatic, nCell, snowRef, base: IwbElement;
+begin
+    Result := 0;
+    cellX := GetElementNativeValues(rCell, 'XCLC\X');
+    cellY := GetElementNativeValues(rCell, 'XCLC\Y');
+    unitsX := cellX * 4096;
+    unitsY := cellY * 4096;
+    editorIdSnowNif := EditorID(rWrld) + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
+
+    snowModel := 'LandscapeSnow\' + editorIdSnowNif + '.nif';
+    snowLodModel := 'LOD\LandscapeSnow\' + editorIdSnowNif + '_lod.nif';
+    if not FileExists(wbScriptsPath + 'Seasons\output\Meshes\' + snowModel) then begin
+        snowModel := 'LandscapeSnow\LandscapeSnow.nif';
+        snowLodModel := 'LOD\LandscapeSnow\LandscapeSnow_lod.nif';
+        if not Assigned(flatSnowStatic) then flatSnowStatic := CreateNewStat(snowModel, snowLodModel, 'FlatSnowStatic01');
+        snowStatic := flatSnowStatic;
+    end else snowStatic := CreateNewStat(snowModel, snowLodModel, editorIdSnowNif);
+
+    fileProvidingLand := GetFileName(GetFile(land));
+    landOffsetZ := joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S['offset'];
+
+    AddRequiredElementMasters(rWrld, plugin, False, True);
+    AddRequiredElementMasters(rCell, plugin, False, True);
+  	SortMasters(plugin);
+    wbCopyElementToFile(rWrld, plugin, False, True);
+    nCell := wbCopyElementToFile(rCell, plugin, False, True);
+    snowRef := Add(nCell, 'REFR', True);
+    snowStaticFormid := IntToHex(GetLoadOrderFormID(snowStatic), 8);
+
+    SetElementEditValues(snowRef, 'DATA\Position\X', IntToStr(unitsX));
+    SetElementEditValues(snowRef, 'DATA\Position\Y', IntToStr(unitsY));
+    SetElementEditValues(snowRef, 'DATA\Position\Z', IntToStr(landOffsetZ + 25));
+
+    base := ElementByPath(snowRef, 'NAME');
+    SetEditValue(base, snowStaticFormid);
+end;
+
+function CreateNewStat(model, lod, editorid: string): IwbElement;
+var
+    newStatic, newStaticModel, newStaticMNAM: IwbElement;
+begin
+    newStatic := Add(statGroup, 'STAT', True);
+    SetEditorID(newStatic, editorid);
+    newStaticModel := Add(Add(newStatic, 'Model', True), 'MODL', True);
+    SetEditValue(newStaticModel, model);
+    newStaticMNAM := Add(newStatic, 'MNAM', True);
+    SetElementEditValues(newStaticMNAM, 'LOD #0 (Level 0)\Mesh', lod);
+    SetElementEditValues(newStaticMNAM, 'LOD #1 (Level 1)\Mesh', lod);
+    SetElementEditValues(newStaticMNAM, 'LOD #2 (Level 2)\Mesh', lod);
+    Result := newStatic;
 end;
 
 function CreateLandscapeSnow(land, rCell, rWrld: IwbElement): integer;
 var
+    bEverChanged: boolean;
     i, nifFile, cellX, cellY, unitsX, unitsY, landOffsetZ, row, column, vertexCount: integer;
     editorIdSnowNif, fileProvidingLand, fileName, snowNifFile, rowColumn, xyz, vx, vy, vz: string;
 
@@ -155,6 +229,7 @@ begin
             block := snowNif.Blocks[1];
             vertexCount := block.NativeValues['Num Vertices'];
             vertexData := block.Elements['Vertex Data'];
+            bEverChanged := false;
             for i := 0 to Pred(vertexCount) do begin
                 vertex := vertexData[i];
                 xyz := vertex.EditValues['Vertex'];
@@ -165,13 +240,15 @@ begin
                 row := Round(StrToFloatDef(vy, 9))/128;
                 rowColumn := 'Row #' + IntToStr(row) + '\Column #' + IntToStr(column);
                 vz := IntToStr(joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn]);
+                if vz <> '0' then bEverChanged := true;
                 vertex.EditValues['Vertex'] := vx + ' ' + vy + ' ' + vz;
             end;
-            snowNif.SaveToFile(snowNifFile);
+            if bEverChanged then snowNif.SaveToFile(snowNifFile);
         finally
             snowNif.Free;
         end;
     end;
+    if bEverChanged then Result := 1;
     AddMessage(editorIdSnowNif);
 end;
 
@@ -249,6 +326,7 @@ var
 begin
     for i := 0 to Pred(FileCount) do begin
         f := GetFileName(FileByIndex(i));
+        if f = 'Fallout4.exe' then continue;
         slPluginFiles.Add(f);
         LoadRules(f);
     end;
