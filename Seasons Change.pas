@@ -70,6 +70,8 @@ begin
         Exit;
     end;
 
+    EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
+    EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
     CollectRecords;
 end;
 
@@ -108,8 +110,9 @@ begin
                         if not Assigned(land) then continue;
                         if not IsWinningOverride(land) then continue;
                         if not ElementExists(land, 'VHGT') then continue;
+                        //count := count + CreateLandscapeHeights(land, WinningOverride(rCell), WinningOverride(rWrld));
                         count := count + CreateLandscapeSnow(land, WinningOverride(rCell), WinningOverride(rWrld));
-                        //if count = 30 then Exit;
+                        if count = 30 then Exit;
                     end;
                 end;
             end;
@@ -120,14 +123,66 @@ end;
 
 function CreateLandscapeSnow(land, rCell, rWrld: IwbElement): integer;
 var
+    i, nifFile, cellX, cellY, unitsX, unitsY, landOffsetZ, row, column, vertexCount: integer;
+    editorIdSnowNif, fileProvidingLand, fileName, snowNifFile, rowColumn, xyz, vx, vy, vz: string;
+
+    tsXYZ: TStrings;
+
+    vertexData, vertex: TdfElement;
+    block: TwbNifBlock;
+    snowNif, snowLodNif: TwbNifFile;
+begin
+    Result := 0;
+    cellX := GetElementNativeValues(rCell, 'XCLC\X');
+    cellY := GetElementNativeValues(rCell, 'XCLC\Y');
+    unitsX := cellX * 4096;
+    unitsY := cellY * 4096;
+    editorIdSnowNif := EditorID(rWrld) + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
+    fileProvidingLand := GetFileName(GetFile(land));
+    landOffsetZ := joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S['offset'];
+
+    for nifFile := 0 to 1 do begin
+        if nifFile = 0 then begin //Create full model
+            fileName := wbScriptsPath + 'Seasons\LandscapeSnow.nif';
+            snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow\' + editorIdSnowNif + '.nif';
+        end else begin //Create lod model
+            fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod.nif';
+            snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod.nif';
+        end;
+        snowNif := TwbNifFile.Create;
+        try
+            snowNif.LoadFromFile(fileName);
+            block := snowNif.Blocks[1];
+            vertexCount := block.NativeValues['Num Vertices'];
+            vertexData := block.Elements['Vertex Data'];
+            for i := 0 to Pred(vertexCount) do begin
+                vertex := vertexData[i];
+                xyz := vertex.EditValues['Vertex'];
+                tsXYZ := SplitString(xyz, ' ');
+                vx := tsXYZ[0];
+                vy := tsXYZ[1];
+                column := Round(StrToFloatDef(vx, 9))/128;
+                row := Round(StrToFloatDef(vy, 9))/128;
+                rowColumn := 'Row #' + IntToStr(row) + '\Column #' + IntToStr(column);
+                vz := IntToStr(joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn]);
+                vertex.EditValues['Vertex'] := vx + ' ' + vy + ' ' + vz;
+            end;
+            snowNif.SaveToFile(snowNifFile);
+        finally
+            snowNif.Free;
+        end;
+    end;
+    AddMessage(editorIdSnowNif);
+end;
+
+function CreateLandscapeHeights(land, rCell, rWrld: IwbElement): integer;
+var
     bFoundInJSON: boolean;
     landOffsetZ, rowColumnOffsetZ, rowStartVal, landValue, landValueScaled: single;
-    cellX, CellY, unitsX, unitsY, row, column: integer;
+    cellX, cellY, unitsX, unitsY, row, column: integer;
     fileProvidingLand, rowColumn, editorIdSnowNif: string;
 
     landHeightData: IwbElement;
-
-    snowNif: TwbNifFile;
 begin
     Result := 0;
     cellX := GetElementNativeValues(rCell, 'XCLC\X');
@@ -140,53 +195,48 @@ begin
     landOffsetZ := GetElementNativeValues(land, 'VHGT\Offset');
     landHeightData := ElementByPath(land, 'VHGT\Height Data');
 
-    snowNif := TwbNifFile.Create;
-    try
-        for row := 0 to 32 do begin
-            for column := 0 to 32 do begin
-                bFoundInJSON := False;
+    for row := 0 to 32 do begin
+        for column := 0 to 32 do begin
+            bFoundInJSON := False;
 
-                rowColumn := 'Row #' + IntToStr(row) + '\Column #' + IntToStr(column);
-                if joLandscapeHeights.Contains(fileProvidingLand) then begin
-                    if joLandscapeHeights.O[fileProvidingLand].Contains(editorIdSnowNif) then begin
-                        if joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].Contains(rowColumn) then begin
-                            landValueScaled := joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn];
-                            bFoundInJSON := True;
-                        end;
+            rowColumn := 'Row #' + IntToStr(row) + '\Column #' + IntToStr(column);
+            if joLandscapeHeights.Contains(fileProvidingLand) then begin
+                if joLandscapeHeights.O[fileProvidingLand].Contains(editorIdSnowNif) then begin
+                    if joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].Contains(rowColumn) then begin
+                        landValueScaled := joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn];
+                        bFoundInJSON := True;
                     end;
                 end;
-                if not bFoundInJSON then begin
-                    rowColumnOffsetZ := GetElementNativeValues(landHeightData, rowColumn);
-                    if rowColumnOffsetZ > 127 then rowColumnOffsetZ := rowColumnOffsetZ - 256;
-
-                    if(column = 0) then begin //check if first column
-                        if(row = 0) then begin // check if first row of first column
-                            rowStartVal := rowColumnOffsetZ; //rowColumnOffsetZ + landOffsetZ; //if first column, first row, height is the LAND's offset + the offset value. We are omitting landOffsetZ since we want to simply place the landscape snow at z height of landOffsetZ.
-                        end else begin
-                            rowStartVal := rowColumnOffsetZ + rowStartVal; //if first column, but 2nd or higher row, height is the 1st row's offset + the current offset value
-                        end;
-                        landValue := rowStartVal;
-                    end else begin
-                        // If it is the 2nd or higher column, height is the previous rowColumn's height + the current offset value.
-                        landValue := landValue + rowColumnOffsetZ;
-                    end;
-                    landValueScaled := landValue * SCALE_FACTOR_TERRAIN; //This will be the Z height we apply to the vertex of the nif.
-                    joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S['offset'] := Round(landOffsetZ) * SCALE_FACTOR_TERRAIN;
-                    joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn] := landValueScaled;
-                    bSaveLandHeights := True;
-                    Result := 1;
-                end;
-
-                // X Y Z coordinates. Shouldn't need these.
-                // pX := FloatToStr(column * 128);
-                // pY := FloatToStr(row * 128);
-                // pZ := FloatToStr(landValueScaled);
             end;
+            if not bFoundInJSON then begin
+                rowColumnOffsetZ := GetElementNativeValues(landHeightData, rowColumn);
+                if rowColumnOffsetZ > 127 then rowColumnOffsetZ := rowColumnOffsetZ - 256;
+
+                if(column = 0) then begin //check if first column
+                    if(row = 0) then begin // check if first row of first column
+                        rowStartVal := rowColumnOffsetZ; //rowColumnOffsetZ + landOffsetZ; //if first column, first row, height is the LAND's offset + the offset value. We are omitting landOffsetZ since we want to simply place the landscape snow at z height of landOffsetZ.
+                    end else begin
+                        rowStartVal := rowColumnOffsetZ + rowStartVal; //if first column, but 2nd or higher row, height is the 1st row's offset + the current offset value
+                    end;
+                    landValue := rowStartVal;
+                end else begin
+                    // If it is the 2nd or higher column, height is the previous rowColumn's height + the current offset value.
+                    landValue := landValue + rowColumnOffsetZ;
+                end;
+                landValueScaled := landValue * SCALE_FACTOR_TERRAIN; //This will be the Z height we apply to the vertex of the nif.
+                joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S['offset'] := Round(landOffsetZ) * SCALE_FACTOR_TERRAIN;
+                joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn] := landValueScaled;
+                bSaveLandHeights := True;
+                Result := 1;
+            end;
+
+            // X Y Z coordinates. Shouldn't need these.
+            // pX := FloatToStr(column * 128);
+            // pY := FloatToStr(row * 128);
+            // pZ := FloatToStr(landValueScaled);
         end;
-        //AddMessage(editorIdSnowNif);
-    finally
-        snowNif.Free;
     end;
+    AddMessage(editorIdSnowNif);
 end;
 
 procedure FetchRules;
@@ -452,6 +502,16 @@ function TrimLeftChars(s: string; chars: integer): string;
 }
 begin
     Result := LeftStr(s, Length(s) - chars);
+end;
+
+procedure EnsureDirectoryExists(f: string);
+{
+    Create directories if they do not exist.
+}
+begin
+    if not DirectoryExists(f) then
+        if not ForceDirectories(f) then
+            raise Exception.Create('Can not create destination directory ' + f);
 end;
 
 end.
