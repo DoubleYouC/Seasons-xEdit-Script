@@ -125,7 +125,7 @@ begin
                         AddMessage(ShortName(land));
                         //count := count + CreateLandscapeHeights(land, WinningOverride(rCell), WinningOverride(rWrld));
                         //count := count + CreateLandscapeSnow(land, WinningOverride(rCell), WinningOverride(rWrld));
-                        count := count + 1;
+                        //count := count + 1;
                         PlaceLandscapeSnow(land, WinningOverride(rCell), WinningOverride(rWrld));
                         //if count = 30 then Exit;
                     end;
@@ -140,7 +140,7 @@ end;
 function PlaceLandscapeSnow(land, rCell, rWrld: IwbElement): integer;
 var
     cellX, cellY, unitsX, unitsY, landOffsetZ: integer;
-    editorIdSnowNif, fileProvidingLand, snowModel, snowLodModel, snowStaticFormid: string;
+    editorIdSnowNif, fileProvidingLand, snowModel, snowLodModel0, snowLodModel1, snowLodModel2, snowStaticFormid: string;
 
     snowStatic, nCell, snowRef, base: IwbElement;
 begin
@@ -152,15 +152,17 @@ begin
     editorIdSnowNif := EditorID(rWrld) + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
 
     snowModel := 'LandscapeSnow\' + editorIdSnowNif + '.nif';
-    snowLodModel := 'LOD\LandscapeSnow\' + editorIdSnowNif + '_lod.nif';
-    if not FileExists(wbScriptsPath + 'Seasons\output\Meshes\' + snowLodModel) then
-        snowLodModel := 'LOD\LandscapeSnow\LandscapeSnow_lod.nif';
+    snowLodModel0 := 'LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_0.nif';
+    snowLodModel1 := 'LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_1.nif';
+    snowLodModel2 := 'LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_2.nif';
     if not FileExists(wbScriptsPath + 'Seasons\output\Meshes\' + snowModel) then begin
         snowModel := 'LandscapeSnow\LandscapeSnow.nif';
-        snowLodModel := 'LOD\LandscapeSnow\LandscapeSnow_lod.nif';
-        if not Assigned(flatSnowStatic) then flatSnowStatic := CreateNewStat(snowModel, snowLodModel, 'FlatSnowStatic01');
+        snowLodModel0 := 'LOD\LandscapeSnow\LandscapeSnow_lod_0.nif';
+        snowLodModel1 := 'LOD\LandscapeSnow\LandscapeSnow_lod_1.nif';
+        snowLodModel2 := 'LOD\LandscapeSnow\LandscapeSnow_lod_2.nif';
+        if not Assigned(flatSnowStatic) then flatSnowStatic := CreateNewStat(snowModel, snowLodModel0, snowLodModel1, snowLodModel2, 'FlatSnowStatic01');
         snowStatic := flatSnowStatic;
-    end else snowStatic := CreateNewStat(snowModel, snowLodModel, editorIdSnowNif);
+    end else snowStatic := CreateNewStat(snowModel, snowLodModel0, snowLodModel1, snowLodModel2, editorIdSnowNif);
 
     fileProvidingLand := GetFileName(GetFile(land));
     landOffsetZ := joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S['offset'];
@@ -175,13 +177,13 @@ begin
 
     SetElementEditValues(snowRef, 'DATA\Position\X', IntToStr(unitsX));
     SetElementEditValues(snowRef, 'DATA\Position\Y', IntToStr(unitsY));
-    SetElementEditValues(snowRef, 'DATA\Position\Z', IntToStr(landOffsetZ + 25));
+    SetElementEditValues(snowRef, 'DATA\Position\Z', IntToStr(landOffsetZ + 1));
 
     base := ElementByPath(snowRef, 'NAME');
     SetEditValue(base, snowStaticFormid);
 end;
 
-function CreateNewStat(model, lod, editorid: string): IwbElement;
+function CreateNewStat(model, lod0, lod1, lod2, editorid: string): IwbElement;
 var
     newStatic, newStaticModel, newStaticMNAM: IwbElement;
 begin
@@ -190,9 +192,9 @@ begin
     newStaticModel := Add(Add(newStatic, 'Model', True), 'MODL', True);
     SetEditValue(newStaticModel, model);
     newStaticMNAM := Add(newStatic, 'MNAM', True);
-    SetElementEditValues(newStaticMNAM, 'LOD #0 (Level 0)\Mesh', lod);
-    SetElementEditValues(newStaticMNAM, 'LOD #1 (Level 1)\Mesh', lod);
-    SetElementEditValues(newStaticMNAM, 'LOD #2 (Level 2)\Mesh', lod);
+    SetElementEditValues(newStaticMNAM, 'LOD #0 (Level 0)\Mesh', lod0);
+    SetElementEditValues(newStaticMNAM, 'LOD #1 (Level 1)\Mesh', lod1);
+    SetElementEditValues(newStaticMNAM, 'LOD #2 (Level 2)\Mesh', lod2);
     Result := newStatic;
 end;
 
@@ -200,7 +202,7 @@ function CreateLandscapeSnow(land, rCell, rWrld: IwbElement): integer;
 var
     bEverChanged: boolean;
     i, nifFile, cellX, cellY, unitsX, unitsY, landOffsetZ, row, column, vertexCount: integer;
-    editorIdSnowNif, fileProvidingLand, fileName, snowNifFile, rowColumn, xyz, vx, vy, vz: string;
+    editorIdSnowNif, fileProvidingLand, fileName, snowNifFile, rowColumn, xyz, vx, vy, vz, newvz: string;
 
     tsXYZ: TStrings;
 
@@ -217,13 +219,19 @@ begin
     fileProvidingLand := GetFileName(GetFile(land));
     landOffsetZ := joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S['offset'];
 
-    for nifFile := 0 to 1 do begin
+    for nifFile := 0 to 3 do begin
         if nifFile = 0 then begin //Create full model
             fileName := wbScriptsPath + 'Seasons\LandscapeSnow.nif';
             snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow\' + editorIdSnowNif + '.nif';
-        end else begin //Create lod model
-            fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod.nif';
-            snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod.nif';
+        end else if nifFile = 1 then begin //Create lod model
+            fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_0.nif';
+            snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_0.nif';
+        end else if nifFile = 2 then begin //Create lod model
+            fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_1.nif';
+            snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_1.nif';
+        end else if nifFile = 3 then begin //Create lod model
+            fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_2.nif';
+            snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_2.nif';
         end;
         snowNif := TwbNifFile.Create;
         try
@@ -238,12 +246,13 @@ begin
                 tsXYZ := SplitString(xyz, ' ');
                 vx := tsXYZ[0];
                 vy := tsXYZ[1];
+                vz := tsXYZ[2];
                 column := Round(StrToFloatDef(vx, 9))/128;
                 row := Round(StrToFloatDef(vy, 9))/128;
                 rowColumn := 'Row #' + IntToStr(row) + '\Column #' + IntToStr(column);
-                vz := IntToStr(joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn]);
-                if vz <> '0' then bEverChanged := true;
-                vertex.EditValues['Vertex'] := vx + ' ' + vy + ' ' + vz;
+                newvz := IntToStr(joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn] + Round(StrToFloatDef(vz, 9)));
+                if joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn] <> 0 then bEverChanged := true;
+                vertex.EditValues['Vertex'] := vx + ' ' + vy + ' ' + newvz;
             end;
             if bEverChanged then snowNif.SaveToFile(snowNifFile);
         finally
