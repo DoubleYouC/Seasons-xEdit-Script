@@ -66,12 +66,13 @@ begin
 
     CreateObjects;
     FetchRules;
-    CreatePlugin;
+
 
     if not MainMenuForm then begin
         Result := 1;
         Exit;
     end;
+    //CreatePlugin;
 
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
@@ -92,16 +93,17 @@ procedure CollectRecords;
     Collect records;
 }
 var
-    i, j, count, blockidx, subblockidx, cellidx: integer;
-    recordid: string;
+    i, j, count, blockidx, subblockidx, cellidx, cellX, cellY: integer;
+    recordid, fileName, wrldEdid: string;
 
     f: IwbFile;
     g, wrldgroup: IwbGroupRecord;
-    r, rWrld, block, subblock, rCell, land: IwbElement;
+    r, rWrld, wWrld, block, subblock, rCell, land: IwbElement;
 begin
     count := 0;
     for i := 0 to Pred(FileCount) do begin
         f := FileByIndex(i);
+        fileName := GetFileName(f);
 
         //Collect LAND
         g := GroupBySignature(f, 'WRLD');
@@ -109,6 +111,8 @@ begin
             rWrld := ElementByIndex(g, j);
             recordid := RecordFormIdFileId(rWrld);
             if Pos(recordid, sIgnoredWorldspaces) <> 0 then continue;
+            wrldEdid := GetElementEditValues(rWrld, 'EDID');
+            wWrld := WinningOverride(rWrld);
 
             wrldgroup := ChildGroup(rWrld);
             for blockidx := 0 to Pred(ElementCount(wrldgroup)) do begin
@@ -122,11 +126,15 @@ begin
                         if not Assigned(land) then continue;
                         if not IsWinningOverride(land) then continue;
                         if not ElementExists(land, 'VHGT') then continue;
-                        AddMessage(ShortName(land));
-                        //count := count + CreateLandscapeHeights(land, WinningOverride(rCell), WinningOverride(rWrld));
-                        //count := count + CreateLandscapeSnow(land, WinningOverride(rCell), WinningOverride(rWrld));
+                        cellX := GetElementNativeValues(rCell, 'XCLC\X');
+                        cellY := GetElementNativeValues(rCell, 'XCLC\Y');
+                        //AddMessage(ShortName(land));
+                        //count := count + CreateLandscapeHeights(land, WinningOverride(rCell), wWrld, wrldEdid);
+                        if joLandscapeHeights.O[fileName].O[wrldEdid].O[cellX].O[cellY].S['flat'] = 0 then continue; //skip flat landscape cells
+                        count := count + CreateLandscapeSnow(land, WinningOverride(rCell), wWrld, wrldEdid, fileName, cellX, cellY);
                         //count := count + 1;
-                        PlaceLandscapeSnow(land, WinningOverride(rCell), WinningOverride(rWrld));
+                        //PlaceLandscapeSnow(land, WinningOverride(rCell), wWrld, wrldEdid, fileName, cellX, cellY);
+                        AddMessage(IntToStr(count));
                         //if count = 30 then Exit;
                     end;
                 end;
@@ -137,19 +145,17 @@ begin
     AddMessage(IntToStr(count));
 end;
 
-function PlaceLandscapeSnow(land, rCell, rWrld: IwbElement): integer;
+function PlaceLandscapeSnow(land, rCell, rWrld: IwbElement; wrldEdid, fileProvidingLand: string; cellX, cellY: integer): integer;
 var
-    cellX, cellY, unitsX, unitsY, landOffsetZ: integer;
-    editorIdSnowNif, fileProvidingLand, snowModel, snowLodModel0, snowLodModel1, snowLodModel2, snowStaticFormid: string;
+    unitsX, unitsY, landOffsetZ: integer;
+    editorIdSnowNif, snowModel, snowLodModel0, snowLodModel1, snowLodModel2, snowStaticFormid: string;
 
     snowStatic, nCell, snowRef, base: IwbElement;
 begin
     Result := 0;
-    cellX := GetElementNativeValues(rCell, 'XCLC\X');
-    cellY := GetElementNativeValues(rCell, 'XCLC\Y');
     unitsX := cellX * 4096;
     unitsY := cellY * 4096;
-    editorIdSnowNif := EditorID(rWrld) + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
+    editorIdSnowNif := wrldEdid + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
 
     snowModel := 'LandscapeSnow\' + editorIdSnowNif + '.nif';
     snowLodModel0 := 'LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_0.nif';
@@ -157,15 +163,15 @@ begin
     snowLodModel2 := 'LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_2.nif';
     if not FileExists(wbScriptsPath + 'Seasons\output\Meshes\' + snowModel) then begin
         snowModel := 'LandscapeSnow\LandscapeSnow.nif';
-        snowLodModel0 := 'LOD\LandscapeSnow\LandscapeSnow_lod_0.nif';
-        snowLodModel1 := 'LOD\LandscapeSnow\LandscapeSnow_lod_1.nif';
-        snowLodModel2 := 'LOD\LandscapeSnow\LandscapeSnow_lod_2.nif';
+        snowLodModel0 := '';
+        snowLodModel1 := '';
+        snowLodModel2 := '';
         if not Assigned(flatSnowStatic) then flatSnowStatic := CreateNewStat(snowModel, snowLodModel0, snowLodModel1, snowLodModel2, 'FlatSnowStatic01');
         snowStatic := flatSnowStatic;
     end else snowStatic := CreateNewStat(snowModel, snowLodModel0, snowLodModel1, snowLodModel2, editorIdSnowNif);
 
     fileProvidingLand := GetFileName(GetFile(land));
-    landOffsetZ := joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S['offset'];
+    landOffsetZ := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['offset'] * SCALE_FACTOR_TERRAIN;
 
     AddRequiredElementMasters(rWrld, plugin, False, True);
     AddRequiredElementMasters(rCell, plugin, False, True);
@@ -177,7 +183,7 @@ begin
 
     SetElementEditValues(snowRef, 'DATA\Position\X', IntToStr(unitsX));
     SetElementEditValues(snowRef, 'DATA\Position\Y', IntToStr(unitsY));
-    SetElementEditValues(snowRef, 'DATA\Position\Z', IntToStr(landOffsetZ + 1));
+    SetElementEditValues(snowRef, 'DATA\Position\Z', IntToStr(landOffsetZ));
 
     base := ElementByPath(snowRef, 'NAME');
     SetEditValue(base, snowStaticFormid);
@@ -198,11 +204,11 @@ begin
     Result := newStatic;
 end;
 
-function CreateLandscapeSnow(land, rCell, rWrld: IwbElement): integer;
+function CreateLandscapeSnow(land, rCell, rWrld: IwbElement; wrldEdid, fileProvidingLand: string; cellX, cellY: integer): integer;
 var
-    bEverChanged: boolean;
-    i, nifFile, cellX, cellY, unitsX, unitsY, landOffsetZ, row, column, vertexCount: integer;
-    editorIdSnowNif, fileProvidingLand, fileName, snowNifFile, rowColumn, xyz, vx, vy, vz, newvz: string;
+    bVertexIsOutsideCell: boolean;
+    i, nifFile, unitsX, unitsY, landOffsetZ, row2, column2, row, column, vertexCount, point1, point2, point3, point4, newCellX, newCellY, newlandOffsetZ, cellOffsetDifference, newVz: integer;
+    editorIdSnowNif, fileName, snowNifFile, xyz, vx, vy, vz, newVzStr: string;
 
     tsXYZ: TStrings;
 
@@ -211,13 +217,10 @@ var
     snowNif, snowLodNif: TwbNifFile;
 begin
     Result := 0;
-    cellX := GetElementNativeValues(rCell, 'XCLC\X');
-    cellY := GetElementNativeValues(rCell, 'XCLC\Y');
     unitsX := cellX * 4096;
     unitsY := cellY * 4096;
-    editorIdSnowNif := EditorID(rWrld) + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
-    fileProvidingLand := GetFileName(GetFile(land));
-    landOffsetZ := joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S['offset'];
+    editorIdSnowNif := wrldEdid + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
+    landOffsetZ := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['offset'];
 
     for nifFile := 0 to 3 do begin
         if nifFile = 0 then begin //Create full model
@@ -230,7 +233,7 @@ begin
             fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_1.nif';
             snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_1.nif';
         end else if nifFile = 3 then begin //Create lod model
-            fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_2.nif';
+            fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_1.nif';
             snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_2.nif';
         end;
         snowNif := TwbNifFile.Create;
@@ -239,35 +242,108 @@ begin
             block := snowNif.Blocks[1];
             vertexCount := block.NativeValues['Num Vertices'];
             vertexData := block.Elements['Vertex Data'];
-            bEverChanged := false;
             for i := 0 to Pred(vertexCount) do begin
+                bVertexIsOutsideCell := false;
                 vertex := vertexData[i];
                 xyz := vertex.EditValues['Vertex'];
                 tsXYZ := SplitString(xyz, ' ');
                 vx := tsXYZ[0];
                 vy := tsXYZ[1];
                 vz := tsXYZ[2];
-                column := Round(StrToFloatDef(vx, 9))/128;
-                row := Round(StrToFloatDef(vy, 9))/128;
-                rowColumn := 'Row #' + IntToStr(row) + '\Column #' + IntToStr(column);
-                newvz := IntToStr(joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn] + Round(StrToFloatDef(vz, 9)));
-                if joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn] <> 0 then bEverChanged := true;
-                vertex.EditValues['Vertex'] := vx + ' ' + vy + ' ' + newvz;
+
+                row2 := Round(StrToFloatDef(vy, 9))/64; // dividing by 64 means row2 is twice the size of the actual row
+                // if row2 is even, this row exists
+                column2 := Round(StrToFloatDef(vx, 9))/64; // dividing by 64 means column2 is twice the size of the actual column
+                // if column2 is even, this column exists
+
+                if (IsEven(row2) and IsEven(column2)) then begin
+                    row := row2/2;
+                    column := column2/2;
+                    if ((row < 0) or (row > 32) or (column < 0) or (column > 32)) then begin
+                        // This will only happen for the LOD models. We have an overlap that goes to the neighboring cell so we can close some gaps for LOD.
+                        bVertexIsOutsideCell := true;
+                        // Here we get the neighboring cell based off these values.
+                        newCellX := cellX; //default to no cell offset
+                        newCellY := cellY;
+                        if column < 0 then newCellX := cellX - 1
+                        else if column > 32 then newCellX := cellX + 1;
+                        if row < 0 then newCellY := cellY - 1
+                        else if row > 32 then newCellY := cellY + 1;
+
+                        if not joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[newCellX].O[newCellY].Contains('offset') then begin
+                            //If the neighboring cell does not exist, we should change the row/column to the vertex that is closest and use that for the newVz
+                            if column < 0 then column := 0
+                            else if column > 32 then column := 32;
+                            if row < 0 then row := 0
+                            else if row > 32 then row := 32;
+                            newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                        end else begin
+                            //If the neighboring cell does exist, we need to compare the offset values, as that will affect the newVz.
+                            newlandOffsetZ := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[newCellX].O[newCellY].S['offset'];
+                            // We will need to add this difference to the final vz value;
+                            cellOffsetDifference := (landOffsetZ - newlandOffsetZ) * SCALE_FACTOR_TERRAIN;
+
+                            //Get the correct row/column for the overlap cell vertex we wish to go by. Since our LOD only has resolution of 4 rows/columns, we use 4 or 28.
+                            if column < 0 then column := 28
+                            else if column > 32 then column := 4;
+                            if row < 0 then row := 28
+                            else if row > 32 then row := 4;
+
+                            //We add the cellOffsetDifference to the final z value.
+                            newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[newCellX].O[newCellY].A[row].S[column] * SCALE_FACTOR_TERRAIN + cellOffsetDifference;
+                        end;
+                    end else begin
+                        newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                    end;
+                end else begin
+                    // If odd, this row/column does not exist. This will only happen to the full model for the in-between vertices.
+                    // Get the average of 4 points around the vertex to set the new height.
+                    row := (row2 - 1)/2;
+                    column := (column2 - 1)/2;
+                    point1 := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+
+                    row := (row2 - 1)/2;
+                    column := (column2 + 1)/2;
+                    point2 := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+
+                    row := (row2 + 1)/2;
+                    column := (column2 + 1)/2;
+                    point3 := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+
+                    row := (row2 + 1)/2;
+                    column := (column2 - 1)/2;
+                    point4 := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+
+                    newVz := (point1 + point2 + point3 + point4)/4;
+                end;
+
+                //We have z offsets built in for the LOD.
+                if nifFile = 0 then newVzStr := IntToStr(newVz)
+                else if nifFile = 1 then begin
+                    if bVertexIsOutsideCell then newVzStr := IntToStr(newVz)
+                    else newVzStr := IntToStr(newVz + 80);
+                end else if nifFile = 2 then begin
+                    if bVertexIsOutsideCell then newVzStr := IntToStr(newVz + 80)
+                    else newVzStr := IntToStr(newVz + 160);
+                end else if nifFile = 3 then begin
+                    if bVertexIsOutsideCell then newVzStr := IntToStr(newVz + 160)
+                    else newVzStr := IntToStr(newVz + 320);
+                end;
+                vertex.EditValues['Vertex'] := vx + ' ' + vy + ' ' + newVzStr;
             end;
-            if bEverChanged then snowNif.SaveToFile(snowNifFile);
+            snowNif.SaveToFile(snowNifFile);
         finally
             snowNif.Free;
         end;
     end;
-    if bEverChanged then Result := 1;
+    Result := 1;
     AddMessage(editorIdSnowNif);
 end;
 
-function CreateLandscapeHeights(land, rCell, rWrld: IwbElement): integer;
+function CreateLandscapeHeights(land, rCell, rWrld: IwbElement; wrldEdid: string): integer;
 var
-    bFoundInJSON: boolean;
     landOffsetZ, rowColumnOffsetZ, rowStartVal, landValue, landValueScaled: single;
-    cellX, cellY, unitsX, unitsY, row, column: integer;
+    cellX, cellY, unitsX, unitsY, row, column, bHeightAlwaysZero: integer;
     fileProvidingLand, rowColumn, editorIdSnowNif: string;
 
     landHeightData: IwbElement;
@@ -278,45 +354,39 @@ begin
     unitsX := cellX * 4096;
     unitsY := cellY * 4096;
     fileProvidingLand := GetFileName(GetFile(land));
-    editorIdSnowNif := EditorID(rWrld) + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
+    editorIdSnowNif := wrldEdid + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
 
     landOffsetZ := GetElementNativeValues(land, 'VHGT\Offset');
     landHeightData := ElementByPath(land, 'VHGT\Height Data');
 
+
+
+    if joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].Contains('offset') then Exit;
+    joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['offset'] := Round(landOffsetZ);
+    bHeightAlwaysZero := 0;
+
     for row := 0 to 32 do begin
         for column := 0 to 32 do begin
-            bFoundInJSON := False;
-
             rowColumn := 'Row #' + IntToStr(row) + '\Column #' + IntToStr(column);
-            if joLandscapeHeights.Contains(fileProvidingLand) then begin
-                if joLandscapeHeights.O[fileProvidingLand].Contains(editorIdSnowNif) then begin
-                    if joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].Contains(rowColumn) then begin
-                        landValueScaled := joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn];
-                        bFoundInJSON := True;
-                    end;
-                end;
-            end;
-            if not bFoundInJSON then begin
-                rowColumnOffsetZ := GetElementNativeValues(landHeightData, rowColumn);
-                if rowColumnOffsetZ > 127 then rowColumnOffsetZ := rowColumnOffsetZ - 256;
+            rowColumnOffsetZ := GetElementNativeValues(landHeightData, rowColumn);
+            if rowColumnOffsetZ > 127 then rowColumnOffsetZ := rowColumnOffsetZ - 256;
 
-                if(column = 0) then begin //check if first column
-                    if(row = 0) then begin // check if first row of first column
-                        rowStartVal := rowColumnOffsetZ; //rowColumnOffsetZ + landOffsetZ; //if first column, first row, height is the LAND's offset + the offset value. We are omitting landOffsetZ since we want to simply place the landscape snow at z height of landOffsetZ.
-                    end else begin
-                        rowStartVal := rowColumnOffsetZ + rowStartVal; //if first column, but 2nd or higher row, height is the 1st row's offset + the current offset value
-                    end;
-                    landValue := rowStartVal;
+            if(column = 0) then begin //check if first column
+                if(row = 0) then begin // check if first row of first column
+                    rowStartVal := rowColumnOffsetZ; //rowColumnOffsetZ + landOffsetZ; //if first column, first row, height is the LAND's offset + the offset value. We are omitting landOffsetZ since we want to simply place the landscape snow at z height of landOffsetZ.
                 end else begin
-                    // If it is the 2nd or higher column, height is the previous rowColumn's height + the current offset value.
-                    landValue := landValue + rowColumnOffsetZ;
+                    rowStartVal := rowColumnOffsetZ + rowStartVal; //if first column, but 2nd or higher row, height is the 1st row's offset + the current offset value
                 end;
-                landValueScaled := landValue * SCALE_FACTOR_TERRAIN; //This will be the Z height we apply to the vertex of the nif.
-                joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S['offset'] := Round(landOffsetZ) * SCALE_FACTOR_TERRAIN;
-                joLandscapeHeights.O[fileProvidingLand].O[editorIdSnowNif].S[rowColumn] := landValueScaled;
-                bSaveLandHeights := True;
-                Result := 1;
+                landValue := rowStartVal;
+            end else begin
+                // If it is the 2nd or higher column, height is the previous rowColumn's height + the current offset value.
+                landValue := landValue + rowColumnOffsetZ;
             end;
+            //landValueScaled := landValue * SCALE_FACTOR_TERRAIN; //This will be the Z height we apply to the vertex of the nif.
+            if landValue <> 0 then bHeightAlwaysZero := 1;
+            joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].Add(landValue);
+            bSaveLandHeights := True;
+            Result := 1;
 
             // X Y Z coordinates. Shouldn't need these.
             // pX := FloatToStr(column * 128);
@@ -324,7 +394,7 @@ begin
             // pZ := FloatToStr(landValueScaled);
         end;
     end;
-    AddMessage(editorIdSnowNif);
+    joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['flat'] := bHeightAlwaysZero;
 end;
 
 procedure FetchRules;
@@ -602,5 +672,12 @@ begin
         if not ForceDirectories(f) then
             raise Exception.Create('Can not create destination directory ' + f);
 end;
+
+function IsEven(Number: Integer): Boolean;
+begin
+  Result := false;
+  if Number mod 2 = 0 then Result := true;
+end;
+
 
 end.
