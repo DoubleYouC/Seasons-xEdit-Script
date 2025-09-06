@@ -8,7 +8,7 @@ unit Seasons;
 // ----------------------------------------------------
 
 var
-    bSaveLandHeights: boolean;
+    bSaveLandHeights, bCreateLandscapeHeights, bCreateLandscapeSnowMeshes, bPlaceLandscapeSnow: boolean;
     uiScale: integer;
     sIgnoredWorldspaces: string;
 
@@ -58,7 +58,13 @@ function Initialize: integer;
 }
 begin
     Result := 0;
+    //Globals
     bSaveLandHeights := False;
+
+    //Gui settings
+    bCreateLandscapeHeights := False;
+    bCreateLandscapeSnowMeshes := False;
+    bPlaceLandscapeSnow := False;
 
     //Get scaling
     uiScale := Screen.PixelsPerInch * 100 / 96;
@@ -72,7 +78,7 @@ begin
         Result := 1;
         Exit;
     end;
-    //CreatePlugin;
+    CreatePlugin;
 
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
@@ -128,7 +134,7 @@ begin
                         if not ElementExists(land, 'VHGT') then continue;
                         cellX := GetElementNativeValues(rCell, 'XCLC\X');
                         cellY := GetElementNativeValues(rCell, 'XCLC\Y');
-                        //AddMessage(ShortName(land));
+                        AddMessage(ShortName(land) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
                         //count := count + CreateLandscapeHeights(land, WinningOverride(rCell), wWrld, wrldEdid);
                         if joLandscapeHeights.O[fileName].O[wrldEdid].O[cellX].O[cellY].S['flat'] = 0 then continue; //skip flat landscape cells
                         count := count + CreateLandscapeSnow(land, WinningOverride(rCell), wWrld, wrldEdid, fileName, cellX, cellY);
@@ -181,9 +187,9 @@ begin
     snowRef := Add(nCell, 'REFR', True);
     snowStaticFormid := IntToHex(GetLoadOrderFormID(snowStatic), 8);
 
-    SetElementEditValues(snowRef, 'DATA\Position\X', IntToStr(unitsX));
-    SetElementEditValues(snowRef, 'DATA\Position\Y', IntToStr(unitsY));
-    SetElementEditValues(snowRef, 'DATA\Position\Z', IntToStr(landOffsetZ));
+    SetElementEditValues(snowRef, 'DATA\Position\X', IntToStr(unitsX + 2048));
+    SetElementEditValues(snowRef, 'DATA\Position\Y', IntToStr(unitsY + 2048));
+    SetElementEditValues(snowRef, 'DATA\Position\Z', IntToStr(landOffsetZ + 20));
 
     base := ElementByPath(snowRef, 'NAME');
     SetEditValue(base, snowStaticFormid);
@@ -233,7 +239,7 @@ begin
             fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_1.nif';
             snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_1.nif';
         end else if nifFile = 3 then begin //Create lod model
-            fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_1.nif';
+            fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_2.nif';
             snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_2.nif';
         end;
         snowNif := TwbNifFile.Create;
@@ -281,16 +287,26 @@ begin
                             //If the neighboring cell does exist, we need to compare the offset values, as that will affect the newVz.
                             newlandOffsetZ := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[newCellX].O[newCellY].S['offset'];
                             // We will need to add this difference to the final vz value;
-                            cellOffsetDifference := (landOffsetZ - newlandOffsetZ) * SCALE_FACTOR_TERRAIN;
+                            cellOffsetDifference := landOffsetZ - newlandOffsetZ;
 
-                            //Get the correct row/column for the overlap cell vertex we wish to go by. Since our LOD only has resolution of 4 rows/columns, we use 4 or 28.
-                            if column < 0 then column := 28
-                            else if column > 32 then column := 4;
-                            if row < 0 then row := 28
-                            else if row > 32 then row := 4;
+                            //Get the correct row/column for the overlap cell vertex we wish to go by.
+                            // Since our LOD only has resolution of 4 rows/columns, we use 3 or 29.
+                            // For LOD16 we use a scale of 1.1111 so we need to change these to 4 more rows over,
+                            // so 7 and 25.
+                            if nifFile = 3 then begin
+                                if column < 0 then column := 25
+                                else if column > 32 then column := 7;
+                                if row < 0 then row := 25
+                                else if row > 32 then row := 7;
+                            end else begin
+                                if column < 0 then column := 29
+                                else if column > 32 then column := 3;
+                                if row < 0 then row := 29
+                                else if row > 32 then row := 3;
+                            end;
 
                             //We add the cellOffsetDifference to the final z value.
-                            newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[newCellX].O[newCellY].A[row].S[column] * SCALE_FACTOR_TERRAIN + cellOffsetDifference;
+                            newVz := (joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[newCellX].O[newCellY].A[row].S[column] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
                         end;
                     end else begin
                         newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
@@ -321,23 +337,24 @@ begin
                 if nifFile = 0 then newVzStr := IntToStr(newVz)
                 else if nifFile = 1 then begin
                     if bVertexIsOutsideCell then newVzStr := IntToStr(newVz)
-                    else newVzStr := IntToStr(newVz + 80);
+                    else newVzStr := IntToStr(newVz + 40);
                 end else if nifFile = 2 then begin
-                    if bVertexIsOutsideCell then newVzStr := IntToStr(newVz + 80)
-                    else newVzStr := IntToStr(newVz + 160);
+                    if bVertexIsOutsideCell then newVzStr := IntToStr(newVz + 40)
+                    else newVzStr := IntToStr(newVz + 192);
                 end else if nifFile = 3 then begin
-                    if bVertexIsOutsideCell then newVzStr := IntToStr(newVz + 160)
-                    else newVzStr := IntToStr(newVz + 320);
+                    if bVertexIsOutsideCell then newVzStr := IntToStr(newVz + 192)
+                    else newVzStr := IntToStr(newVz + 512);
                 end;
                 vertex.EditValues['Vertex'] := vx + ' ' + vy + ' ' + newVzStr;
             end;
+            block.UpdateNormals;
+            block.UpdateTangents;
             snowNif.SaveToFile(snowNifFile);
         finally
             snowNif.Free;
         end;
     end;
     Result := 1;
-    AddMessage(editorIdSnowNif);
 end;
 
 function CreateLandscapeHeights(land, rCell, rWrld: IwbElement; wrldEdid: string): integer;
