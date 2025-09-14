@@ -56,7 +56,6 @@ begin
     tlLandRecords.Free;
     tlBasesThatAlterLand.Free;
 
-    if bSaveLandHeights then joLandscapeHeights.SaveToFile(wbScriptsPath + 'Seasons\LandHeights.json', False, TEncoding.UTF8, True);
     joLandscapeHeights.Free;
     Result := 0;
 end;
@@ -173,11 +172,43 @@ begin
             if not IsWinningOverride(r) then continue;
             if ReferencedByCount(r) = 0 then continue;
             recordid := RecordFormIdFileId(r);
-            if joAlterLandRules.O['Alter Land For These Bases'].Contains(recordid) then tlBasesThatAlterLand.Add(r);
+            if not joAlterLandRules.Contains(recordid) then continue;
+            tlBasesThatAlterLand.Add(r);
+        end;
+
+        g := GroupBySignature(f, 'FURN');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := ElementByIndex(g, j);
+            if not IsWinningOverride(r) then continue;
+            if ReferencedByCount(r) = 0 then continue;
+            recordid := RecordFormIdFileId(r);
+            if not joAlterLandRules.Contains(recordid) then continue;
+            tlBasesThatAlterLand.Add(r);
+        end;
+
+        g := GroupBySignature(f, 'ACTI');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := ElementByIndex(g, j);
+            if not IsWinningOverride(r) then continue;
+            if ReferencedByCount(r) = 0 then continue;
+            recordid := RecordFormIdFileId(r);
+            if not joAlterLandRules.Contains(recordid) then continue;
+            tlBasesThatAlterLand.Add(r);
+        end;
+
+        g := GroupBySignature(f, 'MSTT');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := ElementByIndex(g, j);
+            if not IsWinningOverride(r) then continue;
+            if ReferencedByCount(r) = 0 then continue;
+            recordid := RecordFormIdFileId(r);
+            if not joAlterLandRules.Contains(recordid) then continue;
+            tlBasesThatAlterLand.Add(r);
         end;
 
     end;
-    AddMessage('Processed LAND Records: ' + IntToStr(count));
+    AddMessage('New LAND Records: ' + IntToStr(count));
+    if bSaveLandHeights then joLandscapeHeights.SaveToFile(wbScriptsPath + 'Seasons\LandHeights.json', False, TEncoding.UTF8, True);
 end;
 
 procedure AlterLandHeightsForTheseBases;
@@ -190,6 +221,7 @@ var
 begin
     for i:= 0 to Pred(tlBasesThatAlterLand.Count) do begin
         base := ObjectToElement(tlBasesThatAlterLand[i]);
+        AddMessage('Processing base ' + #9 + Name(base));
         ProcessBasesThatAlterLand(base, base);
     end;
 end;
@@ -202,7 +234,8 @@ var
     i, cellX, cellY: integer;
     wrldEdid, fileName: string;
 
-    r, rCell, rWrld, rLand: IwbElement;
+    r, rCell, wCell, rWrld, rLand: IwbElement;
+    c: TwbGridCell;
 begin
     Result := False;
     for i := 0 to Pred(ReferencedByCount(base)) do begin
@@ -222,16 +255,22 @@ begin
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
 
+        if GetIsPersistent(rCell) then begin
+            c := wbPositionToGridCell(GetPosition(r));
+            rCell := WinningOverride(GetCellFromWorldspace(rWrld, c.X, c.Y));
+            if not Assigned(rCell) then continue;
+        end;
+
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
         cellX := GetElementNativeValues(rCell, 'XCLC\X');
         cellY := GetElementNativeValues(rCell, 'XCLC\Y');
         if not joLandFiles.O[wrldEdid].O[cellX].Contains(cellY) then continue;
         fileName := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
 
-        if joLandscapeHeights.O[fileName].O[wrldEdid].O[cellX].O[cellY].S['flat'] = 1 then continue; //skip flat landscape cells
-        if joLandscapeHeights.O[fileName].O[wrldEdid].O[cellX].O[cellY].S['underwater'] = 1 then continue; //skip underwater landscape cells
+        if joLandscapeHeights.O[fileName].O[wrldEdid].O[cellX].O[cellY].S['flags'] > 0 then continue; //skip flat landscape cells and underwater landscape cells
 
         // If we got this far, this REFR is in an exterior cell with landscape, and we will need to alter the land heights IF it is close enough to the landscape.
+        AddMessage(#9 + 'Processing reference ' + #9 + ShortName(r) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
         AlterLandHeightsForThisRefr(r, base, fromBase, wrldEdid, cellX, cellY);
     end;
 end;
@@ -260,7 +299,7 @@ begin
     y2 := GetElementNativeValues(realBase, 'OBND\Y2');
     z2 := GetElementNativeValues(realBase, 'OBND\Z2');
 
-    alteration := joAlterLandRules.O['Alter Land For These Bases'].S[RecordFormIdFileId(realBase)];
+    alteration := joAlterLandRules.S[RecordFormIdFileId(realBase)];
 
     //Get scale and position of the reference.
     if ElementExists(r, 'XSCL') then scale := GetElementNativeValues(r, 'XSCL') else scale := 1;
@@ -356,8 +395,8 @@ begin
                 landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
 
                 vz := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] * SCALE_FACTOR_TERRAIN + landOffsetZ;
-                if minZ - vz > 24 then break;
-                newZ := Ceil((vz + maxZ + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
+                if minZ - vz > 200 then break;
+                newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
                 joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
                 bLandHasChanged := True;
             end;
@@ -368,7 +407,7 @@ begin
                 if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
                     fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
                     landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                    newZ := Ceil((vz + maxZ + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
+                    newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
                     joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
                     bLandHasChanged := True;
                 end;
@@ -378,7 +417,7 @@ begin
                     if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
                         fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
                         landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                        newZ := Ceil((vz + maxZ + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
+                        newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
                         joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
                         bLandHasChanged := True;
                     end;
@@ -389,7 +428,7 @@ begin
                     if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
                         fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
                         landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                        newZ := Ceil((vz + maxZ + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
+                        newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
                         joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
                         bLandHasChanged := True;
                     end;
@@ -400,7 +439,7 @@ begin
                 if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
                     fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
                     landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                    newZ := Ceil((vz + maxZ + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
+                    newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
                     joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
                     bLandHasChanged := True;
                 end;
@@ -410,7 +449,7 @@ begin
                     if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
                         fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
                         landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                        newZ := Ceil((vz + maxZ + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
+                        newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
                         joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
                         bLandHasChanged := True;
                     end;
@@ -421,7 +460,7 @@ begin
                     if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
                         fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
                         landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                        newZ := Ceil((vz + maxZ + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
+                        newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
                         joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
                         bLandHasChanged := True;
                     end;
@@ -432,7 +471,7 @@ begin
                 if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
                     fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
                     landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                    newZ := Ceil((vz + maxZ + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
+                    newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
                     joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
                     bLandHasChanged := True;
                 end;
@@ -442,7 +481,7 @@ begin
                 if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
                     fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
                     landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                    newZ := Ceil((vz + maxZ + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
+                    newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
                     joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
                     bLandHasChanged := True;
                 end;
@@ -450,7 +489,7 @@ begin
 
         end;
     end;
-    if bLandHasChanged then AddMessage('Altered land heights for ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + ' due to base object near landscape: ' + ShortName(realBase));
+    if bLandHasChanged then AddMessage(#9 + #9 + #9 + 'Altered land heights for ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + ' due to base object near landscape: ' + ShortName(realBase));
 end;
 
 procedure ProcessLandRecords;
@@ -458,12 +497,13 @@ procedure ProcessLandRecords;
     Process land records to place snow.
 }
 var
-    i, cellX, cellY: integer;
+    i, cellX, cellY, count: integer;
     wrldEdid, fileName: string;
 
     rLand, rCell, rWrld: IwbElement;
 begin
-    for i:= 0 to Pred(tlLandRecords.Count) do begin
+    count := tlLandRecords.Count;
+    for i:= 0 to Pred(count) do begin
         rLand := ObjectToElement(tlLandRecords[i]);
         rCell := WinningOverride(LinksTo(ElementByIndex(rLand, 0)));
         cellX := GetElementNativeValues(rCell, 'XCLC\X');
@@ -472,10 +512,8 @@ begin
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
         fileName := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
 
-
-        if joLandscapeHeights.O[fileName].O[wrldEdid].O[cellX].O[cellY].S['flat'] = 1 then continue; //skip flat landscape cells
-        if joLandscapeHeights.O[fileName].O[wrldEdid].O[cellX].O[cellY].S['underwater'] = 1 then continue; //skip underwater landscape cells
-        AddMessage(ShortName(rLand) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+        if joLandscapeHeights.O[fileName].O[wrldEdid].O[cellX].O[cellY].S['flags'] > 0 then continue; //skip flat and underwater landscape cells
+        AddMessage(IntToStr(i) + ' of ' + IntToStr(count) + #9 + ShortName(rLand) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
 
         CreateLandscapeSnow(rLand, rCell, rWrld, wrldEdid, fileName, cellX, cellY);
         if bPlaceLandscapeSnow then PlaceLandscapeSnow(rLand, rCell, rWrld, wrldEdid, fileName, cellX, cellY);
@@ -695,8 +733,8 @@ end;
 
 function CreateLandscapeHeights(land, rCell, rWrld: IwbElement; wrldEdid: string): boolean;
 var
-    bLandHeightsExist: boolean;
-    landOffsetZ, rowColumnOffsetZ, rowStartVal, landValue, landValueScaled, cellWaterHeightFloat: single;
+    bLandHeightsExist, bHasWater: boolean;
+    landOffsetZ, rowColumnOffsetZ, rowStartVal, landValue, landValueScaled, landValueChanged, cellWaterHeightFloat: single;
     cellX, cellY, unitsX, unitsY, row, column, iFlat, iHeightAlwaysBelowWater: integer;
     fileProvidingLand, rowColumn, cellWaterHeight: string;
 
@@ -708,9 +746,11 @@ begin
     unitsX := cellX * 4096;
     unitsY := cellY * 4096;
     fileProvidingLand := GetFileName(GetFile(land));
+    bHasWater := False;
+    if GetElementNativeValues(land, 'DATA\Has Water') = 1 then bHasWater := True;
     cellWaterHeight := GetElementEditValues(rCell, 'XCLW');
     if cellWaterHeight = 'Default' then cellWaterHeight := GetElementEditValues(rWrld, 'DNAM\Default Water Height');
-    cellWaterHeightFloat := StrToFloatDef(cellWaterHeight, 0);
+    cellWaterHeightFloat := StrToFloatDef(cellWaterHeight, 9);
 
     landOffsetZ := GetElementNativeValues(land, 'VHGT\Offset');
     landHeightData := ElementByPath(land, 'VHGT\Height Data');
@@ -719,8 +759,8 @@ begin
     if bLandHeightsExist and not bCreateLandscapeHeights then Exit; //If land heights already exist and we are not creating land heights, exit.
     Result := True;
     joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['offset'] := Round(landOffsetZ);
-    iFlat := 1; // assume the cell is flat
-    iHeightAlwaysBelowWater := 1; // assume the cell is always below water
+    iFlat := 4; // assume the cell is flat
+    iHeightAlwaysBelowWater := 8; // assume the cell is always below water
 
     for row := 0 to 32 do begin
         for column := 0 to 32 do begin
@@ -739,12 +779,15 @@ begin
                 // If it is the 2nd or higher column, height is the previous rowColumn's height + the current offset value.
                 landValue := landValue + rowColumnOffsetZ;
             end;
-            landValueScaled := landValue * SCALE_FACTOR_TERRAIN; //This will be the Z height we apply to the vertex of the nif.
+            landValueScaled := (landValue + landOffsetZ) * SCALE_FACTOR_TERRAIN; //This will be the Z height we apply to the vertex of the nif.
             if landValue <> 0 then iFlat := 0; //If at least one land height is not 0, we will not mark this cell not flat.
-            if landValueScaled < cellWaterHeightFloat then begin
-                landValue := landValue - 4; //If the land height is below water, we need to lower it more so the snow does not poke above the water. Since we raise the snow 16 units above the land, we lower the land by 4 (4*8=32) to help hide the snow under water.
-            end else iHeightAlwaysBelowWater := 0; //If at least one land height is above water, we will not mark this cell as always below water.
-            joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].Add(landValue);
+            if bHasWater and (landValueScaled < cellWaterHeightFloat) then begin
+                landValueChanged := landValue - 4; //If the land height is below water, we need to lower it more so the snow does not poke above the water.
+            end else begin
+                iHeightAlwaysBelowWater := 0; //If at least one land height is above water, we will not mark this cell as always below water.
+                landValueChanged := landValue;
+            end;
+            joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].Add(landValueChanged);
             bSaveLandHeights := True;
             Result := 1;
 
@@ -754,10 +797,9 @@ begin
             // pZ := FloatToStr(landValueScaled);
         end;
     end;
-    joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['flat'] := iFlat; // if iFlat = 1, then the entire cell is flat
-    joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['underwater'] := iHeightAlwaysBelowWater; // if iHeightAlwaysBelowWater = 1, then the entire cell is below water
-    if iFlat = 1 then Result := False;
-    if iHeightAlwaysBelowWater = 1 then Result := False;
+    joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['flags'] := iFlat + iHeightAlwaysBelowWater;
+    if iFlat = 4 then Result := False;
+    if iHeightAlwaysBelowWater = 8 then Result := False;
 end;
 
 procedure FetchRules;
@@ -818,7 +860,7 @@ begin
             sub.LoadFromResource(j);
             for c := 0 to Pred(sub.Count) do begin
                 key := sub.Names[c];
-                joAlterLandRules.O[key].Assign(sub.O[key]);
+                joAlterLandRules.S[key] := sub.S[key];
             end;
         finally
             sub.Free;
@@ -1058,6 +1100,43 @@ begin
         if Signature(r) <> 'LAND' then continue;
         Result := r;
         Exit;
+    end;
+end;
+
+function GetCellFromWorldspace(Worldspace: IInterface; GridX, GridY: integer): IInterface;
+var
+    blockidx, subblockidx, cellidx: integer;
+    wrldgrup, block, subblock, cell: IInterface;
+    Grid, GridBlock, GridSubBlock: TwbGridCell;
+    LabelBlock, LabelSubBlock: Cardinal;
+begin
+    Grid := wbGridCell(GridX, GridY);
+    GridSubBlock := wbSubBlockFromGridCell(Grid);
+    LabelSubBlock := wbGridCellToGroupLabel(GridSubBlock);
+    GridBlock := wbBlockFromSubBlock(GridSubBlock);
+    LabelBlock := wbGridCellToGroupLabel(GridBlock);
+
+    wrldgrup := ChildGroup(Worldspace);
+    // iterate over Exterior Blocks
+    for blockidx := 0 to Pred(ElementCount(wrldgrup)) do begin
+        block := ElementByIndex(wrldgrup, blockidx);
+        if GroupLabel(block) <> LabelBlock then Continue;
+        // iterate over SubBlocks
+        for subblockidx := 0 to Pred(ElementCount(block)) do begin
+            subblock := ElementByIndex(block, subblockidx);
+            if GroupLabel(subblock) <> LabelSubBlock then Continue;
+            // iterate over Cells
+            for cellidx := 0 to Pred(ElementCount(subblock)) do begin
+                cell := ElementByIndex(subblock, cellidx);
+                if (Signature(cell) <> 'CELL') or GetIsPersistent(cell) then Continue;
+                if (GetElementNativeValues(cell, 'XCLC\X') = Grid.x) and (GetElementNativeValues(cell, 'XCLC\Y') = Grid.y) then begin
+                    Result := cell;
+                    Exit;
+                end;
+            end;
+            Break;
+        end;
+        Break;
     end;
 end;
 
