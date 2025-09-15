@@ -92,7 +92,7 @@ begin
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
     CollectRecords;
-    AlterLandHeightsForTheseBases;
+    //AlterLandHeightsForTheseBases;
     ProcessLandRecords;
 end;
 
@@ -748,8 +748,8 @@ begin
     unitsX := cellX * 4096;
     unitsY := cellY * 4096;
     fileProvidingLand := GetFileName(GetFile(land));
-    bHasWater := False;
-    if GetElementNativeValues(land, 'DATA\Has Water') = 1 then bHasWater := True;
+    bHasWater := True;
+    if GetElementEditValues(rCell, 'DATA\Has Water') = '0' then bHasWater := False;
     cellWaterHeight := GetElementEditValues(rCell, 'XCLW');
     if cellWaterHeight = 'Default' then cellWaterHeight := GetElementEditValues(rWrld, 'DNAM\Default Water Height');
     cellWaterHeightFloat := StrToFloatDef(cellWaterHeight, 9);
