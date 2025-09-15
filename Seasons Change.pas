@@ -369,25 +369,27 @@ begin
 
     for column := lowestColumn to highestColumn do begin
         if column < 0 then begin
-            cellXHere := cellX - 1;
-            column := column + 32;
+            while column < 0 do begin
+                cellXHere := cellX - 1;
+                column := column + 32;
+            end;
         end else if column > 32 then begin
-            cellXHere := cellX + 1;
-            column := column - 32;
-        end else if column = 0 then begin
-            cellXHere := cellX;
-            column := 0;
-        end else if column = 32 then begin
-            cellXHere := cellX;
-            column := 32;
+            while column > 32 do begin
+                cellXHere := cellX + 1;
+                column := column - 32;
+            end;
         end else cellXHere := cellX;
         for row := lowestRow to highestRow do begin
             if row < 0 then begin
-                cellYHere := cellY - 1;
-                row := row + 32;
+                while row < 0 do begin
+                    cellYHere := cellY - 1;
+                    row := row + 32;
+                end;
             end else if row > 32 then begin
-                cellYHere := cellY + 1;
-                row := row - 32;
+                while row > 32 do begin
+                    cellYHere := cellY + 1;
+                    row := row - 32;
+                end;
             end else cellYHere := cellY;
 
             if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
