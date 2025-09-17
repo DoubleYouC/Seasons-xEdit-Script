@@ -23,6 +23,10 @@ var
 const
     sSeasonsFileName = 'Seasons.esm';
     SCALE_FACTOR_TERRAIN = 8;
+    // epsilon to use for CompareValue calls
+    // between positions and rotations, positions have more significant decimals (6), so this is set
+    // to compliment that
+    EPSILON = 0.000001;
 
 // ----------------------------------------------------
 // Main functions and procedures go immediately below.
@@ -92,7 +96,7 @@ begin
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
     CollectRecords;
-    //AlterLandHeightsForTheseBases;
+    AlterLandHeightsForTheseBases;
     ProcessLandRecords;
 end;
 
@@ -208,7 +212,7 @@ begin
 
     end;
     AddMessage('New LAND Records: ' + IntToStr(count));
-    if bSaveLandHeights then joLandscapeHeights.SaveToFile(wbScriptsPath + 'Seasons\LandHeights.json', False, TEncoding.UTF8, True);
+    //if bSaveLandHeights then joLandscapeHeights.SaveToFile(wbScriptsPath + 'Seasons\LandHeights.json', False, TEncoding.UTF8, True);
 end;
 
 procedure AlterLandHeightsForTheseBases;
@@ -216,17 +220,18 @@ procedure AlterLandHeightsForTheseBases;
     Alters land heights for certain base objects placed near landscape.
 }
 var
-    i: integer;
+    i, alteration: integer;
     base: IwbElement;
 begin
     for i:= 0 to Pred(tlBasesThatAlterLand.Count) do begin
         base := ObjectToElement(tlBasesThatAlterLand[i]);
-        AddMessage('Processing base ' + #9 + Name(base));
-        ProcessBasesThatAlterLand(base, base);
+        alteration := joAlterLandRules.S[RecordFormIdFileId(base)];
+        AddMessage('Processing base ' + #9 + Name(base) + #9 + IntToStr(alteration));
+        ProcessBasesThatAlterLand(base, base, alteration);
     end;
 end;
 
-function ProcessBasesThatAlterLand(base, fromBase: IwbElement): boolean;
+function ProcessBasesThatAlterLand(base, fromBase: IwbElement; alteration: integer): boolean;
 {
     Process a base object to see if it alters land heights.
 }
@@ -243,7 +248,7 @@ begin
         //If so, we need to alter the land heights near the reference.
         r := ReferencedByIndex(base, i);
         if Signature(r) = 'SCOL' then begin
-            ProcessBasesThatAlterLand(r, base);
+            ProcessBasesThatAlterLand(r, base, alteration);
             continue;
         end;
         if Signature(r) <> 'REFR' then continue;
@@ -271,18 +276,18 @@ begin
 
         // If we got this far, this REFR is in an exterior cell with landscape, and we will need to alter the land heights IF it is close enough to the landscape.
         AddMessage(#9 + 'Processing reference ' + #9 + ShortName(r) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
-        AlterLandHeightsForThisRefr(r, base, fromBase, wrldEdid, cellX, cellY);
+        AlterLandHeightsForThisRefr(r, base, fromBase, wrldEdid, cellX, cellY, alteration);
     end;
 end;
 
-procedure AlterLandHeightsForThisRefr(r, base, fromBase: IwbElement; wrldEdid: string; cellX, cellY: integer);
+procedure AlterLandHeightsForThisRefr(r, base, fromBase: IwbElement; wrldEdid: string; cellX, cellY, alteration: integer);
 {
     Alters land heights for a specific reference.
 }
 var
     bSCOL: boolean;
-    i, x1, y1, z1, x2, y2, z2, alteration: integer;
-    scale, posX, posY, posZ: single;
+    i, x1, y1, z1, x2, y2, z2: integer;
+    scale, posX, posY, posZ, rotX, rotY, rotZ: single;
 
     realBase, scolParts, scolPart, onam, placements, placement: IwbElement;
 begin
@@ -299,13 +304,14 @@ begin
     y2 := GetElementNativeValues(realBase, 'OBND\Y2');
     z2 := GetElementNativeValues(realBase, 'OBND\Z2');
 
-    alteration := joAlterLandRules.S[RecordFormIdFileId(realBase)];
-
     //Get scale and position of the reference.
     if ElementExists(r, 'XSCL') then scale := GetElementNativeValues(r, 'XSCL') else scale := 1;
     posX := GetElementNativeValues(r, 'DATA\Position\X');
     posY := GetElementNativeValues(r, 'DATA\Position\Y');
     posZ := GetElementNativeValues(r, 'DATA\Position\Z');
+    rotX := GetElementNativeValues(placement, 'DATA\Rotation\X');
+    rotY := GetElementNativeValues(placement, 'DATA\Rotation\Y');
+    rotZ := GetElementNativeValues(placement, 'DATA\Rotation\Z');
 
     //If the object is an SCOL, we need to adjust the position to be the SCOL placement position.
     if bSCOL then begin
@@ -321,6 +327,9 @@ begin
             posX := posX + GetElementNativeValues(placement, 'Position\X');
             posY := posY + GetElementNativeValues(placement, 'Position\Y');
             posZ := posZ + GetElementNativeValues(placement, 'Position\Z');
+            rotX := rotX + GetElementNativeValues(placement, 'Rotation\X');
+            rotY := rotY + GetElementNativeValues(placement, 'Rotation\Y');
+            rotZ := rotZ + GetElementNativeValues(placement, 'Rotation\Z');
             scale := scale * GetElementNativeValues(placement, 'Scale');
             x1 := Floor(x1 * scale);
             y1 := Floor(y1 * scale);
@@ -328,7 +337,7 @@ begin
             x2 := Ceil(x2 * scale);
             y2 := Ceil(y2 * scale);
             z2 := Ceil(z2 * scale);
-            AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2, posX, posY, posZ, wrldEdid, cellX, cellY, realBase);
+            AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, cellX, cellY, realBase);
         end;
     end else begin
         x1 := Floor(x1 * scale);
@@ -337,37 +346,54 @@ begin
         x2 := Ceil(x2 * scale);
         y2 := Ceil(y2 * scale);
         z2 := Ceil(z2 * scale);
-        AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2, posX, posY, posZ, wrldEdid, cellX, cellY, realBase);
+        AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, cellX, cellY, realBase);
     end;
 end;
 
-procedure AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2: integer; posX, posY, posZ: single; wrldEdid: string; cellX, cellY: integer; realBase: IwbElement);
+procedure AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2: integer; posX, posY, posZ, rotX, rotY, rotZ: single; wrldEdid: string; cellX, cellY: integer; realBase: IwbElement);
 {
     Alters land heights for a specific placement of a base object.
 }
 var
-    unitsX, unitsY, aposX, aposY, lowerCornerX, lowerCornerY, upperCornerX, upperCornerY, lowestColumn, lowestRow,
-    highestColumn, highestRow, row, column, alteration, cellXHere, cellYHere, maxZ, minZ, vz, newZ, landOffsetZ: integer;
+    unitsX, unitsY, lowestColumn, lowestRow, highestColumn, highestRow, row, column, cellXHere, cellYHere, vz, newZ, oldZ, landOffsetZ, columnMin,
+    columnMax, rowMin, rowMax, alterationHere: integer;
     fileName: string;
-    bLandHasChanged: boolean;
+    aposX, aposY, lowerCornerX, lowerCornerY, upperCornerX, upperCornerY, raw_x, raw_y, raw_z, minZ, maxZ: single;
 begin
     //Get the position in relation to the cell.
     unitsX := cellX * 4096;
     unitsY := cellY * 4096;
-    aposX := Round(posX) - unitsX;
-    aposY := Round(posY) - unitsY;
-    lowerCornerX := aposX - x1;
-    lowerCornerY := aposY - y1;
-    upperCornerX := aposX + x2;
-    upperCornerY := aposY + y2;
-    lowestColumn := Floor(lowerCornerX/128);
-    highestColumn := Ceil(upperCornerX/128);
-    lowestRow := Floor(lowerCornerY/128);
-    highestRow := Ceil(upperCornerY/128);
-    maxZ := Ceil(posZ) + z2;
-    minZ := Floor(posZ) + z1;
+    aposX := posX - unitsX;
+    aposY := posY - unitsY;
+
+    rotate_position(
+      x1, y1, z1,                      // initial position
+      rotX, rotY, rotZ,              // rotation to apply - x y z
+      raw_x, raw_y, raw_z           // (output) raw final position
+    );
+    lowerCornerX := aposX + raw_x;
+    lowerCornerY := aposY + raw_y;
+    minZ := posZ + raw_z;
+
+    rotate_position(
+      x2, y2, z2,                      // initial position
+      rotX, rotY, rotZ,              // rotation to apply - x y z
+      raw_x, raw_y, raw_z           // (output) raw final position
+    );
+    upperCornerX := aposX + raw_x;
+    upperCornerY := aposY + raw_y;
+    maxZ := posZ + raw_z;
+
+    lowestColumn := Floor(Min(lowerCornerX/128, upperCornerX/128));
+    highestColumn := Ceil(Max(lowerCornerX/128, upperCornerX/128));
+    lowestRow := Floor(Min(lowerCornerY/128, upperCornerY/128));
+    highestRow := Ceil(Max(lowerCornerY/128, upperCornerY/128));
+
+    AddMessage(#9 + #9 + 'Placement row/columns: ' + IntToStr(lowestColumn) + ',' + IntToStr(lowestRow) + ' to ' + IntToStr(highestColumn) + ',' + IntToStr(highestRow));
 
     for column := lowestColumn to highestColumn do begin
+        columnMin := column - lowestColumn;
+        columnMax := highestColumn - column;
         if column < 0 then begin
             while column < 0 do begin
                 cellXHere := cellX - 1;
@@ -380,6 +406,8 @@ begin
             end;
         end else cellXHere := cellX;
         for row := lowestRow to highestRow do begin
+            rowMin := row - lowestRow;
+            rowMax := highestRow - row;
             if row < 0 then begin
                 while row < 0 do begin
                     cellYHere := cellY - 1;
@@ -395,103 +423,27 @@ begin
             if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
                 fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
                 landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
+                vz := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column];
+                oldZ := vz * SCALE_FACTOR_TERRAIN + landOffsetZ;
+                if maxZ < oldZ then continue; //The object is completely below this vertex, so skip it.
+                alterationHere := alteration/SCALE_FACTOR_TERRAIN;
+                if alterationHere > 0 then continue;
 
-                vz := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] * SCALE_FACTOR_TERRAIN + landOffsetZ;
-                if minZ - vz > 200 then break;
-                newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
+                // if ((alterationHere > 0) and (maxZ > (oldZ + alteration))) then begin
+                //     continue;
+                //     //We will limit the alteration based on the distance from the edges of the object, limiting to a change of 1 from the edges.
+                //     //alterationHere := Min(alterationHere, Min(Min(columnMin, columnMax), Min(rowMin, rowMax)) + 1);
+                //     //while maxZ > oldZ + (alterationHere * SCALE_FACTOR_TERRAIN) do alterationHere := alterationHere + 1;
+                //     //alterationHere + 1;
+                // end;
+                newZ := vz + alterationHere;
+
                 joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
-                bLandHasChanged := True;
-            end;
-
-            if column = 0 then begin
-                column := 32;
-                cellXHere := cellXHere - 1;
-                if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
-                    fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
-                    landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                    newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
-                    joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
-                    bLandHasChanged := True;
-                end;
-                if row = 0 then begin
-                    row := 32;
-                    cellYHere := cellYHere - 1;
-                    if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
-                        fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
-                        landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                        newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
-                        joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
-                        bLandHasChanged := True;
-                    end;
-                end
-                else if row = 32 then begin
-                    row := 0;
-                    cellYHere := cellYHere + 1;
-                    if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
-                        fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
-                        landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                        newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
-                        joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
-                        bLandHasChanged := True;
-                    end;
-                end;
-            end else if column = 32 then begin
-                column := 0;
-                cellXHere := cellXHere + 1;
-                if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
-                    fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
-                    landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                    newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
-                    joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
-                    bLandHasChanged := True;
-                end;
-                if row = 0 then begin
-                    row := 32;
-                    cellYHere := cellYHere - 1;
-                    if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
-                        fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
-                        landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                        newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
-                        joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
-                        bLandHasChanged := True;
-                    end;
-                end
-                else if row = 32 then begin
-                    row := 0;
-                    cellYHere := cellYHere + 1;
-                    if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
-                        fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
-                        landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                        newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
-                        joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
-                        bLandHasChanged := True;
-                    end;
-                end;
-            end else if row = 0 then begin
-                row := 32;
-                cellYHere := cellYHere - 1;
-                if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
-                    fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
-                    landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                    newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
-                    joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
-                    bLandHasChanged := True;
-                end;
-            end else if row = 32 then begin
-                row := 0;
-                cellYHere := cellYHere + 1;
-                if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
-                    fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
-                    landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
-                    newZ := Ceil((vz + alteration)/SCALE_FACTOR_TERRAIN) - landOffsetZ/SCALE_FACTOR_TERRAIN;
-                    joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
-                    bLandHasChanged := True;
-                end;
+                AddMessage(#9 + #9 + #9 + 'Altering land height at ' + IntToStr(column) + ',' + IntToStr(row) + ' in ' + wrldEdid + ' ' + IntToStr(cellXHere) + ' ' + IntToStr(cellYHere) + ' from ' + IntToStr(vz) + ' to ' + IntToStr(newZ));
             end;
 
         end;
     end;
-    if bLandHasChanged then AddMessage(#9 + #9 + #9 + 'Altered land heights for ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + ' due to base object near landscape: ' + ShortName(realBase));
 end;
 
 procedure ProcessLandRecords;
@@ -585,7 +537,7 @@ end;
 function CreateLandscapeSnow(land, rCell, rWrld: IwbElement; wrldEdid, fileProvidingLand: string; cellX, cellY: integer): integer;
 var
     bVertexIsOutsideCell: boolean;
-    i, nifFile, unitsX, unitsY, landOffsetZ, row2, column2, row, column, vertexCount, point1, point2, point3, point4, maxPoint, newCellX, newCellY, newlandOffsetZ, cellOffsetDifference, newVz: integer;
+    i, nifFile, unitsX, unitsY, landOffsetZ, row2, column2, row, column, vertexCount, point1, point2, point3, point4, maxPoint, newCellX, newCellY, newlandOffsetZ, cellOffsetDifference, newVz, neighborVz: integer;
     editorIdSnowNif, fileName, snowNifFile, xyz, vx, vy, vz, newVzStr, fileNameLand: string;
 
     tsXYZ: TStrings;
@@ -648,8 +600,9 @@ begin
                         else if column > 32 then newCellX := cellX + 1;
                         if row < 0 then newCellY := cellY - 1
                         else if row > 32 then newCellY := cellY + 1;
+                        fileNameLand := joLandFiles.O[wrldEdid].O[newCellX].S[newCellY];
 
-                        if not joLandFiles.O[wrldEdid].O[newCellX].Contains(newCellY) then begin
+                        if fileNameLand <> '' then begin
                             //If the neighboring cell does not exist, we should change the row/column to the vertex that is closest and use that for the newVz
                             if column < 0 then column := 0
                             else if column > 32 then column := 32;
@@ -657,7 +610,6 @@ begin
                             else if row > 32 then row := 32;
                             newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
                         end else begin
-                            fileNameLand := joLandFiles.O[wrldEdid].O[newCellX].S[newCellY];
                             //If the neighboring cell does exist, we need to compare the offset values, as that will affect the newVz.
                             newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[newCellX].O[newCellY].S['offset'];
                             // We will need to add this difference to the final vz value;
@@ -682,7 +634,33 @@ begin
                             //We add the cellOffsetDifference to the final z value.
                             newVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[newCellX].O[newCellY].A[row].S[column] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
                         end;
-                    end else begin
+                    end
+                    else if ((row = 0) or (row = 32) or (column = 0) or (column = 32)) then begin
+                        // This is the value here, but we need to check the neighboring cell's same border vertex and use the lowest of the two.
+                        newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+
+                        // Find the neighboring cell based off these values.
+                        newCellX := cellX; //default to no cell offset
+                        newCellY := cellY;
+                        if column = 0 then newCellX := cellX - 1
+                        else if column = 32 then newCellX := cellX + 1;
+                        if row = 0 then newCellY := cellY - 1
+                        else if row = 32 then newCellY := cellY + 1;
+                        fileNameLand := joLandFiles.O[wrldEdid].O[newCellX].S[newCellY];
+                        if fileNameLand <> '' then begin
+                            //If the neighboring cell does exist, we need to compare the offset values, as that will affect the height.
+                            newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[newCellX].O[newCellY].S['offset'];
+                            cellOffsetDifference := landOffsetZ - newlandOffsetZ;
+
+                            if column = 0 then column := 32
+                            else if column = 32 then column := 0;
+                            if row = 0 then row := 32
+                            else if row = 32 then row := 0;
+                            neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[newCellX].O[newCellY].A[row].S[column] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                            if neighborVz < newVz then newVz := neighborVz;
+                        end;
+                    end
+                    else begin
                         newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
                     end;
                 end else begin
@@ -1183,6 +1161,241 @@ function IsEven(Number: Integer): Boolean;
 begin
   Result := false;
   if Number mod 2 = 0 then Result := true;
+end;
+
+// normalize an angle (in degrees) to [0.0, 360.0)
+function normalize_angle(angle: double): double;
+const
+  NORMALIZER = 360.0;
+begin
+  // FMod(a,b) returns a value between -Abs(b) and Abs(b) exclusive, so need to add b and do it again
+  // to fully catch negative angles
+  Result := FMod(FMod(angle, NORMALIZER) + NORMALIZER, NORMALIZER);
+end;
+
+// clamp given value d between min and max (inclusive)
+function clamp(d, min, max: double): double;
+begin
+  if (CompareValue(d, min, EPSILON) = LessThanValue) then begin
+    Result := min;
+  end else if (CompareValue(d, max, EPSILON) = GreaterThanValue) then begin
+    Result := max;
+  end else begin
+    Result := d;
+  end;
+end;
+
+
+procedure quaternion_to_euler(
+  qw, qx, qy, qz: double;                    // input quaternion
+  var return_x, return_y, return_z: double;  // euler angle (in degrees)
+);
+var
+  p0, p1, p2, p3: double;              // variables representing dynamically-ordered quaternion components
+  singularity_check: double;           // contains value used for the singularity check
+  e: integer;                          // variable representing sign used in angle calculations
+  euler_order: array[0..2] of double;  // holds mapping between rotation sequence angles and output angles
+  euler_angle: array[0..2] of double;  // output angles
+begin
+  // map quaternion components to generic p-variables, and set the sign
+  p0 := qw;
+
+  //rotation sequence
+  p1 := qz; p2 := qy; p3 := qx; e :=  1;
+
+  // create mapping between the euler angle and the rotation sequence
+  euler_order[0] := 2; euler_order[1] := 1; euler_order[2] := 0;
+
+  // calculate the value to be used to check for singularities
+  singularity_check := 2.0 * (p0 * p2 - e * p1 * p3);
+
+  // calculate second rotation angle, clamping it to prevent ArcSin from erroring
+  euler_angle[euler_order[1]] := ArcSin(clamp(singularity_check, -1.0, 1.0));
+
+  // a singularity exists when the second angle in a rotation sequence is at +/-90 degrees
+  if (CompareValue(Abs(singularity_check), 1.0, EPSILON) = LessThanValue) then begin
+    euler_angle[euler_order[0]] := ArcTan2(2.0 * (p0 * p1 + e * p2 * p3), 1.0 - 2.0 * (p1 * p1 + p2 * p2));
+    euler_angle[euler_order[2]] := ArcTan2(2.0 * (p0 * p3 + e * p1 * p2), 1.0 - 2.0 * (p2 * p2 + p3 * p3));
+  end else begin
+    // when a singularity is detected, the third angle basically loses all meaning so is set to 0
+    euler_angle[euler_order[0]] := ArcTan2(2.0 * (p0 * p1 - e * p2 * p3), 1.0 - 2.0 * (p1 * p1 + p3 * p3));
+    euler_angle[euler_order[2]] := 0.0;
+  end;
+
+  // convert results to degrees and then normalize them
+  return_x := normalize_angle(RadToDeg(euler_angle[0]));
+  return_y := normalize_angle(RadToDeg(euler_angle[1]));
+  return_z := normalize_angle(RadToDeg(euler_angle[2]));
+end;
+
+procedure euler_to_quaternion(
+  x, y, z: double;                                         // euler angle in degrees
+  var return_qw, return_qx, return_qy, return_qz: double;  // quaternion components
+);
+var
+  cos_x, cos_y, cos_z, sin_x, sin_y, sin_z: double;
+  sign_w, sign_x, sign_y, sign_z: integer;
+begin
+  // normalize angles and convert them to radians
+  x := DegToRad(normalize_angle(x));
+  y := DegToRad(normalize_angle(y));
+  z := DegToRad(normalize_angle(z));
+
+  // calculate cosine and sine of the various angles once instead of multiple times
+  cos_x := Cos(x / 2.0); cos_y := Cos(y / 2.0); cos_z := Cos(z / 2.0);
+  sin_x := Sin(x / 2.0); sin_y := Sin(y / 2.0); sin_z := Sin(z / 2.0);
+
+  // use the rotation sequence to determine what signs are used when calculating quaternion components
+  // Rotation sequence
+  sign_w :=  1; sign_x := -1; sign_y :=  1; sign_z := -1;
+
+  // calculate the quaternion components
+  return_qw := cos_x * cos_y * cos_z + sign_w * sin_x * sin_y * sin_z;
+  return_qx := sin_x * cos_y * cos_z + sign_x * cos_x * sin_y * sin_z;
+  return_qy := cos_x * sin_y * cos_z + sign_y * sin_x * cos_y * sin_z;
+  return_qz := cos_x * cos_y * sin_z + sign_z * sin_x * sin_y * cos_z;
+end;
+
+// multiply two quaternions together - note that quaternion multiplication is NOT commutative, so
+// (q1 * q2) != (q2 * q1)
+procedure quaternion_multiply(
+  qw1, qx1, qy1, qz1: double;                              // input quaternion 1
+  qw2, qx2, qy2, qz2: double;                              // input quaternion 2
+  var return_qw, return_qx, return_qy, return_qz: double;  // result quaternion
+);
+begin
+  return_qw := qw1 * qw2 - qx1 * qx2 - qy1 * qy2 - qz1 * qz2;
+  return_qx := qw1 * qx2 + qx1 * qw2 + qy1 * qz2 - qz1 * qy2;
+  return_qy := qw1 * qy2 - qx1 * qz2 + qy1 * qw2 + qz1 * qx2;
+  return_qz := qw1 * qz2 + qx1 * qy2 - qy1 * qx2 + qz1 * qw2;
+end;
+
+// compute the difference between two quaternions, q1 and q2, using the formula (q_result = q1' * q2),
+// where q1' is the inverse (conjugate) of the first quaternion
+procedure quaternion_difference(
+  qw1, qx1, qy1, qz1: double;                              // first quaternion
+  qw2, qx2, qy2, qz2: double;                              // second quaternion
+  var return_qw, return_qx, return_qy, return_qz: double;  // difference quaternion
+);
+var
+  qw1i, qx1i, qy1i, qz1i: double;  // inverse (conjugate) of the first quaternion
+begin
+  quaternion_inverse(  // calculate (q1')
+    qw1, qx1, qy1, qz1,
+    qw1i, qx1i, qy1i, qz1i
+  );
+  quaternion_multiply(  // calculate (q1' * q2)
+    qw1i, qx1i, qy1i, qz1i,
+    qw2, qx2, qy2, qz2,
+    return_qw, return_qx, return_qy, return_qz
+  );
+end;
+
+// get the inverse of a quaternion
+procedure quaternion_inverse(
+  qw, qx, qy, qz: double;                                  // input quaternion
+  var return_qw, return_qx, return_qy, return_qz: double;  // inverted quaternion
+);
+begin
+  return_qw := qw;
+  return_qx := -qx;
+  return_qy := -qy;
+  return_qz := -qz;
+end;
+
+procedure rotate_position(
+  vx, vy, vz: double;                           // initial position vector (x, y, z coordinates)
+  rx, ry, rz: double;                           // rotation to apply (euler angle)
+  var return_vx, return_vy, return_vz: double;  // final position vector (x, y, z coordinates)
+);
+var
+  qx, qy, qz, qw: double;      // quaternion representing rotation to be applied
+  qwv, qxv, qyv, qzv: double;  // quaternion representing the result of the vector/quaternion multiplication
+begin
+  euler_to_quaternion(
+    rx, ry, rz,
+    qw, qx, qy, qz
+  );
+
+  // everything i've read says this should be (q * v * q'), but only (q' * (v * q)) gives the correct
+  // results *shrug*
+  quaternion_multiply(  // calculate (v * q)
+    0.0, vx, vy, vz,
+    qw, qx, qy, qz,
+    qwv, qxv, qyv, qzv
+  );
+  // instead of computing q', then multiplying that by (v * q) manually, we can compute the
+  // difference between them and get the same result (because it's the same math)
+  quaternion_difference(  // calculate (q' * (v * q))
+    qw, qx, qy, qz,
+    qwv, qxv, qyv, qzv,
+    nil, return_vx, return_vy, return_vz  // the returned w component is irrelevant and so is discarded
+  );
+end;
+
+// rotate a rotation (duh) via quaternion math (vs matrix math)
+procedure rotate_rotation(
+  x, y, z: double;                          // initial rotation (euler angle)
+  rx, ry, rz: double;                       // rotation to apply (euler angle)
+  var return_x, return_y, return_z: double  // final rotation (euler angle)
+);
+var
+  qw1, qx1, qy1, qz1: double;  // quaternion representing initial rotation
+  qw2, qx2, qy2, qz2: double;  // quaternion representing rotation to be applied
+  qw3, qx3, qy3, qz3: double;  // quaternion representing final rotation
+begin
+  euler_to_quaternion(
+    x, y, z,
+    qw1, qx1, qy1, qz1
+  );
+  euler_to_quaternion(
+    rx, ry, rz,
+    qw2, qx2, qy2, qz2
+  );
+
+  // everything i've read says this should be (q2 * q1), but only (q1 * q2) gives the correct results
+  // *shrug*
+  quaternion_multiply(  // calculate (q1 * q2)
+    qw1, qx1, qy1, qz1,
+    qw2, qx2, qy2, qz2,
+    qw3, qx3, qy3, qz3
+  );
+
+  quaternion_to_euler(
+    qw3, qx3, qy3, qz3,
+    return_x, return_y, return_z
+  );
+end;
+
+// compute the difference between two rotations by converting them to quaternions, using the
+// quaternion_difference function, and converting the result back to an euler angle
+procedure rotation_difference(
+  x1, y1, z1: double;                        // input rotation 1 (euler angle)
+  x2, y2, z2: double;                        // input rotation 2 (euler angle)
+  var return_x, return_y, return_z: double;  // output rotation (euler angle)
+);
+var
+  qw1, qx1, qy1, qz1: double;  // quaternion representing rotation 1
+  qw2, qx2, qy2, qz2: double;  // quaternion representing rotation 2
+  qw3, qx3, qy3, qz3: double;  // quaternion representing the difference between the two rotations
+begin
+  euler_to_quaternion(
+    x1, y1, z1,
+    qw1, qx1, qy1, qz1
+  );
+  euler_to_quaternion(
+    x2, y2, z2,
+    qw2, qx2, qy2, qz2
+  );
+  quaternion_difference(
+    qw1, qx1, qy1, qz1,
+    qw2, qx2, qy2, qz2,
+    qw3, qx3, qy3, qz3
+  );
+  quaternion_to_euler(
+    qw3, qx3, qy3, qz3,
+    return_x, return_y, return_z
+  );
 end;
 
 
