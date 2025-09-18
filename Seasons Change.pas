@@ -238,11 +238,10 @@ function ProcessBasesThatAlterLand(base, fromBase: IwbElement; alteration: integ
     Process a base object to see if it alters land heights.
 }
 var
-    i, cellX, cellY: integer;
-    wrldEdid, fileName: string;
+    i: integer;
+    wrldEdid: string;
 
-    r, rCell, wCell, rWrld, rLand: IwbElement;
-    c: TwbGridCell;
+    r, rCell, rWrld: IwbElement;
 begin
     Result := False;
     for i := 0 to Pred(ReferencedByCount(base)) do begin
@@ -262,34 +261,22 @@ begin
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
 
-        if GetIsPersistent(rCell) then begin
-            c := wbPositionToGridCell(GetPosition(r));
-            rCell := WinningOverride(GetCellFromWorldspace(rWrld, c.X, c.Y));
-            if not Assigned(rCell) then continue;
-        end;
-
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
-        cellX := GetElementNativeValues(rCell, 'XCLC\X');
-        cellY := GetElementNativeValues(rCell, 'XCLC\Y');
-        if not joLandFiles.O[wrldEdid].O[cellX].Contains(cellY) then continue;
-        fileName := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
-
-        if joLandscapeHeights.O[fileName].O[wrldEdid].O[cellX].O[cellY].S['flags'] > 0 then continue; //skip flat landscape cells and underwater landscape cells
 
         // If we got this far, this REFR is in an exterior cell with landscape, and we will need to alter the land heights IF it is close enough to the landscape.
-        AddMessage(#9 + 'Processing reference ' + #9 + ShortName(r) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
-        AlterLandHeightsForThisRefr(r, base, fromBase, wrldEdid, cellX, cellY, alteration);
+        AddMessage(#9 + 'Processing reference ' + #9 + ShortName(r) + #9 + wrldEdid);
+        AlterLandHeightsForThisRefr(r, base, fromBase, wrldEdid, alteration, rWrld);
     end;
 end;
 
-procedure AlterLandHeightsForThisRefr(r, base, fromBase: IwbElement; wrldEdid: string; cellX, cellY, alteration: integer);
+procedure AlterLandHeightsForThisRefr(r, base, fromBase: IwbElement; wrldEdid: string; alteration: integer; rWrld: IwbElement);
 {
     Alters land heights for a specific reference.
 }
 var
     bSCOL: boolean;
     i, x1, y1, z1, x2, y2, z2: integer;
-    scale, posX, posY, posZ, rotX, rotY, rotZ: double;
+    scale, posX, posY, posZ, rotX, rotY, rotZ, pmScale, pmPosX, pmPosY, pmPosZ, pmRotX, pmRotY, pmRotZ: double;
 
     realBase, scolParts, scolPart, onam, placements, placement: IwbElement;
 begin
@@ -326,20 +313,32 @@ begin
         placements := ElementByPath(scolPart, 'Placements');
         for i := 0 to Pred(ElementCount(placements)) do begin
             placement := ElementByIndex(placements, i);
-            posX := posX + GetElementNativeValues(placement, 'Position\X');
-            posY := posY + GetElementNativeValues(placement, 'Position\Y');
-            posZ := posZ + GetElementNativeValues(placement, 'Position\Z');
-            rotX := rotX + GetElementNativeValues(placement, 'Rotation\X');
-            rotY := rotY + GetElementNativeValues(placement, 'Rotation\Y');
-            rotZ := rotZ + GetElementNativeValues(placement, 'Rotation\Z');
-            scale := scale * GetElementNativeValues(placement, 'Scale');
+
+            pmPosX := GetElementNativeValues(placement, 'Position\X');
+            pmPosY := GetElementNativeValues(placement, 'Position\Y');
+            pmPosZ := GetElementNativeValues(placement, 'Position\Z');
+            pmRotX := GetElementNativeValues(placement, 'Rotation\X');
+            pmRotY := GetElementNativeValues(placement, 'Rotation\Y');
+            pmRotZ := GetElementNativeValues(placement, 'Rotation\Z');
+            pmScale := GetElementNativeValues(placement, 'Scale');
+
+            rotate_position(
+                pmPosX, pmPosY, pmPosZ,         // initial position
+                pmRotX, pmRotY, pmRotZ,        // rotation to apply - x y z
+                raw_x, raw_y, raw_z           // (output) raw final position
+            );
+
+            posX := posX + raw_x;
+            posY := posY + raw_y;
+            posZ := posZ + raw_z;
+            scale := scale * pmScale;
             x1 := Floor(x1 * scale);
             y1 := Floor(y1 * scale);
             z1 := Floor(z1 * scale);
             x2 := Ceil(x2 * scale);
             y2 := Ceil(y2 * scale);
             z2 := Ceil(z2 * scale);
-            AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, cellX, cellY, realBase);
+            AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, realBase, rWrld);
         end;
     end
     else begin
@@ -349,18 +348,20 @@ begin
         x2 := Ceil(x2 * scale);
         y2 := Ceil(y2 * scale);
         z2 := Ceil(z2 * scale);
-        AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, cellX, cellY, realBase);
+        AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, realBase, rWrld);
     end;
 end;
 
-procedure AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2: integer; posX, posY, posZ, rotX, rotY, rotZ: double; wrldEdid: string; cellX, cellY: integer; realBase: IwbElement);
+procedure AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2: integer; posX, posY, posZ, rotX, rotY, rotZ: double; wrldEdid: string; realBase, rWrld: IwbElement);
 {
     Alters land heights for a specific placement of a base object.
 }
 var
+    bHasWater: boolean;
     i, j, k, row, column, cellXHere, cellYHere, vz, newZ, oldZ, landOffsetZ, alterationHere, width, height, numX, numY: integer;
-    fileName: string;
-    raw_x, raw_y, raw_z, xHere, yHere, zHere, posXHere, posYHere, posZHere: double;
+    fileName, cellWaterHeight: string;
+    raw_x, raw_y, raw_z, xHere, yHere, zHere, posXHere, posYHere, posZHere, cellWaterHeightFloat: double;
+    rCell, rWrld: IwbElement;
 begin
     //Okay, so what we need to do is understand that our object is rotated, and we are only given the bounds of the object in the unrotated state.
     //We are going to need to just take the bounding width/height of the object, divide that by 128, to get the number of lines we will use to get all the vertices
@@ -375,7 +376,7 @@ begin
     numX := Ceil(width/128);
     numY := Ceil(height/128);
     zHere := z2;
-    AddMessage(#9 + #9 + 'Width: ' + IntToStr(width) + ' Height: ' + IntToStr(height) + ' NumX: ' + IntToStr(numX) + ' NumY: ' + IntToStr(numY) + ' Rotation: ' + FloatToStr(rotZ) + ' World: ' + wrldEdid + ' Cell: ' + IntToStr(cellX) + ',' + IntToStr(cellY));
+    AddMessage(#9 + #9 + 'Width: ' + IntToStr(width) + ' Height: ' + IntToStr(height) + ' NumX: ' + IntToStr(numX) + ' NumY: ' + IntToStr(numY) + ' Rotation: ' + FloatToStr(rotZ) + ' World: ' + wrldEdid);
 
     //Now we will loop through all the points we need to check, get the rotated position, find the closest land vertex, and alter it.
     for i := 0 to numX do begin
@@ -415,8 +416,20 @@ begin
                 continue; //No landscape in this cell.
             end;
 
+            alterationHere := alteration/SCALE_FACTOR_TERRAIN;
+            if alterationHere > 0 then begin
+                rCell := GetCellFromWorldspace(rWrld, cellXHere, cellYHere);
+                bHasWater := True;
+                if GetElementEditValues(rCell, 'DATA\Has Water') = '0' then bHasWater := False;
+                cellWaterHeight := GetElementEditValues(rCell, 'XCLW');
+                if cellWaterHeight = 'Default' then cellWaterHeight := GetElementEditValues(rWrld, 'DNAM\Default Water Height');
+                cellWaterHeightFloat := StrToFloatDef(cellWaterHeight, 9);
+            end;
+
             //Find the closest vertex in this cell.
             for k := 0 to 3 do begin
+
+
                 if k = 0 then begin
                     column := Floor((posXHere - (cellXHere * 4096))/128);
                     row := Floor((posYHere - (cellYHere * 4096))/128);
@@ -436,7 +449,12 @@ begin
 
                 if joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] = '1' then begin
                     AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
-                    continue; //We already altered this vertex, so skip it.
+                    if alterationHere > 0 then continue;
+                    if alterationHere < 0 then alterationHere := alterationHere - 2;
+                end
+                else if joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] = '-1' then begin
+                    AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
+                    if alterationHere > 0 then continue;
                 end;
 
                 landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
@@ -446,7 +464,13 @@ begin
                     AddMessage(#9 + #9 + #9 + 'Object is below the landscape vertex, so skipping it.');
                     continue; //The object is completely below this vertex, so skip it.
                 end;
-                alterationHere := alteration/SCALE_FACTOR_TERRAIN;
+                if (alterationHere > 0) and (oldZ < cellWaterHeightFloat) then begin
+                    AddMessage(#9 + #9 + #9 + 'Landscape is below water height at this vertex, so skipping it.');
+                    continue; //The object is below water, so skipping it.
+                end;
+
+
+
                 //if alterationHere > 0 then continue;
 
                 // if ((alterationHere > 0) and (posZHere > (oldZ + alteration))) then begin
@@ -460,7 +484,9 @@ begin
 
                 joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
                 AddMessage(#9 + #9 + #9 + 'Altering land height at ' + IntToStr(column) + ',' + IntToStr(row) + ' in ' + wrldEdid + ' ' + IntToStr(cellXHere) + ' ' + IntToStr(cellYHere) + ' from ' + IntToStr(vz) + ' to ' + IntToStr(newZ));
-                joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] := '1';
+                if alteration < 0 then joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] := '-1'
+                else if alteration > 0 then joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] := '1';
+
             end;
         end;
     end;
@@ -741,6 +767,10 @@ var
     m, n, tmp: integer;
     mean: double;
 begin
+    Result := (point1 + point2 + point3 + point4)/4;
+    Exit;
+
+    //This code is unreachable... it didn't look right.
     points[0] := point1;
     points[1] := point2;
     points[2] := point3;
