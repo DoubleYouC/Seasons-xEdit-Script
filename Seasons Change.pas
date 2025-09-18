@@ -18,7 +18,7 @@ var
 
     slPluginFiles: TStringList;
     tlLandRecords, tlBasesThatAlterLand: TList;
-    joSeasons, joLandscapeHeights, joLandFiles, joAlterLandRules: TJsonObject;
+    joSeasons, joLandscapeHeights, joLandFiles, joAlterLandRules, joAlteredLandscape: TJsonObject;
 
 const
     sSeasonsFileName = 'Seasons.esm';
@@ -42,6 +42,7 @@ begin
     joLandscapeHeights := TJsonObject.Create;
     joLandFiles := TJsonObject.Create;
     joAlterLandRules := TJsonObject.Create;
+    joAlteredLandscape := TJsonObject.Create;
     tlLandRecords := TList.Create;
     tlBasesThatAlterLand := TList.Create;
     if FileExists(wbScriptsPath + 'Seasons\LandHeights.json') then
@@ -57,6 +58,7 @@ begin
     joSeasons.Free;
     joAlterLandRules.Free;
     joLandFiles.Free;
+    joAlteredLandscape.Free;
     tlLandRecords.Free;
     tlBasesThatAlterLand.Free;
 
@@ -287,7 +289,7 @@ procedure AlterLandHeightsForThisRefr(r, base, fromBase: IwbElement; wrldEdid: s
 var
     bSCOL: boolean;
     i, x1, y1, z1, x2, y2, z2: integer;
-    scale, posX, posY, posZ, rotX, rotY, rotZ: single;
+    scale, posX, posY, posZ, rotX, rotY, rotZ: double;
 
     realBase, scolParts, scolPart, onam, placements, placement: IwbElement;
 begin
@@ -309,9 +311,9 @@ begin
     posX := GetElementNativeValues(r, 'DATA\Position\X');
     posY := GetElementNativeValues(r, 'DATA\Position\Y');
     posZ := GetElementNativeValues(r, 'DATA\Position\Z');
-    rotX := GetElementNativeValues(placement, 'DATA\Rotation\X');
-    rotY := GetElementNativeValues(placement, 'DATA\Rotation\Y');
-    rotZ := GetElementNativeValues(placement, 'DATA\Rotation\Z');
+    rotX := GetElementNativeValues(r, 'DATA\Rotation\X');
+    rotY := GetElementNativeValues(r, 'DATA\Rotation\Y');
+    rotZ := GetElementNativeValues(r, 'DATA\Rotation\Z');
 
     //If the object is an SCOL, we need to adjust the position to be the SCOL placement position.
     if bSCOL then begin
@@ -339,7 +341,8 @@ begin
             z2 := Ceil(z2 * scale);
             AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, cellX, cellY, realBase);
         end;
-    end else begin
+    end
+    else begin
         x1 := Floor(x1 * scale);
         y1 := Floor(y1 * scale);
         z1 := Floor(z1 * scale);
@@ -350,98 +353,115 @@ begin
     end;
 end;
 
-procedure AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2: integer; posX, posY, posZ, rotX, rotY, rotZ: single; wrldEdid: string; cellX, cellY: integer; realBase: IwbElement);
+procedure AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2: integer; posX, posY, posZ, rotX, rotY, rotZ: double; wrldEdid: string; cellX, cellY: integer; realBase: IwbElement);
 {
     Alters land heights for a specific placement of a base object.
 }
 var
-    unitsX, unitsY, lowestColumn, lowestRow, highestColumn, highestRow, row, column, cellXHere, cellYHere, vz, newZ, oldZ, landOffsetZ, columnMin,
-    columnMax, rowMin, rowMax, alterationHere: integer;
+    i, j, k, row, column, cellXHere, cellYHere, vz, newZ, oldZ, landOffsetZ, alterationHere, width, height, numX, numY: integer;
     fileName: string;
-    aposX, aposY, lowerCornerX, lowerCornerY, upperCornerX, upperCornerY, raw_x, raw_y, raw_z, minZ, maxZ: single;
+    raw_x, raw_y, raw_z, xHere, yHere, zHere, posXHere, posYHere, posZHere: double;
 begin
-    //Get the position in relation to the cell.
-    unitsX := cellX * 4096;
-    unitsY := cellY * 4096;
-    aposX := posX - unitsX;
-    aposY := posY - unitsY;
+    //Okay, so what we need to do is understand that our object is rotated, and we are only given the bounds of the object in the unrotated state.
+    //We are going to need to just take the bounding width/height of the object, divide that by 128, to get the number of lines we will use to get all the vertices
+    //that we will need to alter.
+    //    ||||          ////
+    //    ||||         ////
+    //    ||||   to   ////
+    //    ||||       ////
+    //    ||||      ////
+    width := x2 - x1;
+    height := y2 - y1;
+    numX := Ceil(width/128);
+    numY := Ceil(height/128);
+    zHere := z2;
+    AddMessage(#9 + #9 + 'Width: ' + IntToStr(width) + ' Height: ' + IntToStr(height) + ' NumX: ' + IntToStr(numX) + ' NumY: ' + IntToStr(numY) + ' Rotation: ' + FloatToStr(rotZ) + ' World: ' + wrldEdid + ' Cell: ' + IntToStr(cellX) + ',' + IntToStr(cellY));
 
-    rotate_position(
-      x1, y1, z1,                      // initial position
-      rotX, rotY, rotZ,              // rotation to apply - x y z
-      raw_x, raw_y, raw_z           // (output) raw final position
-    );
-    lowerCornerX := aposX + raw_x;
-    lowerCornerY := aposY + raw_y;
-    minZ := posZ + raw_z;
-
-    rotate_position(
-      x2, y2, z2,                      // initial position
-      rotX, rotY, rotZ,              // rotation to apply - x y z
-      raw_x, raw_y, raw_z           // (output) raw final position
-    );
-    upperCornerX := aposX + raw_x;
-    upperCornerY := aposY + raw_y;
-    maxZ := posZ + raw_z;
-
-    lowestColumn := Floor(Min(lowerCornerX/128, upperCornerX/128));
-    highestColumn := Ceil(Max(lowerCornerX/128, upperCornerX/128));
-    lowestRow := Floor(Min(lowerCornerY/128, upperCornerY/128));
-    highestRow := Ceil(Max(lowerCornerY/128, upperCornerY/128));
-
-    AddMessage(#9 + #9 + 'Placement row/columns: ' + IntToStr(lowestColumn) + ',' + IntToStr(lowestRow) + ' to ' + IntToStr(highestColumn) + ',' + IntToStr(highestRow));
-
-    for column := lowestColumn to highestColumn do begin
-        columnMin := column - lowestColumn;
-        columnMax := highestColumn - column;
-        if column < 0 then begin
-            while column < 0 do begin
-                cellXHere := cellX - 1;
-                column := column + 32;
+    //Now we will loop through all the points we need to check, get the rotated position, find the closest land vertex, and alter it.
+    for i := 0 to numX do begin
+        xHere := x1 + (i * width/numX);
+        //xHere := x1 + (i * 128);
+        for j := 0 to numY do begin
+            yHere := y1 + (j * height/numY);
+            //yHere := y1 + (j * 128);
+            AddMessage(#9 + #9 + #9 + 'Processing point ' + FloatToStr(xHere) + ',' + FloatToStr(yHere));
+            if xHere > x2 then xHere := x2;
+            if yHere > y2 then yHere := y2;
+            if ((rotX = 0) and (rotY = 0) and (rotZ = 0)) then begin
+                raw_x := xHere;
+                raw_y := yHere;
+                raw_z := zHere;
+            end
+            else begin
+                //continue; //Skipping rotated objects for now.
+                rotate_position(
+                    xHere, yHere, zHere,            // initial position
+                    rotX, rotY, rotZ,              // rotation to apply - x y z
+                    raw_x, raw_y, raw_z           // (output) raw final position
+                );
             end;
-        end else if column > 32 then begin
-            while column > 32 do begin
-                cellXHere := cellX + 1;
-                column := column - 32;
-            end;
-        end else cellXHere := cellX;
-        for row := lowestRow to highestRow do begin
-            rowMin := row - lowestRow;
-            rowMax := highestRow - row;
-            if row < 0 then begin
-                while row < 0 do begin
-                    cellYHere := cellY - 1;
-                    row := row + 32;
-                end;
-            end else if row > 32 then begin
-                while row > 32 do begin
-                    cellYHere := cellY + 1;
-                    row := row - 32;
-                end;
-            end else cellYHere := cellY;
+            AddMessage(#9 + #9 + #9 + 'Rotated point ' + FloatToStr(raw_x) + ',' + FloatToStr(raw_y));
+            posXHere := posX + raw_x;
+            posYHere := posY + raw_y;
+            posZHere := posZ + raw_z;
 
-            if joLandFiles.O[wrldEdid].O[cellXHere].Contains(cellYHere) then begin
-                fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
+            //Find the cell this position is in.
+            cellXHere := Floor(posXHere/4096);
+            cellYHere := Floor(posYHere/4096);
+            AddMessage(#9 + #9 + #9 + 'Position ' + FloatToStr(posXHere) + ',' + FloatToStr(posYHere) + ' is in cell ' + IntToStr(cellXHere) + ',' + IntToStr(cellYHere));
+            fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
+            if fileName = '' then begin
+                AddMessage(#9 + #9 + #9 + 'No landscape in this cell.');
+                continue; //No landscape in this cell.
+            end;
+
+            //Find the closest vertex in this cell.
+            for k := 0 to 3 do begin
+                if k = 0 then begin
+                    column := Floor((posXHere - (cellXHere * 4096))/128);
+                    row := Floor((posYHere - (cellYHere * 4096))/128);
+                end
+                else if k = 1 then begin
+                    column := Floor((posXHere - (cellXHere * 4096))/128);
+                    row := Ceil((posYHere - (cellYHere * 4096))/128);
+                end
+                else if k = 2 then begin
+                    column := Ceil((posXHere - (cellXHere * 4096))/128);
+                    row := Floor((posYHere - (cellYHere * 4096))/128);
+                end
+                else begin
+                    column := Ceil((posXHere - (cellXHere * 4096))/128);
+                    row := Ceil((posYHere - (cellYHere * 4096))/128);
+                end;
+
+                if joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] = '1' then begin
+                    AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
+                    continue; //We already altered this vertex, so skip it.
+                end;
+
                 landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
                 vz := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column];
                 oldZ := vz * SCALE_FACTOR_TERRAIN + landOffsetZ;
-                if maxZ < oldZ then continue; //The object is completely below this vertex, so skip it.
+                if posZHere < oldZ then begin
+                    AddMessage(#9 + #9 + #9 + 'Object is below the landscape vertex, so skipping it.');
+                    continue; //The object is completely below this vertex, so skip it.
+                end;
                 alterationHere := alteration/SCALE_FACTOR_TERRAIN;
-                if alterationHere > 0 then continue;
+                //if alterationHere > 0 then continue;
 
-                // if ((alterationHere > 0) and (maxZ > (oldZ + alteration))) then begin
-                //     continue;
+                // if ((alterationHere > 0) and (posZHere > (oldZ + alteration))) then begin
                 //     //We will limit the alteration based on the distance from the edges of the object, limiting to a change of 1 from the edges.
-                //     //alterationHere := Min(alterationHere, Min(Min(columnMin, columnMax), Min(rowMin, rowMax)) + 1);
-                //     //while maxZ > oldZ + (alterationHere * SCALE_FACTOR_TERRAIN) do alterationHere := alterationHere + 1;
-                //     //alterationHere + 1;
+                //     //alterationHere := Min(alterationHere, Min(Min(i, numX - i), Min(j, numY - j)) + 1);
+
+                //     while (posZHere > oldZ + (alterationHere * SCALE_FACTOR_TERRAIN)) do Inc(alterationHere);
+                //     Inc(alterationHere);
                 // end;
                 newZ := vz + alterationHere;
 
                 joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
                 AddMessage(#9 + #9 + #9 + 'Altering land height at ' + IntToStr(column) + ',' + IntToStr(row) + ' in ' + wrldEdid + ' ' + IntToStr(cellXHere) + ' ' + IntToStr(cellYHere) + ' from ' + IntToStr(vz) + ' to ' + IntToStr(newZ));
+                joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] := '1';
             end;
-
         end;
     end;
 end;
@@ -603,13 +623,6 @@ begin
                         fileNameLand := joLandFiles.O[wrldEdid].O[newCellX].S[newCellY];
 
                         if fileNameLand <> '' then begin
-                            //If the neighboring cell does not exist, we should change the row/column to the vertex that is closest and use that for the newVz
-                            if column < 0 then column := 0
-                            else if column > 32 then column := 32;
-                            if row < 0 then row := 0
-                            else if row > 32 then row := 32;
-                            newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
-                        end else begin
                             //If the neighboring cell does exist, we need to compare the offset values, as that will affect the newVz.
                             newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[newCellX].O[newCellY].S['offset'];
                             // We will need to add this difference to the final vz value;
@@ -633,6 +646,14 @@ begin
 
                             //We add the cellOffsetDifference to the final z value.
                             newVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[newCellX].O[newCellY].A[row].S[column] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                        end
+                        else begin
+                            //If the neighboring cell does not exist, we should change the row/column to the vertex that is closest and use that for the newVz
+                            if column < 0 then column := 0
+                            else if column > 32 then column := 32;
+                            if row < 0 then row := 0
+                            else if row > 32 then row := 32;
+                            newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
                         end;
                     end
                     else if ((row = 0) or (row = 32) or (column = 0) or (column = 32)) then begin
@@ -666,6 +687,7 @@ begin
                 end else begin
                     // If odd, this row/column does not exist. This will only happen to the full model for the in-between vertices.
                     // Get the average of 4 points around the vertex to set the new height.
+
                     row := (row2 - 1)/2;
                     column := (column2 - 1)/2;
                     point1 := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
@@ -684,7 +706,7 @@ begin
 
                     //maxPoint := Max(Max(point1, point2), Max(point3, point4));
                     //newVz := (point1 + point2 + point3 + point4 + maxPoint)/5; //We add the max point again to help even out the average a bit more
-                    newVz := (point1 + point2 + point3 + point4)/4;
+                    newVz := ComputeInBetweenVertexHeight(point1, point2, point3, point4);
                 end;
 
                 //We have z offsets built in for the LOD.
@@ -709,6 +731,36 @@ begin
         end;
     end;
     Result := 1;
+end;
+
+function ComputeInBetweenVertexHeight(point1, point2, point3, point4: integer): integer;
+var
+    points: array[0..3] of integer;
+    diffs: array[0..3] of double;
+    idx: array[0..3] of integer;
+    m, n, tmp: integer;
+    mean: double;
+begin
+    points[0] := point1;
+    points[1] := point2;
+    points[2] := point3;
+    points[3] := point4;
+    // Calculate difference from each point to the mean
+    mean := (point1 + point2 + point3 + point4) / 4;
+    for m := 0 to 3 do begin
+        diffs[m] := Abs(points[m] - mean);
+        idx[m] := m;
+    end;
+    // Sort idx by diffs ascending (simple bubble sort for 4 elements)
+    for m := 0 to 2 do
+        for n := m + 1 to 3 do
+            if diffs[idx[m]] > diffs[idx[n]] then begin
+                tmp := idx[m];
+                idx[m] := idx[n];
+                idx[n] := tmp;
+            end;
+    // Take the three closest points
+    Result := (points[idx[0]] + points[idx[1]] + points[idx[2]]) / 3;
 end;
 
 function CreateLandscapeHeights(land, rCell, rWrld: IwbElement; wrldEdid: string): boolean;
