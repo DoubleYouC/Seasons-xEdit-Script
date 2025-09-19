@@ -682,6 +682,132 @@ begin
                             newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
                         end;
                     end
+                    else if (((row = 0) and (column=0)) or ((row = 0) and (column=32)) or ((row = 32) and (column=0)) or ((row = 32) and (column=32))) then begin
+                        //We are on the corner of the cell, so we will need to check 4 cells to determine correct height.
+                        newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+
+                        // Check the four neighboring cells for the corner vertex and use the lowest height.
+                        // Bottom-left corner
+                        if (row = 0) and (column = 0) then begin
+                            // cell to the left r0c32
+                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX - 1].S[cellY];
+                            neighborVz := newVz;
+                            if fileNameLand <> '' then begin
+                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY].S['offset'];
+                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
+                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY].A[0].S[32] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                                if neighborVz < newVz then newVz := neighborVz;
+                            end;
+                            // cell below r32c0
+                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY - 1];
+                            neighborVz := newVz;
+                            if fileNameLand <> '' then begin
+                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY - 1].S['offset'];
+                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
+                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY - 1].A[32].S[0] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                                if neighborVz < newVz then newVz := neighborVz;
+                            end;
+                            // cell diagonal (bottom-left) r32c32
+                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX - 1].S[cellY - 1];
+                            neighborVz := newVz;
+                            if fileNameLand <> '' then begin
+                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY - 1].S['offset'];
+                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
+                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY - 1].A[32].S[32] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                                if neighborVz < newVz then newVz := neighborVz;
+                            end;
+                        end
+                        // Bottom-right corner
+                        else if (row = 0) and (column = 32) then begin
+                            // cell to the right r0c0
+                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX + 1].S[cellY];
+                            neighborVz := newVz;
+                            if fileNameLand <> '' then begin
+                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY].S['offset'];
+                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
+                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY].A[0].S[0] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                                if neighborVz < newVz then newVz := neighborVz;
+                            end;
+                            // cell below r32c32
+                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY - 1];
+                            neighborVz := newVz;
+                            if fileNameLand <> '' then begin
+                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY - 1].S['offset'];
+                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
+                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY - 1].A[32].S[32] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                                if neighborVz < newVz then newVz := neighborVz;
+                            end;
+                            // cell diagonal (bottom-right) r32c0
+                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX + 1].S[cellY - 1];
+                            neighborVz := newVz;
+                            if fileNameLand <> '' then begin
+                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY - 1].S['offset'];
+                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
+                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY - 1].A[32].S[0] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                                if neighborVz < newVz then newVz := neighborVz;
+                            end;
+                        end
+                        // Top-left corner
+                        else if (row = 32) and (column = 0) then begin
+                            // cell to the left r32c32
+                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX - 1].S[cellY];
+                            neighborVz := newVz;
+                            if fileNameLand <> '' then begin
+                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY].S['offset'];
+                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
+                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY].A[32].S[32] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                                if neighborVz < newVz then newVz := neighborVz;
+                            end;
+                            // cell above r0c0
+                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY + 1];
+                            neighborVz := newVz;
+                            if fileNameLand <> '' then begin
+                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY + 1].S['offset'];
+                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
+                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY + 1].A[0].S[0] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                                if neighborVz < newVz then newVz := neighborVz;
+                            end;
+                            // cell diagonal (top-left) r0c32
+                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX - 1].S[cellY + 1];
+                            neighborVz := newVz;
+                            if fileNameLand <> '' then begin
+                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY + 1].S['offset'];
+                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
+                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY + 1].A[0].S[32] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                                if neighborVz < newVz then newVz := neighborVz;
+                            end;
+                        end
+                        // Top-right corner
+                        else if (row = 32) and (column = 32) then begin
+                            // cell to the right r32c0
+                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX + 1].S[cellY];
+                            neighborVz := newVz;
+                            if fileNameLand <> '' then begin
+                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY].S['offset'];
+                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
+                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY].A[32].S[0] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                                if neighborVz < newVz then newVz := neighborVz;
+                            end;
+                            // cell above r0c32
+                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY + 1];
+                            neighborVz := newVz;
+                            if fileNameLand <> '' then begin
+                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY + 1].S['offset'];
+                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
+                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY + 1].A[0].S[32] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                                if neighborVz < newVz then newVz := neighborVz;
+                            end;
+                            // cell diagonal (top-right) r0c0
+                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX + 1].S[cellY + 1];
+                            neighborVz := newVz;
+                            if fileNameLand <> '' then begin
+                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY + 1].S['offset'];
+                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
+                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY + 1].A[0].S[0] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                                if neighborVz < newVz then newVz := neighborVz;
+                            end;
+                        end;
+                    end;
                     else if ((row = 0) or (row = 32) or (column = 0) or (column = 32)) then begin
                         // This is the value here, but we need to check the neighboring cell's same border vertex and use the lowest of the two.
                         newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
