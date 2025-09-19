@@ -375,13 +375,13 @@ var
     rCell, rWrld: IwbElement;
 begin
     //Fix object bounds in case they are all 0
-    if (x1 = 0) and (x2 = 0) and (y1 = 0) and (y2 = 0) and (z1 = 0) and (z2 = 0) then begin
-        x1 = -64;
-        x2 = 64;
-        y1 = -64;
-        y2 = 64;
-        z1 = -64;
-        z2 = 64;
+    if ((x1 = 0) and (x2 = 0) and (y1 = 0) and (y2 = 0) and (z1 = 0) and (z2 = 0)) then begin
+        x1 := -8;
+        x2 := 8;
+        y1 := -8;
+        y2 := 8;
+        z1 := -8;
+        z2 := 8;
     end;
 
     //Okay, so what we need to do is understand that our object is rotated, and we are only given the bounds of the object in the unrotated state.
