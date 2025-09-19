@@ -397,7 +397,7 @@ begin
     numX := Ceil(width/128);
     numY := Ceil(height/128);
     zHere := z2;
-    AddMessage(#9 + #9 + 'Width: ' + IntToStr(width) + ' Height: ' + IntToStr(height) + ' NumX: ' + IntToStr(numX) + ' NumY: ' + IntToStr(numY) + ' Rotation: ' + FloatToStr(rotZ) + ' World: ' + wrldEdid);
+    //AddMessage(#9 + #9 + 'Width: ' + IntToStr(width) + ' Height: ' + IntToStr(height) + ' NumX: ' + IntToStr(numX) + ' NumY: ' + IntToStr(numY) + ' Rotation: ' + FloatToStr(rotZ) + ' World: ' + wrldEdid);
 
     //Now we will loop through all the points we need to check, get the rotated position, find the closest land vertex, and alter it.
     for i := 0 to numX do begin
@@ -406,7 +406,7 @@ begin
         for j := 0 to numY do begin
             yHere := y1 + (j * height/numY);
             //yHere := y1 + (j * 128);
-            AddMessage(#9 + #9 + #9 + 'Processing point ' + FloatToStr(xHere) + ',' + FloatToStr(yHere));
+            //AddMessage(#9 + #9 + #9 + 'Processing point ' + FloatToStr(xHere) + ',' + FloatToStr(yHere));
             if xHere > x2 then xHere := x2;
             if yHere > y2 then yHere := y2;
             if ((rotX = 0) and (rotY = 0) and (rotZ = 0)) then begin
@@ -422,7 +422,7 @@ begin
                     raw_x, raw_y, raw_z           // (output) raw final position
                 );
             end;
-            AddMessage(#9 + #9 + #9 + 'Rotated point ' + FloatToStr(raw_x) + ',' + FloatToStr(raw_y));
+            //AddMessage(#9 + #9 + #9 + 'Rotated point ' + FloatToStr(raw_x) + ',' + FloatToStr(raw_y));
             posXHere := posX + raw_x;
             posYHere := posY + raw_y;
             posZHere := posZ + raw_z;
@@ -430,7 +430,7 @@ begin
             //Find the cell this position is in.
             cellXHere := Floor(posXHere/4096);
             cellYHere := Floor(posYHere/4096);
-            AddMessage(#9 + #9 + #9 + 'Position ' + FloatToStr(posXHere) + ',' + FloatToStr(posYHere) + ' is in cell ' + IntToStr(cellXHere) + ',' + IntToStr(cellYHere));
+            //AddMessage(#9 + #9 + #9 + 'Position ' + FloatToStr(posXHere) + ',' + FloatToStr(posYHere) + ' is in cell ' + IntToStr(cellXHere) + ',' + IntToStr(cellYHere));
             fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
             if fileName = '' then begin
                 AddMessage(#9 + #9 + #9 + 'No landscape in this cell.');
@@ -469,12 +469,12 @@ begin
                 end;
 
                 if joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] = '1' then begin
-                    AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
+                    //AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
                     if alterationHere > 0 then continue;
                     if alterationHere < 0 then alterationHere := alterationHere - 2;
                 end
                 else if joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] = '-1' then begin
-                    AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
+                    //AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
                     if alterationHere > 0 then continue;
                 end;
 
@@ -482,11 +482,11 @@ begin
                 vz := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column];
                 oldZ := vz * SCALE_FACTOR_TERRAIN + landOffsetZ;
                 if posZHere < oldZ then begin
-                    AddMessage(#9 + #9 + #9 + 'Object is below the landscape vertex, so skipping it.');
+                    //AddMessage(#9 + #9 + #9 + 'Object is below the landscape vertex, so skipping it.');
                     continue; //The object is completely below this vertex, so skip it.
                 end;
                 if (alterationHere > 0) and ((oldZ < cellWaterHeightFloat) or (posZHere < cellWaterHeightFloat)) then begin
-                    AddMessage(#9 + #9 + #9 + 'Landscape or object is below water height at this vertex, so skipping it.');
+                    //AddMessage(#9 + #9 + #9 + 'Landscape or object is below water height at this vertex, so skipping it.');
                     continue; //The object is below water, so skipping it.
                 end;
 
@@ -828,7 +828,7 @@ begin
                                 if neighborVz < newVz then newVz := neighborVz;
                             end;
                         end;
-                    end;
+                    end
                     else if ((row = 0) or (row = 32) or (column = 0) or (column = 32)) then begin
                         // This is the value here, but we need to check the neighboring cell's same border vertex and use the lowest of the two.
                         newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
