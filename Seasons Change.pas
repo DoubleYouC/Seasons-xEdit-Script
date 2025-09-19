@@ -212,6 +212,16 @@ begin
             tlBasesThatAlterLand.Add(r);
         end;
 
+        g := GroupBySignature(f, 'LIGH');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := ElementByIndex(g, j);
+            if not IsWinningOverride(r) then continue;
+            if ReferencedByCount(r) = 0 then continue;
+            recordid := RecordFormIdFileId(r);
+            if not joAlterLandRules.Contains(recordid) then continue;
+            tlBasesThatAlterLand.Add(r);
+        end;
+
     end;
     AddMessage('New LAND Records: ' + IntToStr(count));
     //if bSaveLandHeights then joLandscapeHeights.SaveToFile(wbScriptsPath + 'Seasons\LandHeights.json', False, TEncoding.UTF8, True);
@@ -255,7 +265,8 @@ begin
         if Signature(r) <> 'REFR' then continue;
         if not IsWinningOverride(r) then continue;
         if GetIsDeleted(r) then continue;
-        if ElementExists(r, 'XESP') then continue; //skip enable parented references, since the object is not always present.
+        if GetIsCleanDeleted(r) then continue;
+        //if ElementExists(r, 'XESP') then continue; //skip enable parented references, since the object is not always present.
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
         if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
@@ -363,6 +374,16 @@ var
     raw_x, raw_y, raw_z, xHere, yHere, zHere, posXHere, posYHere, posZHere, cellWaterHeightFloat: double;
     rCell, rWrld: IwbElement;
 begin
+    //Fix object bounds in case they are all 0
+    if (x1 = 0) and (x2 = 0) and (y1 = 0) and (y2 = 0) and (z1 = 0) and (z2 = 0) then begin
+        x1 = -64;
+        x2 = 64;
+        y1 = -64;
+        y2 = 64;
+        z1 = -64;
+        z2 = 64;
+    end;
+
     //Okay, so what we need to do is understand that our object is rotated, and we are only given the bounds of the object in the unrotated state.
     //We are going to need to just take the bounding width/height of the object, divide that by 128, to get the number of lines we will use to get all the vertices
     //that we will need to alter.
@@ -464,8 +485,8 @@ begin
                     AddMessage(#9 + #9 + #9 + 'Object is below the landscape vertex, so skipping it.');
                     continue; //The object is completely below this vertex, so skip it.
                 end;
-                if (alterationHere > 0) and (oldZ < cellWaterHeightFloat) then begin
-                    AddMessage(#9 + #9 + #9 + 'Landscape is below water height at this vertex, so skipping it.');
+                if (alterationHere > 0) and ((oldZ < cellWaterHeightFloat) or (posZHere < cellWaterHeightFloat)) then begin
+                    AddMessage(#9 + #9 + #9 + 'Landscape or object is below water height at this vertex, so skipping it.');
                     continue; //The object is below water, so skipping it.
                 end;
 
@@ -1328,6 +1349,17 @@ begin
     end;
 end;
 
+function GetIsCleanDeleted(r: IwbElement): Boolean;
+{
+    Checks to see if a reference has an XESP set to opposite of the PlayerRef
+}
+begin
+    Result := False;
+    if not ElementExists(r, 'XESP') then Exit;
+    if not GetElementEditValues(r, 'XESP\Flags\Set Enable State to Opposite of Parent') = '1' then Exit;
+    if GetElementEditValues(r, 'XESP\Reference') <> 'PlayerRef [PLYR:00000014]' then Exit;
+    Result := True;
+end;
 
 procedure Shuffle(Strings: TStrings);
 {
