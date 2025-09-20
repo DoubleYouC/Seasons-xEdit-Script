@@ -102,6 +102,158 @@ begin
     ProcessLandRecords;
 end;
 
+// ----------------------------------------------------
+// UI functions and procedures go below.
+// ----------------------------------------------------
+
+function MainMenuForm: Boolean;
+{
+  Main menu form.
+}
+var
+    btnStart, btnCancel: TButton;
+    frm: TForm;
+    gbOptions: TGroupBox;
+    fImage: TImage;
+    pnl: TPanel;
+    picSeasons: TPicture;
+    chkCreateTestPlugin, chkCreateLandscapeHeights, chkCreateLandscapeSnowMeshes, chkPlaceLandscapeSnow: TCheckBox;
+begin
+    frm := TForm.Create(nil);
+    try
+        frm.Caption := 'Seasons Change';
+        frm.Width := 680;
+        frm.Height := 480;
+        frm.Position := poMainFormCenter;
+        frm.BorderStyle := bsDialog;
+        frm.KeyPreview := True;
+        frm.OnClose := frmOptionsFormClose;
+        frm.OnKeyDown := FormKeyDown;
+
+        picSeasons := TPicture.Create;
+        picSeasons.LoadFromFile(wbScriptsPath + 'Seasons\Seasons Change.jpg');
+
+        fImage := TImage.Create(frm);
+        fImage.Picture := picSeasons;
+        fImage.Parent := frm;
+        fImage.Width := 549;
+        fImage.Height := 300;
+        fImage.Left := 10;
+        fImage.Top := 12;
+        fImage.Stretch := True;
+
+        gbOptions := TGroupBox.Create(frm);
+        gbOptions.Parent := frm;
+        gbOptions.Left := 10;
+        gbOptions.Top := fImage.Top + fImage.Height + 24;
+        gbOptions.Width := frm.Width - 30;
+        gbOptions.Caption := 'Seasons Change';
+        gbOptions.Height := 94;
+
+        chkCreateTestPlugin := TCheckBox.Create(gbOptions);
+        chkCreateTestPlugin.Parent := gbOptions;
+        chkCreateTestPlugin.Left := 16;
+        chkCreateTestPlugin.Top := 16;
+        chkCreateTestPlugin.Width := 120;
+        chkCreateTestPlugin.Caption := 'Create Test Plugin';
+        chkCreateTestPlugin.Hint := 'Creates a test plugin.';
+        chkCreateTestPlugin.ShowHint := True;
+
+        chkCreateLandscapeHeights := TCheckBox.Create(gbOptions);
+        chkCreateLandscapeHeights.Parent := gbOptions;
+        chkCreateLandscapeHeights.Left := chkCreateTestPlugin.Left + chkCreateTestPlugin.Width + 16;
+        chkCreateLandscapeHeights.Top := chkCreateTestPlugin.Top;
+        chkCreateLandscapeHeights.Width := 170;
+        chkCreateLandscapeHeights.Caption := 'Force Recreate Land Heights';
+        chkCreateLandscapeHeights.Hint := 'Forces all land height values to be recalculated.';
+        chkCreateLandscapeHeights.ShowHint := True;
+
+        chkCreateLandscapeSnowMeshes := TCheckBox.Create(gbOptions);
+        chkCreateLandscapeSnowMeshes.Parent := gbOptions;
+        chkCreateLandscapeSnowMeshes.Left := chkCreateLandscapeHeights.Left + chkCreateLandscapeHeights.Width + 16;
+        chkCreateLandscapeSnowMeshes.Top := chkCreateLandscapeHeights.Top;
+        chkCreateLandscapeSnowMeshes.Width := 170;
+        chkCreateLandscapeSnowMeshes.Caption := 'Force Recreate Snow Models';
+        chkCreateLandscapeSnowMeshes.Hint := 'Forces recreation of all snow models.';
+        chkCreateLandscapeSnowMeshes.ShowHint := True;
+
+        chkPlaceLandscapeSnow := TCheckBox.Create(gbOptions);
+        chkPlaceLandscapeSnow.Parent := gbOptions;
+        chkPlaceLandscapeSnow.Left := chkCreateLandscapeSnowMeshes.Left + chkCreateLandscapeSnowMeshes.Width + 16;
+        chkPlaceLandscapeSnow.Top := chkCreateLandscapeSnowMeshes.Top;
+        chkPlaceLandscapeSnow.Width := 100;
+        chkPlaceLandscapeSnow.Caption := 'Place Snow';
+        chkPlaceLandscapeSnow.Hint := 'Place snow.';
+        chkPlaceLandscapeSnow.ShowHint := True;
+
+        btnStart := TButton.Create(frm);
+        btnStart.Parent := frm;
+        btnStart.Caption := 'Start';
+        btnStart.ModalResult := mrOk;
+        btnStart.Top := gbOptions.Top + gbOptions.Height + 24;
+
+        btnCancel := TButton.Create(frm);
+        btnCancel.Parent := frm;
+        btnCancel.Caption := 'Cancel';
+        btnCancel.ModalResult := mrCancel;
+        btnCancel.Top := btnStart.Top;
+
+        btnStart.Left := gbOptions.Width - btnStart.Width - btnCancel.Width - 16;
+        btnCancel.Left := btnStart.Left + btnStart.Width + 8;
+
+        pnl := TPanel.Create(frm);
+        pnl.Parent := frm;
+        pnl.Left := gbOptions.Left;
+        pnl.Top := btnStart.Top - 12;
+        pnl.Width := gbOptions.Width;
+        pnl.Height := 2;
+
+        frm.ActiveControl := btnStart;
+        frm.ScaleBy(uiScale, 100);
+        frm.Font.Size := 8;
+        frm.Height := btnStart.Top + btnStart.Height + btnStart.Height + 30;
+
+        chkCreateTestPlugin.Checked := bCreateTestPlugin;
+        chkCreateLandscapeHeights.Checked := bCreateLandscapeHeights;
+        chkCreateLandscapeSnowMeshes.Checked := bCreateLandscapeSnowMeshes;
+        chkPlaceLandscapeSnow.Checked := bPlaceLandscapeSnow;
+
+        if frm.ShowModal <> mrOk then begin
+            Result := False;
+            Exit;
+        end else Result := True;
+
+        bCreateTestPlugin := chkCreateTestPlugin.Checked;
+        bCreateLandscapeHeights := chkCreateLandscapeHeights.Checked;
+        bCreateLandscapeSnowMeshes := chkCreateLandscapeSnowMeshes.Checked;
+        bPlaceLandscapeSnow := chkPlaceLandscapeSnow.Checked;
+
+    finally
+        frm.Free;
+    end;
+end;
+
+procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+{
+    Cancel if Escape key is pressed.
+}
+begin
+    if Key = VK_ESCAPE then TForm(Sender).ModalResult := mrCancel;
+end;
+
+procedure frmOptionsFormClose(Sender: TObject; var Action: TCloseAction);
+{
+    Close form handler.
+}
+begin
+    if TForm(Sender).ModalResult <> mrOk then Exit
+end;
+
+
+// ----------------------------------------------------
+// Actual Work
+// ----------------------------------------------------
+
 procedure CreatePlugin;
 begin
     SeasonsMainFile := AddNewFile;
@@ -386,12 +538,12 @@ var
 begin
     //Fix object bounds in case they are all 0
     if ((x1 = 0) and (x2 = 0) and (y1 = 0) and (y2 = 0) and (z1 = 0) and (z2 = 0)) then begin
-        x1 := -8;
-        x2 := 8;
-        y1 := -8;
-        y2 := 8;
-        z1 := -8;
-        z2 := 8;
+        x1 := -64;
+        x2 := 64;
+        y1 := -64;
+        y2 := 64;
+        z1 := -64;
+        z2 := 64;
     end;
 
     //Okay, so what we need to do is understand that our object is rotated, and we are only given the bounds of the object in the unrotated state.
@@ -406,6 +558,8 @@ begin
     height := y2 - y1;
     numX := Floor(width/128);
     numY := Floor(height/128);
+    if numX = 0 then numX := 1;
+    if numY = 0 then numY := 1;
     zHere := z2;
     //AddMessage(#9 + #9 + 'Width: ' + IntToStr(width) + ' Height: ' + IntToStr(height) + ' NumX: ' + IntToStr(numX) + ' NumY: ' + IntToStr(numY) + ' Rotation: ' + FloatToStr(rotZ) + ' World: ' + wrldEdid);
 
@@ -1085,153 +1239,6 @@ begin
             sub.Free;
         end;
     end;
-end;
-
-// ----------------------------------------------------
-// UI functions and procedures go below.
-// ----------------------------------------------------
-
-function MainMenuForm: Boolean;
-{
-  Main menu form.
-}
-var
-    btnStart, btnCancel: TButton;
-    frm: TForm;
-    gbOptions: TGroupBox;
-    fImage: TImage;
-    pnl: TPanel;
-    picSeasons: TPicture;
-    chkCreateTestPlugin, chkCreateLandscapeHeights, chkCreateLandscapeSnowMeshes, chkPlaceLandscapeSnow: TCheckBox;
-begin
-    frm := TForm.Create(nil);
-    try
-        frm.Caption := 'Seasons Change';
-        frm.Width := 680;
-        frm.Height := 480;
-        frm.Position := poMainFormCenter;
-        frm.BorderStyle := bsDialog;
-        frm.KeyPreview := True;
-        frm.OnClose := frmOptionsFormClose;
-        frm.OnKeyDown := FormKeyDown;
-
-        picSeasons := TPicture.Create;
-        picSeasons.LoadFromFile(wbScriptsPath + 'Seasons\Seasons Change.jpg');
-
-        fImage := TImage.Create(frm);
-        fImage.Picture := picSeasons;
-        fImage.Parent := frm;
-        fImage.Width := 549;
-        fImage.Height := 300;
-        fImage.Left := 10;
-        fImage.Top := 12;
-        fImage.Stretch := True;
-
-        gbOptions := TGroupBox.Create(frm);
-        gbOptions.Parent := frm;
-        gbOptions.Left := 10;
-        gbOptions.Top := fImage.Top + fImage.Height + 24;
-        gbOptions.Width := frm.Width - 30;
-        gbOptions.Caption := 'Seasons Change';
-        gbOptions.Height := 94;
-
-        chkCreateTestPlugin := TCheckBox.Create(gbOptions);
-        chkCreateTestPlugin.Parent := gbOptions;
-        chkCreateTestPlugin.Left := 16;
-        chkCreateTestPlugin.Top := 16;
-        chkCreateTestPlugin.Width := 120;
-        chkCreateTestPlugin.Caption := 'Create Test Plugin';
-        chkCreateTestPlugin.Hint := 'Creates a test plugin.';
-        chkCreateTestPlugin.ShowHint := True;
-
-        chkCreateLandscapeHeights := TCheckBox.Create(gbOptions);
-        chkCreateLandscapeHeights.Parent := gbOptions;
-        chkCreateLandscapeHeights.Left := chkCreateTestPlugin.Left + chkCreateTestPlugin.Width + 16;
-        chkCreateLandscapeHeights.Top := chkCreateTestPlugin.Top;
-        chkCreateLandscapeHeights.Width := 170;
-        chkCreateLandscapeHeights.Caption := 'Force Recreate Land Heights';
-        chkCreateLandscapeHeights.Hint := 'Forces all land height values to be recalculated.';
-        chkCreateLandscapeHeights.ShowHint := True;
-
-        chkCreateLandscapeSnowMeshes := TCheckBox.Create(gbOptions);
-        chkCreateLandscapeSnowMeshes.Parent := gbOptions;
-        chkCreateLandscapeSnowMeshes.Left := chkCreateLandscapeHeights.Left + chkCreateLandscapeHeights.Width + 16;
-        chkCreateLandscapeSnowMeshes.Top := chkCreateLandscapeHeights.Top;
-        chkCreateLandscapeSnowMeshes.Width := 170;
-        chkCreateLandscapeSnowMeshes.Caption := 'Force Recreate Snow Models';
-        chkCreateLandscapeSnowMeshes.Hint := 'Forces recreation of all snow models.';
-        chkCreateLandscapeSnowMeshes.ShowHint := True;
-
-        chkPlaceLandscapeSnow := TCheckBox.Create(gbOptions);
-        chkPlaceLandscapeSnow.Parent := gbOptions;
-        chkPlaceLandscapeSnow.Left := chkCreateLandscapeSnowMeshes.Left + chkCreateLandscapeSnowMeshes.Width + 16;
-        chkPlaceLandscapeSnow.Top := chkCreateLandscapeSnowMeshes.Top;
-        chkPlaceLandscapeSnow.Width := 100;
-        chkPlaceLandscapeSnow.Caption := 'Place Snow';
-        chkPlaceLandscapeSnow.Hint := 'Place snow.';
-        chkPlaceLandscapeSnow.ShowHint := True;
-
-        btnStart := TButton.Create(frm);
-        btnStart.Parent := frm;
-        btnStart.Caption := 'Start';
-        btnStart.ModalResult := mrOk;
-        btnStart.Top := gbOptions.Top + gbOptions.Height + 24;
-
-        btnCancel := TButton.Create(frm);
-        btnCancel.Parent := frm;
-        btnCancel.Caption := 'Cancel';
-        btnCancel.ModalResult := mrCancel;
-        btnCancel.Top := btnStart.Top;
-
-        btnStart.Left := gbOptions.Width - btnStart.Width - btnCancel.Width - 16;
-        btnCancel.Left := btnStart.Left + btnStart.Width + 8;
-
-        pnl := TPanel.Create(frm);
-        pnl.Parent := frm;
-        pnl.Left := gbOptions.Left;
-        pnl.Top := btnStart.Top - 12;
-        pnl.Width := gbOptions.Width;
-        pnl.Height := 2;
-
-        frm.ActiveControl := btnStart;
-        frm.ScaleBy(uiScale, 100);
-        frm.Font.Size := 8;
-        frm.Height := btnStart.Top + btnStart.Height + btnStart.Height + 30;
-
-        chkCreateTestPlugin.Checked := bCreateTestPlugin;
-        chkCreateLandscapeHeights.Checked := bCreateLandscapeHeights;
-        chkCreateLandscapeSnowMeshes.Checked := bCreateLandscapeSnowMeshes;
-        chkPlaceLandscapeSnow.Checked := bPlaceLandscapeSnow;
-
-        if frm.ShowModal <> mrOk then begin
-            Result := False;
-            Exit;
-        end else Result := True;
-
-        bCreateTestPlugin := chkCreateTestPlugin.Checked;
-        bCreateLandscapeHeights := chkCreateLandscapeHeights.Checked;
-        bCreateLandscapeSnowMeshes := chkCreateLandscapeSnowMeshes.Checked;
-        bPlaceLandscapeSnow := chkPlaceLandscapeSnow.Checked;
-
-    finally
-        frm.Free;
-    end;
-end;
-
-procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
-{
-    Cancel if Escape key is pressed.
-}
-begin
-    if Key = VK_ESCAPE then TForm(Sender).ModalResult := mrCancel;
-end;
-
-procedure frmOptionsFormClose(Sender: TObject; var Action: TCloseAction);
-{
-    Close form handler.
-}
-begin
-    if TForm(Sender).ModalResult <> mrOk then Exit
 end;
 
 // ----------------------------------------------------
