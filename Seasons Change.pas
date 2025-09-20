@@ -182,6 +182,16 @@ begin
             tlBasesThatAlterLand.Add(r);
         end;
 
+        g := GroupBySignature(f, 'SCOL');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := ElementByIndex(g, j);
+            if not IsWinningOverride(r) then continue;
+            if ReferencedByCount(r) = 0 then continue;
+            recordid := RecordFormIdFileId(r);
+            if not joAlterLandRules.Contains(recordid) then continue;
+            tlBasesThatAlterLand.Add(r);
+        end;
+
         g := GroupBySignature(f, 'FURN');
         for j := 0 to Pred(ElementCount(g)) do begin
             r := ElementByIndex(g, j);
