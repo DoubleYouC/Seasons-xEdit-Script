@@ -394,8 +394,8 @@ begin
     //    ||||      ////
     width := x2 - x1;
     height := y2 - y1;
-    numX := Ceil(width/128);
-    numY := Ceil(height/128);
+    numX := Floor(width/128);
+    numY := Floor(height/128);
     zHere := z2;
     //AddMessage(#9 + #9 + 'Width: ' + IntToStr(width) + ' Height: ' + IntToStr(height) + ' NumX: ' + IntToStr(numX) + ' NumY: ' + IntToStr(numY) + ' Rotation: ' + FloatToStr(rotZ) + ' World: ' + wrldEdid);
 
@@ -444,7 +444,7 @@ begin
                 if GetElementEditValues(rCell, 'DATA\Has Water') = '0' then bHasWater := False;
                 cellWaterHeight := GetElementEditValues(rCell, 'XCLW');
                 if cellWaterHeight = 'Default' then cellWaterHeight := GetElementEditValues(rWrld, 'DNAM\Default Water Height');
-                cellWaterHeightFloat := StrToFloatDef(cellWaterHeight, 9);
+                cellWaterHeightFloat := StrToFloatDef(cellWaterHeight, 9) + 16;
             end;
 
             //Find the closest vertex in this cell.
@@ -471,11 +471,11 @@ begin
                 if joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] = '1' then begin
                     //AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
                     if alterationHere > 0 then continue;
-                    if alterationHere < 0 then alterationHere := alterationHere - 2;
+                    alterationHere := alterationHere - 2;
                 end
                 else if joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] = '-1' then begin
                     //AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
-                    if alterationHere > 0 then continue;
+                    continue;
                 end;
 
                 landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
@@ -485,7 +485,7 @@ begin
                     //AddMessage(#9 + #9 + #9 + 'Object is below the landscape vertex, so skipping it.');
                     continue; //The object is completely below this vertex, so skip it.
                 end;
-                if (alterationHere > 0) and ((oldZ < cellWaterHeightFloat) or (posZHere < cellWaterHeightFloat)) then begin
+                if (alterationHere > 0) and ((oldZ <= cellWaterHeightFloat) or (posZHere <= cellWaterHeightFloat)) then begin
                     //AddMessage(#9 + #9 + #9 + 'Landscape or object is below water height at this vertex, so skipping it.');
                     continue; //The object is below water, so skipping it.
                 end;
@@ -506,7 +506,7 @@ begin
                 joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
                 AddMessage(#9 + #9 + #9 + 'Altering land height at ' + IntToStr(column) + ',' + IntToStr(row) + ' in ' + wrldEdid + ' ' + IntToStr(cellXHere) + ' ' + IntToStr(cellYHere) + ' from ' + IntToStr(vz) + ' to ' + IntToStr(newZ));
                 if alteration < 0 then joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] := '-1'
-                else if alteration > 0 then joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] := '1';
+                else joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] := '1';
 
             end;
         end;
