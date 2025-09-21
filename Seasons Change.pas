@@ -8,7 +8,7 @@ unit Seasons;
 // ----------------------------------------------------
 
 var
-    bSaveLandHeights, bCreateLandscapeHeights, bCreateLandscapeSnowMeshes, bPlaceLandscapeSnow, bCreateTestPlugin: boolean;
+    bSaveLandHeights, bCreateLandscapeHeights, bCreateLandscapeSnowMeshes, bPlaceLandscapeSnow, bCreateTestPlugin, bUserAlterLandRulesChanged, bSaveUserRules: boolean;
     uiScale: integer;
     sIgnoredWorldspaces: string;
 
@@ -18,7 +18,10 @@ var
 
     slPluginFiles: TStringList;
     tlLandRecords, tlBasesThatAlterLand: TList;
-    joSeasons, joLandscapeHeights, joLandFiles, joAlterLandRules, joAlteredLandscape: TJsonObject;
+    joSeasons, joLandscapeHeights, joLandFiles, joAlterLandRules, joUserAlterLandRules, joAlteredLandscape: TJsonObject;
+
+    lvAlterLandRules: TListView;
+    btnAlterLandRuleOk, btnAlterLandRuleCancel: TButton;
 
 const
     sSeasonsFileName = 'Seasons.esm';
@@ -42,6 +45,7 @@ begin
     joLandscapeHeights := TJsonObject.Create;
     joLandFiles := TJsonObject.Create;
     joAlterLandRules := TJsonObject.Create;
+    joUserAlterLandRules := TJsonObject.Create;
     joAlteredLandscape := TJsonObject.Create;
     tlLandRecords := TList.Create;
     tlBasesThatAlterLand := TList.Create;
@@ -61,8 +65,13 @@ begin
     joAlteredLandscape.Free;
     tlLandRecords.Free;
     tlBasesThatAlterLand.Free;
-
     joLandscapeHeights.Free;
+
+    if bSaveUserRules and bUserAlterLandRulesChanged then begin
+        AddMessage('Saving ' + IntToStr(joUserAlterLandRules.Count) + ' object snow alteration user rule(s) to ' + wbDataPath + 'Seasons\AlterLandUserRules.json');
+        joUserAlterLandRules.SaveToFile(wbDataPath + 'Seasons\AlterLandUserRules.json', False, TEncoding.UTF8, True);
+    end;
+    joUserAlterLandRules.Free;
     Result := 0;
 end;
 
@@ -80,6 +89,10 @@ begin
     bCreateLandscapeSnowMeshes := False;
     bPlaceLandscapeSnow := False;
     bCreateTestPlugin := False;
+
+    //Rules
+    bSaveUserRules := False;
+    bUserAlterLandRulesChanged := False;
 
     //Get scaling
     uiScale := Screen.PixelsPerInch * 100 / 96;
@@ -111,7 +124,7 @@ function MainMenuForm: Boolean;
   Main menu form.
 }
 var
-    btnStart, btnCancel: TButton;
+    btnStart, btnCancel, btnRuleEditor: TButton;
     frm: TForm;
     gbOptions: TGroupBox;
     fImage: TImage;
@@ -138,7 +151,7 @@ begin
         fImage.Parent := frm;
         fImage.Width := 549;
         fImage.Height := 300;
-        fImage.Left := 10;
+        fImage.Left := (frm.Width - fImage.Width)/2;
         fImage.Top := 12;
         fImage.Stretch := True;
 
@@ -185,6 +198,14 @@ begin
         chkPlaceLandscapeSnow.Caption := 'Place Snow';
         chkPlaceLandscapeSnow.Hint := 'Place snow.';
         chkPlaceLandscapeSnow.ShowHint := True;
+
+        btnRuleEditor := TButton.Create(frm);
+        btnRuleEditor.Parent := frm;
+        btnRuleEditor.Caption := 'Rules';
+        btnRuleEditor.OnClick := AlterLandRuleEditor;
+        btnRuleEditor.Width := 100;
+        btnRuleEditor.Left := 16;
+        btnRuleEditor.Top := gbOptions.Top + gbOptions.Height + 24;
 
         btnStart := TButton.Create(frm);
         btnStart.Parent := frm;
@@ -247,6 +268,306 @@ procedure frmOptionsFormClose(Sender: TObject; var Action: TCloseAction);
 }
 begin
     if TForm(Sender).ModalResult <> mrOk then Exit
+    else bSaveUserRules := True;
+end;
+
+function AlterLandRuleEditor: Boolean;
+var
+    i: integer;
+    mnRules: TPopupMenu;
+    MenuItem: TMenuItem;
+    lbl: TLabel;
+    frm: TForm;
+begin
+    frm := TForm.Create(nil);
+    try
+        frm.Caption := 'Rule Editor';
+        frm.Width := 750;
+        frm.Height := 600;
+        frm.Position := poMainFormCenter;
+        frm.BorderStyle := bsSizeable;
+        frm.KeyPreview := True;
+        frm.OnClose := frmOptionsFormClose;
+        frm.OnKeyDown := FormKeyDown;
+        frm.OnResize := frmAlterLandResize;
+
+        lvAlterLandRules := TListView.Create(frm);
+        lvAlterLandRules.Parent := frm;
+
+        lvAlterLandRules.Top := 24;
+        lvAlterLandRules.Width := frm.Width - 36;
+        lvAlterLandRules.Left := (frm.Width - lvAlterLandRules.Width)/2;
+        lvAlterLandRules.Height := frm.Height - 110;
+        lvAlterLandRules.ReadOnly := True;
+        lvAlterLandRules.ViewStyle := vsReport;
+        lvAlterLandRules.RowSelect := True;
+        lvAlterLandRules.DoubleBuffered := True;
+        lvAlterLandRules.Columns.Add.Caption := 'EditorID';
+        lvAlterLandRules.Columns[0].Width := 350;
+        lvAlterLandRules.Columns.Add.Caption := 'ID';
+        lvAlterLandRules.Columns[1].Width := 275;
+        lvAlterLandRules.Columns.Add.Caption := 'Alteration';
+        lvAlterLandRules.Columns[2].Width := 80;
+        lvAlterLandRules.OwnerData := True;
+        lvAlterLandRules.OnData := lvAlterLandRulesData;
+        lvAlterLandRules.OnDblClick := lvAlterLandRulesDblClick;
+        lvAlterLandRules.Items.Count := joAlterLandRules.Count;
+        CreateLabel(frm, 16, lvAlterLandRules.Top - 20, 'Object Landscape Snow Alterations');
+
+        mnRules := TPopupMenu.Create(frm);
+        lvAlterLandRules.PopupMenu := mnRules;
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Caption := 'Add';
+        MenuItem.OnClick := AlterLandRulesMenuAddClick;
+        mnRules.Items.Add(MenuItem);
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Caption := 'Delete';
+        MenuItem.OnClick := AlterLandRulesMenuDeleteClick;
+        mnRules.Items.Add(MenuItem);
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Caption := 'Edit';
+        MenuItem.OnClick := AlterLandRulesMenuEditClick;
+        mnRules.Items.Add(MenuItem);
+
+        btnAlterLandRuleOk := TButton.Create(frm);
+        btnAlterLandRuleOk.Parent := frm;
+        btnAlterLandRuleOk.Caption := 'OK';
+        btnAlterLandRuleOk.ModalResult := mrOk;
+        btnAlterLandRuleOk.Top := lvAlterLandRules.Height + lvAlterLandRules.Top + 8;
+
+        btnAlterLandRuleCancel := TButton.Create(frm);
+        btnAlterLandRuleCancel.Parent := frm;
+        btnAlterLandRuleCancel.Caption := 'Cancel';
+        btnAlterLandRuleCancel.ModalResult := mrCancel;
+        btnAlterLandRuleCancel.Top := btnAlterLandRuleOk.Top;
+
+        btnAlterLandRuleOk.Left := (frm.Width - btnAlterLandRuleOk.Width - btnAlterLandRuleCancel.Width - 8)/2;
+        btnAlterLandRuleCancel.Left := btnAlterLandRuleOk.Left + btnAlterLandRuleOk.Width + 8;
+
+        frm.ScaleBy(uiScale, 100);
+        frm.Font.Size := 8;
+
+        if frm.ShowModal <> mrOk then begin
+            Result := False;
+            Exit;
+        end
+        else Result := True;
+
+    finally
+        frm.Free;
+    end;
+end;
+
+function EditAlterLandRuleForm(var key: string; var alteration: integer; keyReadOnly: boolean): boolean;
+var
+    frmRule: TForm;
+    pnl: TPanel;
+    btnOk, btnCancel: TButton;
+    edEditorID, edKey, edAlteration: TEdit;
+begin
+    frmRule := TForm.Create(nil);
+    try
+        frmRule.Caption := 'Object Landscape Snow Alteration Rule';
+        frmRule.Width := 600;
+        frmRule.Height := 300;
+        frmRule.Position := poMainFormCenter;
+        frmRule.BorderStyle := bsDialog;
+        frmRule.KeyPreview := True;
+        frmRule.OnKeyDown := FormKeyDown;
+        frmRule.OnClose := frmAlterLandRuleFormClose;
+
+        edEditorID := TEdit.Create(frmRule);
+        edEditorID.Parent := frmRule;
+        edEditorID.Name := 'edEditorID';
+        edEditorID.Left := 120;
+        edEditorID.Top := 12;
+        edEditorID.Width := frmRule.Width - 150;
+        edEditorID.Text := EditorID(GetRecordFromFormIdFileId(key));
+        edEditorID.ReadOnly := True;
+        CreateLabel(frmRule, 16, edEditorID.Top + 4, 'Editor ID');
+
+        edKey := TEdit.Create(frmRule);
+        edKey.Parent := frmRule;
+        edKey.Name := 'edKey';
+        edKey.Left := 120;
+        edKey.Top := edEditorID.Top + 28;
+        edKey.Width := frmRule.Width - 150;
+        edKey.ReadOnly := keyReadOnly;
+        CreateLabel(frmRule, 16, edKey.Top + 4, 'ID');
+
+        edAlteration := TEdit.Create(frmRule);
+        edAlteration.Parent := frmRule;
+        edAlteration.Name := 'edAlteration';
+        edAlteration.Left := 120;
+        edAlteration.Top := edKey.Top + 28;
+        edAlteration.Width := frmRule.Width - 150;
+        CreateLabel(frmRule, 16, edAlteration.Top + 4, 'LOD4');
+
+        btnOk := TButton.Create(frmRule);
+        btnOk.Parent := frmRule;
+        btnOk.Caption := 'OK';
+        btnOk.ModalResult := mrOk;
+        btnOk.Top := edAlteration.Top + (2 * edAlteration.Height);
+
+        btnCancel := TButton.Create(frmRule);
+        btnCancel.Parent := frmRule;
+        btnCancel.Caption := 'Cancel';
+        btnCancel.ModalResult := mrCancel;
+        btnCancel.Top := btnOk.Top;
+
+        btnOk.Left := frmRule.Width - btnOk.Width - btnCancel.Width - 32;
+        btnCancel.Left := btnOk.Left + btnOk.Width + 8;
+
+        pnl := TPanel.Create(frmRule);
+        pnl.Parent := frmRule;
+        pnl.Left := 10;
+        pnl.Top := btnOk.Top - 12;
+        pnl.Width := frmRule.Width - 32;
+        pnl.Height := 2;
+
+        frmRule.Height := btnOk.Top + (4 * btnOk.Height);
+        frmRule.ScaleBy(uiScale, 100);
+        frmRule.Font.Size := 8;
+
+        edKey.Text := key;
+        edAlteration.Text := IntToStr(alteration);
+
+        if frmRule.ShowModal <> mrOk then Exit;
+
+        key := edKey.Text;
+        alteration := StrToInt(edAlteration.Text);
+        Result := True;
+    finally
+        frmRule.Free;
+    end;
+end;
+
+procedure lvAlterLandRulesData(Sender: TObject; Item: TListItem);
+{
+    Populate lvRules
+}
+var
+    i: integer;
+    key: string;
+begin
+    key := joAlterLandRules.Names[Item.Index];
+    Item.Caption := EditorID(GetRecordFromFormIdFileId(key));
+    Item.SubItems.Add(key);
+    Item.SubItems.Add(joAlterLandRules.S[key]);
+end;
+
+procedure lvAlterLandRulesDblClick(Sender: TObject);
+{
+    Double click to edit rule
+}
+begin
+    AlterLandRulesMenuEditClick(nil);
+end;
+
+procedure AlterLandRulesMenuAddClick(Sender: TObject);
+{
+    Add rule
+}
+var
+    idx, alteration: integer;
+    key: string;
+begin
+    key := '';
+    alteration := -32;
+
+    if not EditAlterLandRuleForm(key, alteration, False) then Exit;
+
+    joAlterLandRules.S[key] := alteration;
+
+    joUserAlterLandRules.S[key] := joAlterLandRules.S[key];
+    bUserAlterLandRulesChanged := True;
+
+    lvAlterLandRules.Items.Count := joAlterLandRules.Count;
+    lvAlterLandRules.Refresh;
+end;
+
+procedure AlterLandRulesMenuEditClick(Sender: TObject);
+{
+    Edit rule
+}
+var
+    idx, alteration: integer;
+    key: string;
+begin
+    if not Assigned(lvAlterLandRules.Selected) then Exit;
+    idx := lvAlterLandRules.Selected.Index;
+
+    key := joAlterLandRules.Names[idx];
+    alteration := joAlterLandRules.S[key];
+
+    if not EditAlterLandRuleForm(key, alteration, True) then Exit;
+
+    joAlterLandRules.S[key] := alteration;
+
+    joUserAlterLandRules.S[key] := joAlterLandRules.S[key];
+    bUserAlterLandRulesChanged := True;
+
+    lvAlterLandRules.Items.Count := joAlterLandRules.Count;
+    lvAlterLandRules.Refresh;
+end;
+
+procedure AlterLandRulesMenuDeleteClick(Sender: TObject);
+{
+    Delete rule
+}
+var
+    idx, uidx: integer;
+    key: string;
+begin
+    if not Assigned(lvAlterLandRules.Selected) then Exit;
+    idx := lvAlterLandRules.Selected.Index;
+    key := joAlterLandRules.Names[idx];
+    uidx := joUserAlterLandRules.IndexOf(key);
+    if uidx > -1 then begin
+        joAlterLandRules.Delete(idx);
+        joUserAlterLandRules.Delete(uidx);
+        bUserAlterLandRulesChanged := True;
+        lvAlterLandRules.Items.Count := joAlterLandRules.Count;
+        lvAlterLandRules.Refresh;
+    end else MessageDlg('This rule cannot be deleted.', mtInformation, [mbOk], 0);
+end;
+
+procedure frmAlterLandRuleFormClose(Sender: TObject; var Action: TCloseAction);
+{
+    Close rule edit menu handler.
+}
+begin
+    if TForm(Sender).ModalResult <> mrOk then Exit;
+    if TEdit(TForm(Sender).FindComponent('edKey')).Text = '' then begin
+        MessageDlg('ID must not be empty.', mtInformation, [mbOk], 0);
+        Action := caNone;
+    end;
+    if TEdit(TForm(Sender).FindComponent('edAlteration')).Text = '' then begin
+        MessageDlg('Alteration must not be empty.', mtInformation, [mbOk], 0);
+        Action := caNone;
+    end;
+end;
+
+procedure frmAlterLandResize(Sender: TObject);
+{
+    Handle resizing of elements in the rule menu.
+}
+var
+    frm: TForm;
+begin
+    try
+        frm := TForm(Sender);
+        lvAlterLandRules.Width := frm.Width - 36;
+        lvAlterLandRules.Left := (frm.Width - lvAlterLandRules.Width)/2;
+        lvAlterLandRules.Height := frm.Height - btnAlterLandRuleOk.Height - btnAlterLandRuleOk.Height - btnAlterLandRuleOk.Height - btnAlterLandRuleOk.Height;
+
+        btnAlterLandRuleOk.Top := lvAlterLandRules.Height + lvAlterLandRules.Top + 8;
+        btnAlterLandRuleCancel.Top := btnAlterLandRuleOk.Top;
+        btnAlterLandRuleOk.Left := (frm.Width - btnAlterLandRuleOk.Width - btnAlterLandRuleCancel.Width - 8)/2;
+        btnAlterLandRuleCancel.Left := btnAlterLandRuleOk.Left + btnAlterLandRuleOk.Width + 8;
+    except
+        frm := TForm(Sender);
+    end;
 end;
 
 
@@ -1180,8 +1501,8 @@ procedure FetchRules;
     Loads the Rule JSON files.
 }
 var
-    i: integer;
-    f: string;
+    i, c: integer;
+    f, j, key: string;
 begin
     for i := 0 to Pred(FileCount) do begin
         f := GetFileName(FileByIndex(i));
@@ -1192,6 +1513,17 @@ begin
         slPluginFiles.Add(f);
         LoadRules(f);
     end;
+
+    j := 'Seasons\AlterLandUserRules.json';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded Alter Land User Rule File: ' + j);
+        joUserAlterLandRules.LoadFromResource(j);
+        for c := 0 to Pred(joUserAlterLandRules.Count) do begin
+            key := joUserAlterLandRules.Names[c];
+            joAlterLandRules.S[key] := joUserAlterLandRules.S[key];
+        end;
+    end;
+    SortAlterLandJSONObjectKeys;
 end;
 
 procedure LoadRules(f: string);
@@ -1653,6 +1985,87 @@ begin
     qw3, qx3, qy3, qz3,
     return_x, return_y, return_z
   );
+end;
+
+function CreateLabel(aParent: TControl; x, y: Integer; aCaption: string): TLabel;
+{
+    Create a label.
+}
+begin
+    Result := TLabel.Create(aParent);
+    Result.Parent := aParent;
+    Result.Left := x;
+    Result.Top := y;
+    Result.Caption := aCaption;
+end;
+
+procedure SortJSONObjectKeys(JSONObj: TJsonObject);
+{
+    Sorts JSON keys alphabetically.
+}
+var
+    SortedKeys: TStringList;
+    Key: string;
+    NewJSONObj: TJsonObject;
+    i: integer;
+begin
+    // Create a sorted list of keys
+    SortedKeys := TStringList.Create;
+    NewJSONObj := TJsonObject.Create;
+    try
+        for i := 0 to Pred(JSONObj.Count) do SortedKeys.Add(JSONObj.Names[i]);
+        SortedKeys.Sort; // Sort the keys alphabetically
+
+        for i := 0 to Pred(SortedKeys.Count) do begin
+            Key := SortedKeys[i];
+            NewJSONObj.O[Key].Assign(JSONObj.O[Key]);
+        end;
+
+        // Replace the original JSONObj with the sorted one
+        JSONObj.Clear;
+        JSONObj.Assign(NewJSONObj);
+    finally
+        SortedKeys.Free;
+        NewJSONObj.Free;
+    end;
+end;
+
+procedure SortAlterLandJSONObjectKeys;
+{
+    Sorts Alter Land JSON keys by Editor ID.
+}
+var
+    SortedEDIDs: TStringList;
+    Key, edid: string;
+    NewJSONObj, joEDIDKeyMap: TJsonObject;
+    i: integer;
+begin
+    // Create a sorted list of keys
+    SortedEDIDs := TStringList.Create;
+    joEDIDKeyMap := TJsonObject.Create;
+    NewJSONObj := TJsonObject.Create;
+    try
+        for i := 0 to Pred(joAlterLandRules.Count) do begin
+            Key := joAlterLandRules.Names[i];
+            edid := EditorID(GetRecordFromFormIdFileId(Key));
+            SortedEDIDs.Add(edid);
+            joEDIDKeyMap.S[edid] := Key;
+        end;
+        SortedEDIDs.Sort; // Sort the keys alphabetically
+
+        for i := 0 to Pred(SortedEDIDs.Count) do begin
+            Key := joEDIDKeyMap.S[SortedEDIDs[i]];
+            NewJSONObj.S[Key] := joAlterLandRules.S[Key];
+        end;
+
+        // Replace the original joAlterLandRules with the sorted one
+        joAlterLandRules.Clear;
+        joAlterLandRules.Assign(NewJSONObj);
+    finally
+        SortedEDIDs.Free;
+        joEDIDKeyMap.Free;
+        NewJSONObj.Free;
+    end;
 end;
 
 
