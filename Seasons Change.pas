@@ -18,7 +18,7 @@ var
 
     slPluginFiles: TStringList;
     tlLandRecords, tlBasesThatAlterLand: TList;
-    joSeasons, joLandscapeHeights, joLandFiles, joAlterLandRules, joUserAlterLandRules, joAlteredLandscape: TJsonObject;
+    joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules: TJsonObject;
 
     lvAlterLandRules: TListView;
     btnAlterLandRuleOk, btnAlterLandRuleCancel: TButton;
@@ -43,10 +43,10 @@ begin
     slPluginFiles := TStringList.Create;
     joSeasons := TJsonObject.Create;
     joLandscapeHeights := TJsonObject.Create;
+    joLandscapeHeightsAltered := TJsonObject.Create;
     joLandFiles := TJsonObject.Create;
     joAlterLandRules := TJsonObject.Create;
     joUserAlterLandRules := TJsonObject.Create;
-    joAlteredLandscape := TJsonObject.Create;
     tlLandRecords := TList.Create;
     tlBasesThatAlterLand := TList.Create;
     if FileExists(wbScriptsPath + 'Seasons\LandHeights.json') then
@@ -62,10 +62,10 @@ begin
     joSeasons.Free;
     joAlterLandRules.Free;
     joLandFiles.Free;
-    joAlteredLandscape.Free;
     tlLandRecords.Free;
     tlBasesThatAlterLand.Free;
     joLandscapeHeights.Free;
+    joLandscapeHeightsAltered.Free;
 
     if bSaveUserRules and bUserAlterLandRulesChanged then begin
         AddMessage('Saving ' + IntToStr(joUserAlterLandRules.Count) + ' object snow alteration user rule(s) to ' + wbDataPath + 'Seasons\AlterLandUserRules.json');
@@ -111,8 +111,9 @@ begin
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
     CollectRecords;
+    FixLandscapeSeams;
     AlterLandHeightsForTheseBases;
-    ProcessLandRecords;
+    //ProcessLandRecords;
 end;
 
 // ----------------------------------------------------
@@ -629,13 +630,12 @@ begin
                         cellX := GetElementNativeValues(rCell, 'XCLC\X');
                         cellY := GetElementNativeValues(rCell, 'XCLC\Y');
                         AddMessage(IntToStr(count) + #9 + ShortName(land) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
-                        joLandFiles.O[wrldEdid].O[cellX].S[cellY] := fileName;
                         bLandHasChanged := CreateLandscapeHeights(land, WinningOverride(rCell), wWrld, wrldEdid);
-                        if bLandHasChanged then begin
+                        if bLandHasChanged then Inc(count);
+                        if bCreateLandscapeSnowMeshes or bPlaceLandscapeSnow or bLandHasChanged then begin
                             tlLandRecords.Add(land);
-                            Inc(count);
+                            joLandFiles.O[wrldEdid].O[cellX].S[cellY] := fileName;
                         end;
-                        if bCreateLandscapeSnowMeshes or bPlaceLandscapeSnow then tlLandRecords.Add(land);
                         //if count > 10 then break;
                     end;
                     //if count > 10 then break;
@@ -707,7 +707,7 @@ begin
 
     end;
     AddMessage('New LAND Records: ' + IntToStr(count));
-    //if bSaveLandHeights then joLandscapeHeights.SaveToFile(wbScriptsPath + 'Seasons\LandHeights.json', False, TEncoding.UTF8, True);
+    if bCreateLandscapeHeights then joLandscapeHeights.SaveToFile(wbScriptsPath + 'Seasons\LandHeights.json', False, TEncoding.UTF8, True);
 end;
 
 procedure AlterLandHeightsForTheseBases;
@@ -723,6 +723,9 @@ begin
         alteration := joAlterLandRules.S[RecordFormIdFileId(base)];
         AddMessage('Processing base ' + #9 + Name(base) + #9 + IntToStr(alteration));
         ProcessBasesThatAlterLand(base, base, alteration);
+    end;
+    if bCreateLandscapeHeights then begin
+        joLandscapeHeightsAltered.SaveToFile(wbScriptsPath + 'Seasons\LandHeightsAltered.json', False, TEncoding.UTF8, True);
     end;
 end;
 
@@ -815,12 +818,17 @@ begin
             pmRotY := GetElementNativeValues(placement, 'Rotation\Y');
             pmRotZ := GetElementNativeValues(placement, 'Rotation\Z');
             pmScale := GetElementNativeValues(placement, 'Scale');
-
-            rotate_position(
-                pmPosX, pmPosY, pmPosZ,         // initial position
-                pmRotX, pmRotY, pmRotZ,        // rotation to apply - x y z
-                raw_x, raw_y, raw_z           // (output) raw final position
-            );
+            if ((pmRotX = 0) and (pmRotY = 0) and (pmRotZ = 0)) then begin
+                raw_x := pmPosX;
+                raw_y := pmPosY;
+                raw_z := pmPosZ;
+            end else begin
+                rotate_position(
+                    pmPosX, pmPosY, pmPosZ,         // initial position
+                    pmRotX, pmRotY, pmRotZ,        // rotation to apply - x y z
+                    raw_x, raw_y, raw_z           // (output) raw final position
+                );
+            end;
 
             posX := posX + raw_x;
             posY := posY + raw_y;
@@ -851,11 +859,10 @@ procedure AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2: i
     Alters land heights for a specific placement of a base object.
 }
 var
-    bHasWater: boolean;
-    i, j, k, row, column, cellXHere, cellYHere, vz, newZ, oldZ, landOffsetZ, alterationHere, width, height, numX, numY: integer;
-    fileName, cellWaterHeight: string;
-    raw_x, raw_y, raw_z, xHere, yHere, zHere, posXHere, posYHere, posZHere, cellWaterHeightFloat: double;
-    rCell, rWrld: IwbElement;
+    i, j, k, row, column, cellXHere, cellYHere, vz, oldZ, landOffsetZ, newZ, width, height, numX, numY: integer;
+    fileName: string;
+    raw_x, raw_y, raw_z, xHere, yHere, zHere, posXHere, posYHere, posZHere, alterationHere: double;
+    previousAlteration: variant;
 begin
     //Fix object bounds in case they are all 0
     if ((x1 = 0) and (x2 = 0) and (y1 = 0) and (y2 = 0) and (z1 = 0) and (z2 = 0)) then begin
@@ -922,15 +929,7 @@ begin
                 continue; //No landscape in this cell.
             end;
 
-            alterationHere := alteration/SCALE_FACTOR_TERRAIN;
-            if alterationHere > 0 then begin
-                rCell := GetCellFromWorldspace(rWrld, cellXHere, cellYHere);
-                bHasWater := True;
-                if GetElementEditValues(rCell, 'DATA\Has Water') = '0' then bHasWater := False;
-                cellWaterHeight := GetElementEditValues(rCell, 'XCLW');
-                if cellWaterHeight = 'Default' then cellWaterHeight := GetElementEditValues(rWrld, 'DNAM\Default Water Height');
-                cellWaterHeightFloat := StrToFloatDef(cellWaterHeight, 9) + 16;
-            end;
+            alterationHere := alteration;
 
             //Find the closest vertex in this cell.
             for k := 0 to 3 do begin
@@ -953,49 +952,164 @@ begin
                     row := Ceil((posYHere - (cellYHere * 4096))/128);
                 end;
 
-                if joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] = '1' then begin
-                    //AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
-                    if alterationHere > 0 then continue;
-                    alterationHere := alterationHere - 2;
-                end
-                else if joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] = '-1' then begin
-                    //AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
-                    continue;
+                previousAlteration := joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column];
+
+                if previousAlteration <> '' then begin
+                    if previousAlteration > 0 then begin
+                        //AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
+                        if alterationHere > 0 then continue;
+                        if alterationHere < 0 then alterationHere := alterationHere - previousAlteration;
+                    end
+                    else if previousAlteration < 0 then begin
+                        //AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
+                        continue;
+                    end;
                 end;
 
-                landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'] * SCALE_FACTOR_TERRAIN;
+                landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'];
                 vz := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column];
-                oldZ := vz * SCALE_FACTOR_TERRAIN + landOffsetZ;
+                oldZ := (vz + landOffsetZ) * SCALE_FACTOR_TERRAIN;
                 if posZHere < oldZ then begin
                     //AddMessage(#9 + #9 + #9 + 'Object is below the landscape vertex, so skipping it.');
                     continue; //The object is completely below this vertex, so skip it.
                 end;
-                if (alterationHere > 0) and ((oldZ <= cellWaterHeightFloat) or (posZHere <= cellWaterHeightFloat)) then begin
-                    //AddMessage(#9 + #9 + #9 + 'Landscape or object is below water height at this vertex, so skipping it.');
-                    continue; //The object is below water, so skipping it.
-                end;
 
-
-
-                //if alterationHere > 0 then continue;
-
-                // if ((alterationHere > 0) and (posZHere > (oldZ + alteration))) then begin
-                //     //We will limit the alteration based on the distance from the edges of the object, limiting to a change of 1 from the edges.
-                //     //alterationHere := Min(alterationHere, Min(Min(i, numX - i), Min(j, numY - j)) + 1);
-
-                //     while (posZHere > oldZ + (alterationHere * SCALE_FACTOR_TERRAIN)) do Inc(alterationHere);
-                //     Inc(alterationHere);
-                // end;
-                newZ := vz + alterationHere;
-
-                joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column] := newZ;
+                SetAlteredLandHeightWithOffset(fileName, wrldEdid, cellXHere, cellYHere, row, column, alterationHere);
                 AddMessage(#9 + #9 + #9 + 'Altering land height at ' + IntToStr(column) + ',' + IntToStr(row) + ' in ' + wrldEdid + ' ' + IntToStr(cellXHere) + ' ' + IntToStr(cellYHere) + ' from ' + IntToStr(vz) + ' to ' + IntToStr(newZ));
-                if alteration < 0 then joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] := '-1'
-                else joAlteredLandscape.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column] := '1';
-
             end;
         end;
     end;
+end;
+
+function GetAlteredLandHeight(wrldEdid: string; cellX, cellY, row, column: integer; var fileNameLandHere: string): variant;
+begin
+    Result := nil;
+    fileNameLandHere := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
+    if fileNameLandHere = '' then Exit;
+    Result := joLandscapeHeightsAltered.O[fileNameLandHere].O[wrldEdid].O[cellX].O[cellY].O[row].S[column];
+end;
+
+procedure SetAlteredLandHeight(fileNameLand, wrldEdid: string; cellX, cellY, row, column: integer; alterationHere: double);
+var
+    currentVz, neighborVz: double;
+    rowHere, columnHere: integer;
+    fileNameLand0, fileNameLand1, fileNameLand2: string;
+begin
+    currentVz := alterationHere;
+
+    if (row = 0) and (column = 0) then begin
+        // #####################################
+        // Bottom-left corner r0 c0
+        // #####################################
+
+        // cell to the left x-1 y r0 c32
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX - 1, cellY, 0, 32, fileNameLand0);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+
+        // cell below x y-1 r32 c0
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX, cellY - 1, 32, 0, fileNameLand1);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+
+        // cell diagonal (bottom-left) x-1 y-1 r32 c32
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX - 1, cellY - 1, 32, 32, fileNameLand2);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+
+        if fileNameLand0 <> '' then joLandscapeHeightsAltered.O[fileNameLand0].O[wrldEdid].O[cellX - 1].O[cellY].O[0].S[32] := currentVz;
+        if fileNameLand1 <> '' then joLandscapeHeightsAltered.O[fileNameLand1].O[wrldEdid].O[cellX].O[cellY - 1].O[32].S[0] := currentVz;
+        if fileNameLand2 <> '' then joLandscapeHeightsAltered.O[fileNameLand2].O[wrldEdid].O[cellX - 1].O[cellY - 1].O[32].S[32] := currentVz;
+    end
+    else if (row = 0) and (column = 32) then begin
+        // #####################################
+        // Bottom-right corner r0 c32
+        // #####################################
+
+        // cell to the right x+1 y r0 c0
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX + 1, cellY, 0, 0, fileNameLand0);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+
+        // cell below x y-1 r32 c32
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX, cellY - 1, 32, 32, fileNameLand1);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+
+        // cell diagonal (bottom-right) x+1 y-1 r32 c0
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX + 1, cellY - 1, 32, 0, fileNameLand2);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+
+        if fileNameLand0 <> '' then joLandscapeHeightsAltered.O[fileNameLand0].O[wrldEdid].O[cellX + 1].O[cellY].O[0].S[0] := currentVz;
+        if fileNameLand1 <> '' then joLandscapeHeightsAltered.O[fileNameLand1].O[wrldEdid].O[cellX].O[cellY - 1].O[32].S[32] := currentVz;
+        if fileNameLand2 <> '' then joLandscapeHeightsAltered.O[fileNameLand2].O[wrldEdid].O[cellX + 1].O[cellY - 1].O[32].S[0] := currentVz;
+    end
+    else if (row = 32) and (column = 0) then begin
+        // #####################################
+        // Top-left corner r32 c0
+        // #####################################
+
+        // cell to the left x-1 y r32 c32
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX - 1, cellY, 32, 32, fileNameLand0);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+
+        // cell above x y+1 r0 c0
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX, cellY + 1, 0, 0, fileNameLand1);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+
+        // cell diagonal (top-left) x-1 y+1 r0 c32
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX - 1, cellY + 1, 0, 32, fileNameLand2);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+
+        if fileNameLand0 <> '' then joLandscapeHeightsAltered.O[fileNameLand0].O[wrldEdid].O[cellX - 1].O[cellY].O[32].S[32] := currentVz;
+        if fileNameLand1 <> '' then joLandscapeHeightsAltered.O[fileNameLand1].O[wrldEdid].O[cellX].O[cellY + 1].O[0].S[0] := currentVz;
+        if fileNameLand2 <> '' then joLandscapeHeightsAltered.O[fileNameLand2].O[wrldEdid].O[cellX - 1].O[cellY + 1].O[0].S[32] := currentVz;
+    end
+    else if (row = 32) and (column = 32) then begin
+        // #####################################
+        // Top-right corner r32 c32
+        // #####################################
+
+        // cell to the right x+1 y r32 c0
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX + 1, cellY, 32, 0, fileNameLand0);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+
+        // cell above x y+1 r0 c32
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX, cellY + 1, 0, 32, fileNameLand1);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+
+        // cell diagonal (top-right) x+1 y+1 r0 c0
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX + 1, cellY + 1, 0, 0, fileNameLand2);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+
+        if fileNameLand0 <> '' then joLandscapeHeightsAltered.O[fileNameLand0].O[wrldEdid].O[cellX + 1].O[cellY].O[32].S[0] := currentVz;
+        if fileNameLand1 <> '' then joLandscapeHeightsAltered.O[fileNameLand1].O[wrldEdid].O[cellX].O[cellY + 1].O[0].S[32] := currentVz;
+        if fileNameLand2 <> '' then joLandscapeHeightsAltered.O[fileNameLand2].O[wrldEdid].O[cellX + 1].O[cellY + 1].O[0].S[0] := currentVz;
+    end
+    else if (row = 0) then begin
+        //neighbor cell is below, so y - 1 and r32
+        rowHere := 32;
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX, cellY - 1, rowHere, column, fileNameLand0);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+        if fileNameLand0 <> '' then joLandscapeHeightsAltered.O[fileNameLand0].O[wrldEdid].O[cellX].O[cellY - 1].O[rowHere].S[column] := currentVz;
+    end
+    else if (row = 32) then begin
+        //neighbor cell is above, so y + 1 and r0
+        rowHere := 0;
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX, cellY + 1, rowHere, column, fileNameLand0);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+        if fileNameLand0 <> '' then joLandscapeHeightsAltered.O[fileNameLand0].O[wrldEdid].O[cellX].O[cellY + 1].O[rowHere].S[column] := currentVz;
+    end
+    else if (column = 0) then begin
+        //neighbor cell is to the left, so x - 1 and c32
+        columnHere := 32;
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX - 1, cellY, row, columnHere, fileNameLand0);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+        if fileNameLand0 <> '' then joLandscapeHeightsAltered.O[fileNameLand0].O[wrldEdid].O[cellX - 1].O[cellY].O[row].S[columnHere] := currentVz;
+    end
+    else if (column = 32) then begin
+        //neighbor cell is to the right, so x + 1 and 0
+        columnHere := 0;
+        neighborVz := GetAlteredLandHeight(wrldEdid, cellX + 1, cellY, row, columnHere, fileNameLand0);
+        if Assigned(neighborVz) and (neighborVz <> '') and (neighborVz < currentVz) then currentVz := neighborVz;
+        if fileNameLand0 <> '' then joLandscapeHeightsAltered.O[fileNameLand0].O[wrldEdid].O[cellX + 1].O[cellY].O[row].S[columnHere] := currentVz;
+    end;
+    joLandscapeHeightsAltered.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY].O[row].S[column] := currentVz;
 end;
 
 procedure ProcessLandRecords;
@@ -1188,157 +1302,6 @@ begin
                             newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
                         end;
                     end
-                    else if (((row = 0) and (column=0)) or ((row = 0) and (column=32)) or ((row = 32) and (column=0)) or ((row = 32) and (column=32))) then begin
-                        //We are on the corner of the cell, so we will need to check 4 cells to determine correct height.
-                        newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
-
-                        // Check the four neighboring cells for the corner vertex and use the lowest height.
-                        // Bottom-left corner
-                        if (row = 0) and (column = 0) then begin
-                            // cell to the left r0c32
-                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX - 1].S[cellY];
-                            neighborVz := newVz;
-                            if fileNameLand <> '' then begin
-                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY].S['offset'];
-                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
-                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY].A[0].S[32] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
-                                if neighborVz < newVz then newVz := neighborVz;
-                            end;
-                            // cell below r32c0
-                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY - 1];
-                            neighborVz := newVz;
-                            if fileNameLand <> '' then begin
-                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY - 1].S['offset'];
-                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
-                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY - 1].A[32].S[0] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
-                                if neighborVz < newVz then newVz := neighborVz;
-                            end;
-                            // cell diagonal (bottom-left) r32c32
-                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX - 1].S[cellY - 1];
-                            neighborVz := newVz;
-                            if fileNameLand <> '' then begin
-                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY - 1].S['offset'];
-                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
-                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY - 1].A[32].S[32] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
-                                if neighborVz < newVz then newVz := neighborVz;
-                            end;
-                        end
-                        // Bottom-right corner
-                        else if (row = 0) and (column = 32) then begin
-                            // cell to the right r0c0
-                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX + 1].S[cellY];
-                            neighborVz := newVz;
-                            if fileNameLand <> '' then begin
-                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY].S['offset'];
-                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
-                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY].A[0].S[0] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
-                                if neighborVz < newVz then newVz := neighborVz;
-                            end;
-                            // cell below r32c32
-                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY - 1];
-                            neighborVz := newVz;
-                            if fileNameLand <> '' then begin
-                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY - 1].S['offset'];
-                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
-                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY - 1].A[32].S[32] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
-                                if neighborVz < newVz then newVz := neighborVz;
-                            end;
-                            // cell diagonal (bottom-right) r32c0
-                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX + 1].S[cellY - 1];
-                            neighborVz := newVz;
-                            if fileNameLand <> '' then begin
-                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY - 1].S['offset'];
-                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
-                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY - 1].A[32].S[0] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
-                                if neighborVz < newVz then newVz := neighborVz;
-                            end;
-                        end
-                        // Top-left corner
-                        else if (row = 32) and (column = 0) then begin
-                            // cell to the left r32c32
-                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX - 1].S[cellY];
-                            neighborVz := newVz;
-                            if fileNameLand <> '' then begin
-                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY].S['offset'];
-                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
-                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY].A[32].S[32] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
-                                if neighborVz < newVz then newVz := neighborVz;
-                            end;
-                            // cell above r0c0
-                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY + 1];
-                            neighborVz := newVz;
-                            if fileNameLand <> '' then begin
-                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY + 1].S['offset'];
-                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
-                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY + 1].A[0].S[0] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
-                                if neighborVz < newVz then newVz := neighborVz;
-                            end;
-                            // cell diagonal (top-left) r0c32
-                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX - 1].S[cellY + 1];
-                            neighborVz := newVz;
-                            if fileNameLand <> '' then begin
-                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY + 1].S['offset'];
-                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
-                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX - 1].O[cellY + 1].A[0].S[32] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
-                                if neighborVz < newVz then newVz := neighborVz;
-                            end;
-                        end
-                        // Top-right corner
-                        else if (row = 32) and (column = 32) then begin
-                            // cell to the right r32c0
-                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX + 1].S[cellY];
-                            neighborVz := newVz;
-                            if fileNameLand <> '' then begin
-                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY].S['offset'];
-                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
-                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY].A[32].S[0] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
-                                if neighborVz < newVz then newVz := neighborVz;
-                            end;
-                            // cell above r0c32
-                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY + 1];
-                            neighborVz := newVz;
-                            if fileNameLand <> '' then begin
-                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY + 1].S['offset'];
-                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
-                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY + 1].A[0].S[32] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
-                                if neighborVz < newVz then newVz := neighborVz;
-                            end;
-                            // cell diagonal (top-right) r0c0
-                            fileNameLand := joLandFiles.O[wrldEdid].O[cellX + 1].S[cellY + 1];
-                            neighborVz := newVz;
-                            if fileNameLand <> '' then begin
-                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY + 1].S['offset'];
-                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
-                                neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX + 1].O[cellY + 1].A[0].S[0] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
-                                if neighborVz < newVz then newVz := neighborVz;
-                            end;
-                        end;
-                    end
-                    else if ((row = 0) or (row = 32) or (column = 0) or (column = 32)) then begin
-                        // This is the value here, but we need to check the neighboring cell's same border vertex and use the lowest of the two.
-                        newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
-
-                        // Find the neighboring cell based off these values.
-                        newCellX := cellX; //default to no cell offset
-                        newCellY := cellY;
-                        if column = 0 then newCellX := cellX - 1
-                        else if column = 32 then newCellX := cellX + 1;
-                        if row = 0 then newCellY := cellY - 1
-                        else if row = 32 then newCellY := cellY + 1;
-                        fileNameLand := joLandFiles.O[wrldEdid].O[newCellX].S[newCellY];
-                        if fileNameLand <> '' then begin
-                            //If the neighboring cell does exist, we need to compare the offset values, as that will affect the height.
-                            newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[newCellX].O[newCellY].S['offset'];
-                            cellOffsetDifference := landOffsetZ - newlandOffsetZ;
-
-                            if column = 0 then column := 32
-                            else if column = 32 then column := 0;
-                            if row = 0 then row := 32
-                            else if row = 32 then row := 0;
-                            neighborVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[newCellX].O[newCellY].A[row].S[column] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
-                            if neighborVz < newVz then newVz := neighborVz;
-                        end;
-                    end
                     else begin
                         newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
                     end;
@@ -1392,43 +1355,14 @@ begin
 end;
 
 function ComputeInBetweenVertexHeight(point1, point2, point3, point4: integer): integer;
-var
-    points: array[0..3] of integer;
-    diffs: array[0..3] of double;
-    idx: array[0..3] of integer;
-    m, n, tmp: integer;
-    mean: double;
 begin
     Result := (point1 + point2 + point3 + point4)/4;
-    Exit;
-
-    //This code is unreachable... it didn't look right.
-    points[0] := point1;
-    points[1] := point2;
-    points[2] := point3;
-    points[3] := point4;
-    // Calculate difference from each point to the mean
-    mean := (point1 + point2 + point3 + point4) / 4;
-    for m := 0 to 3 do begin
-        diffs[m] := Abs(points[m] - mean);
-        idx[m] := m;
-    end;
-    // Sort idx by diffs ascending (simple bubble sort for 4 elements)
-    for m := 0 to 2 do
-        for n := m + 1 to 3 do
-            if diffs[idx[m]] > diffs[idx[n]] then begin
-                tmp := idx[m];
-                idx[m] := idx[n];
-                idx[n] := tmp;
-            end;
-    // Take the three closest points
-    Result := (points[idx[0]] + points[idx[1]] + points[idx[2]]) / 3;
 end;
 
 function CreateLandscapeHeights(land, rCell, rWrld: IwbElement; wrldEdid: string): boolean;
 var
     bLandHeightsExist, bHasWater: boolean;
-    landOffsetZ, rowColumnOffsetZ, rowStartVal, landValue, landValueScaled, landValueChanged, cellWaterHeightFloat: single;
+    landOffsetZ, rowColumnOffsetZ, rowStartVal, landValue, landValueScaled, cellWaterHeightFloat: double;
     cellX, cellY, unitsX, unitsY, row, column, iFlat, iHeightAlwaysBelowWater: integer;
     fileProvidingLand, rowColumn, cellWaterHeight: string;
 
@@ -1476,12 +1410,12 @@ begin
             landValueScaled := (landValue + landOffsetZ) * SCALE_FACTOR_TERRAIN; //This will be the Z height we apply to the vertex of the nif.
             if landValue <> 0 then iFlat := 0; //If at least one land height is not 0, we will not mark this cell not flat.
             if bHasWater and (landValueScaled < cellWaterHeightFloat) then begin
-                landValueChanged := landValue - 4; //If the land height is below water, we need to lower it more so the snow does not poke above the water.
+                //If the land height is below water, we need to lower it more so the snow does not poke above the water.
+                joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].O[row].S[column] := -32;
             end else begin
                 iHeightAlwaysBelowWater := 0; //If at least one land height is above water, we will not mark this cell as always below water.
-                landValueChanged := landValue;
             end;
-            joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].Add(landValueChanged);
+            joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].Add(landValue);
             bSaveLandHeights := True;
             Result := 1;
 
@@ -1494,6 +1428,202 @@ begin
     joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['flags'] := iFlat + iHeightAlwaysBelowWater;
     if iFlat = 4 then Result := False;
     if iHeightAlwaysBelowWater = 8 then Result := False;
+end;
+
+procedure FixLandscapeSeams;
+    w, x, y, cellX, cellY: integer;
+    fileProvidingLand, wrldEdid: string;
+begin
+    //joLandFiles.O[wrldEdid].O[newCellX].S[newCellY];
+    for w := 0 to Pred(joLandFiles.Count) do begin
+        wrldEdid := joLandFiles.Names[w];
+        for x := 0 to Pred(joLandFiles.O[wrldEdid].Count) do begin
+            cellX := joLandFiles.O[wrldEdid].Names[x];
+            for y := 0 to Pred(joLandFiles.O[wrldEdid].O[cellX].Count) do begin
+                cellY := joLandFiles.O[wrldEdid].O[cellX].Names[y];
+                fileProvidingLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
+                if joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['flags'] > 4 then continue; //skipping completely underwater cells for speed.
+                //For every landscape record we will check the edges for seams against the neighboring cell.
+                FixLandscapeSeamsAgainstNeighbors(fileProvidingLand, wrldEdid, cellX, cellY);
+            end;
+        end;
+    end;
+    if bCreateLandscapeHeights then joLandscapeHeights.SaveToFile(wbScriptsPath + 'Seasons\LandHeights.json', False, TEncoding.UTF8, True);
+end;
+
+procedure FixLandscapeSeamsAgainstNeighbors(fileProvidingLand, wrldEdid: string; cellX, cellY: integer);
+{
+    Fix landscape seams
+}
+var
+    row, rowHere, column, columnHere, currentVz, neighborVz: integer;
+begin
+    // #####################################
+    // Bottom-left corner r0 c0
+    // #####################################
+    currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, 0, 0);
+    if not Assigned(currentVz) then Exit; //This should never happen
+
+    // cell to the left x-1 y r0 c32
+    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY, 0, 32);
+    if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+
+    // cell below x y-1 r32 c0
+    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY - 1, 32, 0);
+    if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+
+    // cell diagonal (bottom-left) x-1 y-1 r32 c32
+    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY - 1, 32, 32);
+    if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+    SetLandHeightWithOffset(wrldEdid, cellX, cellY, 0, 0, currentVz);
+
+    // #####################################
+    // Bottom-right corner r0 c32
+    // #####################################
+    currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, 0, 32);
+    if not Assigned(currentVz) then Exit; //This should never happen
+
+    // cell to the right x+1 y r0 c0
+    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY, 0, 0);
+    if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+
+    // cell below x y-1 r32 c32
+    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY - 1, 32, 32);
+    if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+
+    // cell diagonal (bottom-right) x+1 y-1 r32 c0
+    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY - 1, 32, 0);
+    if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+    SetLandHeightWithOffset(wrldEdid, cellX, cellY, 0, 32, currentVz);
+
+    // #####################################
+    // Top-left corner r32 c0
+    // #####################################
+    currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, 32, 0);
+    if not Assigned(currentVz) then Exit; //This should never happen
+
+    // cell to the left x-1 y r32 c32
+    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY, 32, 32);
+    if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+
+    // cell above x y+1 r0 c0
+    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY + 1, 0, 0);
+    if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+
+    // cell diagonal (top-left) x-1 y+1 r0 c32
+    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY + 1, 0, 32);
+    if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+    SetLandHeightWithOffset(wrldEdid, cellX, cellY, 32, 0, currentVz);
+
+    // #####################################
+    // Top-right corner r32 c32
+    // #####################################
+    currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, 32, 32);
+    if not Assigned(currentVz) then Exit; //This should never happen
+
+    // cell to the right x+1 y r32 c0
+    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY, 32, 0);
+    if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+
+    // cell above x y+1 r0 c32
+    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY + 1, 0, 32);
+    if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+
+    // cell diagonal (top-right) x+1 y+1 r0 c0
+    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY + 1, 0, 0);
+    if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+    SetLandHeightWithOffset(wrldEdid, cellX, cellY, 32, 32, currentVz);
+
+    // #####################################
+    // Bottom Row r0 c1 through c31
+    // #####################################
+
+    row := 0;
+    for column := 1 to 31 do begin
+        currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column);
+        if not Assigned(currentVz) then Exit; //This should never happen
+
+        //neighbor cell is below, so y - 1 and r32
+        rowHere := 32;
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY - 1, rowHere, column);
+        if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+        SetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column, currentVz);
+    end;
+
+    // #####################################
+    // Top Row r32 c1 through c31
+    // #####################################
+
+    row := 32;
+    for column := 1 to 31 do begin
+        currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column);
+        if not Assigned(currentVz) then Exit; //This should never happen
+
+        //neighbor cell is above, so y + 1 and r0
+        rowHere := 0;
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY + 1, rowHere, column);
+        if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+        SetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column, currentVz);
+    end;
+
+    // #####################################
+    // Left Column c0 r1 through r31
+    // #####################################
+
+    column := 0;
+    for row := 1 to 31 do begin
+        currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column);
+        if not Assigned(currentVz) then Exit; //This should never happen
+
+        //neighbor cell is to the left, so x - 1 and c32
+        columnHere := 32;
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY, row, columnHere);
+        if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+        SetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column, currentVz);
+    end;
+
+    // #####################################
+    // Right Column c32 r1 through r31
+    // #####################################
+
+    column := 32;
+    for row := 1 to 31 do begin
+        currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column);
+        if not Assigned(currentVz) then Exit; //This should never happen
+
+        //neighbor cell is to the right, so x + 1 and 0
+        columnHere := 0;
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY, row, columnHere);
+        if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
+        SetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column, currentVz);
+    end;
+end;
+
+function GetLandHeightWithOffset(wrldEdid: string; cellX, cellY, row, column: integer): integer;
+{
+    Get Land Height at this location including offset.
+}
+var
+    fileNameLand: string;
+    offset, landValue: integer;
+begin
+    Result := nil;
+    fileNameLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
+    if fileNameLand = '' then Exit;
+    offset := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY].S['offset'];
+    landValue := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column];
+    Result := landValue + offset;
+end;
+
+procedure SetLandHeightWithOffset(wrldEdid: string; cellX, cellY, row, column, vz: integer);
+var
+    fileNameLand: string;
+    offset: integer;
+begin
+    fileNameLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
+    if fileNameLand = '' then Exit;
+    offset := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY].S['offset'];
+    joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] := vz - offset;
 end;
 
 procedure FetchRules;
