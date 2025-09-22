@@ -1203,8 +1203,9 @@ end;
 function CreateLandscapeSnow(land, rCell, rWrld: IwbElement; wrldEdid, fileProvidingLand: string; cellX, cellY: integer): integer;
 var
     bVertexIsOutsideCell: boolean;
-    i, nifFile, unitsX, unitsY, landOffsetZ, row2, column2, row, column, vertexCount, point1, point2, point3, point4, maxPoint, newCellX, newCellY, newlandOffsetZ, cellOffsetDifference, newVz, neighborVz: integer;
+    i, nifFile, unitsX, unitsY, row2, column2, row, column, vertexCount, newCellX, newCellY: integer;
     editorIdSnowNif, fileName, snowNifFile, xyz, vx, vy, vz, newVzStr, fileNameLand: string;
+    point1, point2, point3, point4, landOffsetZ, newlandOffsetZ, cellOffsetDifference, newVz: double;
 
     tsXYZ: TStrings;
 
@@ -1291,7 +1292,8 @@ begin
                             end;
 
                             //We add the cellOffsetDifference to the final z value.
-                            newVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[newCellX].O[newCellY].A[row].S[column] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+
+                            newVz := GetLandHeightScaled(fileNameLand, wrldEdid, newCellX, newCellY, row, column) - (cellOffsetDifference * SCALE_FACTOR_TERRAIN);
                         end
                         else begin
                             //If the neighboring cell does not exist, we should change the row/column to the vertex that is closest and use that for the newVz
@@ -1299,11 +1301,11 @@ begin
                             else if column > 32 then column := 32;
                             if row < 0 then row := 0
                             else if row > 32 then row := 32;
-                            newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            newVz := GetLandHeightScaled(fileProvidingLand, wrldEdid, cellX, cellY, row, column);
                         end;
                     end
                     else begin
-                        newVz := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                        newVz := GetLandHeightScaled(fileProvidingLand, wrldEdid, cellX, cellY, row, column);
                     end;
                 end else begin
                     // If odd, this row/column does not exist. This will only happen to the full model for the in-between vertices.
@@ -1311,19 +1313,19 @@ begin
 
                     row := (row2 - 1)/2;
                     column := (column2 - 1)/2;
-                    point1 := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                    point1 := GetLandHeightScaled(fileProvidingLand, wrldEdid, cellX, cellY, row, column);
 
                     row := (row2 - 1)/2;
                     column := (column2 + 1)/2;
-                    point2 := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                    point2 := GetLandHeightScaled(fileProvidingLand, wrldEdid, cellX, cellY, row, column);
 
                     row := (row2 + 1)/2;
                     column := (column2 + 1)/2;
-                    point3 := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                    point3 := GetLandHeightScaled(fileProvidingLand, wrldEdid, cellX, cellY, row, column);
 
                     row := (row2 + 1)/2;
                     column := (column2 - 1)/2;
-                    point4 := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                    point4 := GetLandHeightScaled(fileProvidingLand, wrldEdid, cellX, cellY, row, column);
 
                     //maxPoint := Max(Max(point1, point2), Max(point3, point4));
                     //newVz := (point1 + point2 + point3 + point4 + maxPoint)/5; //We add the max point again to help even out the average a bit more
@@ -1331,16 +1333,16 @@ begin
                 end;
 
                 //We have z offsets built in for the LOD.
-                if nifFile = 0 then newVzStr := IntToStr(newVz)
+                if nifFile = 0 then newVzStr := FloatToStr(newVz)
                 else if nifFile = 1 then begin
-                    if bVertexIsOutsideCell then newVzStr := IntToStr(newVz)
-                    else newVzStr := IntToStr(newVz + 40);
+                    if bVertexIsOutsideCell then newVzStr := FloatToStr(newVz)
+                    else newVzStr := FloatToStr(newVz + 40);
                 end else if nifFile = 2 then begin
-                    if bVertexIsOutsideCell then newVzStr := IntToStr(newVz + 40)
-                    else newVzStr := IntToStr(newVz + 192);
+                    if bVertexIsOutsideCell then newVzStr := FloatToStr(newVz + 40)
+                    else newVzStr := FloatToStr(newVz + 192);
                 end else if nifFile = 3 then begin
-                    if bVertexIsOutsideCell then newVzStr := IntToStr(newVz + 192)
-                    else newVzStr := IntToStr(newVz + 576);
+                    if bVertexIsOutsideCell then newVzStr := FloatToStr(newVz + 192)
+                    else newVzStr := FloatToStr(newVz + 576);
                 end;
                 vertex.EditValues['Vertex'] := vx + ' ' + vy + ' ' + newVzStr;
             end;
@@ -1352,6 +1354,17 @@ begin
         end;
     end;
     Result := 1;
+end;
+
+function GetLandHeightScaled(fileProvidingLand, wrldEdid: string; cellX, cellY, row, column: integer): double;
+var
+    alteration: variant;
+begin
+    Result := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
+    alteration := joLandscapeHeightsAltered.O[fileNameLandHere].O[wrldEdid].O[cellX].O[cellY].O[row].S[column];
+    if not Assigned(alteration) then Exit;
+    if alteration = '' then Exit;
+    Result := Result + alteration;
 end;
 
 function ComputeInBetweenVertexHeight(point1, point2, point3, point4: integer): integer;
