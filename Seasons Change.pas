@@ -115,8 +115,8 @@ begin
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
     CollectRecords;
-    FixLandscapeSeams;
-    AlterLandHeightsForTheseBases;
+    //FixLandscapeSeams;
+    //AlterLandHeightsForTheseBases;
     ProcessLandRecords;
 end;
 
@@ -713,8 +713,8 @@ begin
     end;
     AddMessage('New LAND Records: ' + IntToStr(count));
     if bCreateLandscapeHeights then begin
-        joLandscapeHeights.SaveToFile(wbScriptsPath + 'Seasons\LandHeights.json', False, TEncoding.UTF8, True);
-        joLandscapeHeightsAltered.SaveToFile(wbScriptsPath + 'Seasons\LandHeightsAltered.json', False, TEncoding.UTF8, True);
+        joLandscapeHeights.SaveToFile(wbScriptsPath + 'Seasons\LandHeightsPreAlteration.json', False, TEncoding.UTF8, True);
+        joLandscapeHeightsAltered.SaveToFile(wbScriptsPath + 'Seasons\LandHeightsAlteredPreAlteration.json', False, TEncoding.UTF8, True);
     end;
 end;
 
@@ -723,21 +723,22 @@ procedure AlterLandHeightsForTheseBases;
     Alters land heights for certain base objects placed near landscape.
 }
 var
-    i, alteration: integer;
+    i, alteration, x1, y1, z1, x2, y2, z2: integer;
     base: IwbElement;
 begin
     for i:= 0 to Pred(tlBasesThatAlterLand.Count) do begin
         base := ObjectToElement(tlBasesThatAlterLand[i]);
+        GetBounds(x1, y1, z1, x2, y2, z2, base);
         alteration := joAlterLandRules.S[RecordFormIdFileId(base)];
         AddMessage('Processing base ' + #9 + Name(base) + #9 + IntToStr(alteration));
-        ProcessBasesThatAlterLand(base, base, alteration);
+        ProcessBasesThatAlterLand(base, base, alteration, x1, y1, z1, x2, y2, z2);
     end;
     if bCreateLandscapeHeights then begin
         joLandscapeHeightsAltered.SaveToFile(wbScriptsPath + 'Seasons\LandHeightsAltered.json', False, TEncoding.UTF8, True);
     end;
 end;
 
-function ProcessBasesThatAlterLand(base, fromBase: IwbElement; alteration: integer): boolean;
+function ProcessBasesThatAlterLand(base, fromBase: IwbElement; alteration, x1, y1, z1, x2, y2, z2: integer): boolean;
 {
     Process a base object to see if it alters land heights.
 }
@@ -770,17 +771,37 @@ begin
 
         // If we got this far, this REFR is in an exterior cell with landscape, and we will need to alter the land heights IF it is close enough to the landscape.
         AddMessage(#9 + 'Processing reference ' + #9 + ShortName(r) + #9 + wrldEdid);
-        AlterLandHeightsForThisRefr(r, base, fromBase, wrldEdid, alteration, rWrld);
+        AlterLandHeightsForThisRefr(r, base, fromBase, wrldEdid, alteration, x1, y1, z1, x2, y2, z2, rWrld);
     end;
 end;
 
-procedure AlterLandHeightsForThisRefr(r, base, fromBase: IwbElement; wrldEdid: string; alteration: integer; rWrld: IwbElement);
+procedure GetBounds(var x1, y1, z1, x2, y2, z2: integer; base: IwbElement);
+var
+    model: string;
+    nif: TwbNifFile;
+    block: TwbNifBlock;
+begin
+    x1 := GetElementNativeValues(realBase, 'OBND\X1');
+    y1 := GetElementNativeValues(realBase, 'OBND\Y1');
+    z1 := GetElementNativeValues(realBase, 'OBND\Z1');
+    x2 := GetElementNativeValues(realBase, 'OBND\X2');
+    y2 := GetElementNativeValues(realBase, 'OBND\Y2');
+    z2 := GetElementNativeValues(realBase, 'OBND\Z2');
+    // if not ElementExists(base, 'Model') then Exit;
+    // model := wbNormalizeResourceName(GetElementEditValues(base, 'Model\MODL'), rewMesh);
+    // if not ResourceExists(model) then Exit;
+    // If the model exists, open it and find the bounds by vertex position.
+    // This could introduce errors however, if there is scaling or rotation of the block, and probably quite time consuming.
+    // Avoiding this for now.
+end;
+
+procedure AlterLandHeightsForThisRefr(r, base, fromBase: IwbElement; wrldEdid: string; alteration, x1, y1, z1, x2, y2, z2: integer; rWrld: IwbElement);
 {
     Alters land heights for a specific reference.
 }
 var
     bSCOL: boolean;
-    i, x1, y1, z1, x2, y2, z2: integer;
+    i, x1n, y1n, z1n, x2n, y2n, z2n: integer;
     scale, posX, posY, posZ, rotX, rotY, rotZ, pmScale, pmPosX, pmPosY, pmPosZ, pmRotX, pmRotY, pmRotZ: double;
 
     realBase, scolParts, scolPart, onam, placements, placement: IwbElement;
@@ -790,13 +811,6 @@ begin
         realBase := fromBase;
         bSCOL := True;
     end else realBase := base;
-    //Get object bounds of the base object.
-    x1 := GetElementNativeValues(realBase, 'OBND\X1');
-    y1 := GetElementNativeValues(realBase, 'OBND\Y1');
-    z1 := GetElementNativeValues(realBase, 'OBND\Z1');
-    x2 := GetElementNativeValues(realBase, 'OBND\X2');
-    y2 := GetElementNativeValues(realBase, 'OBND\Y2');
-    z2 := GetElementNativeValues(realBase, 'OBND\Z2');
 
     //Get scale and position of the reference.
     if ElementExists(r, 'XSCL') then scale := GetElementNativeValues(r, 'XSCL') else scale := 1;
@@ -842,27 +856,27 @@ begin
             posY := posY + raw_y;
             posZ := posZ + raw_z;
             scale := scale * pmScale;
-            x1 := Floor(x1 * scale);
-            y1 := Floor(y1 * scale);
-            z1 := Floor(z1 * scale);
-            x2 := Ceil(x2 * scale);
-            y2 := Ceil(y2 * scale);
-            z2 := Ceil(z2 * scale);
-            AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, realBase, rWrld);
+            x1n := Ceil(x1 * scale);
+            y1n := Ceil(y1 * scale);
+            z1n := Ceil(z1 * scale);
+            x2n := Floor(x2 * scale);
+            y2n := Floor(y2 * scale);
+            z2n := Floor(z2 * scale);
+            AlterLandHeightsForThisPlacement(alteration, x1n, y1n, z1n, x2n, y2n, z2n, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, realBase, rWrld);
         end;
     end
     else begin
-        x1 := Floor(x1 * scale);
-        y1 := Floor(y1 * scale);
-        z1 := Floor(z1 * scale);
-        x2 := Ceil(x2 * scale);
-        y2 := Ceil(y2 * scale);
-        z2 := Ceil(z2 * scale);
-        AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, realBase, rWrld);
+        x1n := Ceil(x1 * scale);
+        y1n := Ceil(y1 * scale);
+        z1n := Ceil(z1 * scale);
+        x2n := Floor(x2 * scale);
+        y2n := Floor(y2 * scale);
+        z2n := Floor(z2 * scale);
+        AlterLandHeightsForThisPlacement(alteration, x1n, y1n, z1n, x2n, y2n, z2n, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, realBase, rWrld);
     end;
 end;
 
-procedure AlterLandHeightsForThisPlacement(alteration, x1, y1, z1, x2, y2, z2: integer; posX, posY, posZ, rotX, rotY, rotZ: double; wrldEdid: string; realBase, rWrld: IwbElement);
+procedure AlterLandHeightsForThisPlacement(alteration, x1n, y1n, z1n, x2n, y2n, z2n: integer; posX, posY, posZ, rotX, rotY, rotZ: double; wrldEdid: string; realBase, rWrld: IwbElement);
 {
     Alters land heights for a specific placement of a base object.
 }
@@ -873,13 +887,13 @@ var
     previousAlteration: variant;
 begin
     //Fix object bounds in case they are all 0
-    if ((x1 = 0) and (x2 = 0) and (y1 = 0) and (y2 = 0) and (z1 = 0) and (z2 = 0)) then begin
-        x1 := -64;
-        x2 := 64;
-        y1 := -64;
-        y2 := 64;
-        z1 := -64;
-        z2 := 64;
+    if ((x1n = 0) and (x2n = 0) and (y1n = 0) and (y2n = 0) and (z1n = 0) and (z2n = 0)) then begin
+        x1n := -64;
+        x2n := 64;
+        y1n := -64;
+        y2n := 64;
+        z1n := -64;
+        z2n := 64;
     end;
 
     //Okay, so what we need to do is understand that our object is rotated, and we are only given the bounds of the object in the unrotated state.
@@ -890,25 +904,25 @@ begin
     //    ||||   to   ////
     //    ||||       ////
     //    ||||      ////
-    width := x2 - x1;
-    height := y2 - y1;
+    width := x2n - x1n;
+    height := y2n - y1n;
     numX := Floor(width/128);
     numY := Floor(height/128);
     if numX = 0 then numX := 1;
     if numY = 0 then numY := 1;
-    zHere := z2;
+    zHere := z2n;
     //AddMessage(#9 + #9 + 'Width: ' + IntToStr(width) + ' Height: ' + IntToStr(height) + ' NumX: ' + IntToStr(numX) + ' NumY: ' + IntToStr(numY) + ' Rotation: ' + FloatToStr(rotZ) + ' World: ' + wrldEdid);
 
     //Now we will loop through all the points we need to check, get the rotated position, find the closest land vertex, and alter it.
     for i := 0 to numX do begin
-        xHere := x1 + (i * width/numX);
+        xHere := x1n + (i * width/numX);
         //xHere := x1 + (i * 128);
         for j := 0 to numY do begin
-            yHere := y1 + (j * height/numY);
+            yHere := y1n + (j * height/numY);
             //yHere := y1 + (j * 128);
             //AddMessage(#9 + #9 + #9 + 'Processing point ' + FloatToStr(xHere) + ',' + FloatToStr(yHere));
-            if xHere > x2 then xHere := x2;
-            if yHere > y2 then yHere := y2;
+            if xHere > x2n then xHere := x2n;
+            if yHere > y2n then yHere := y2n;
             if ((rotX = 0) and (rotY = 0) and (rotZ = 0)) then begin
                 raw_x := xHere;
                 raw_y := yHere;
@@ -1079,7 +1093,7 @@ begin
 
         // cell to the right x+1 y r32 c0
         neighborVz := GetAlteredLandHeight(wrldEdid, cellX + 1, cellY, 32, 0, fileNameLand0);
-        if Assigned(neighborVz) and (varType(neighborVz) = varInteger) and (neighborVz < currentVz) then currentVz := neighborVz;
+        if Assigned(neighborVz) and (neighborVz < currentVz) then currentVz := neighborVz;
 
         // cell above x y+1 r0 c32
         neighborVz := GetAlteredLandHeight(wrldEdid, cellX, cellY + 1, 0, 32, fileNameLand1);
@@ -1216,7 +1230,7 @@ end;
 function CreateLandscapeSnow(land, rCell, rWrld: IwbElement; wrldEdid, fileProvidingLand: string; cellX, cellY: integer): integer;
 var
     bVertexIsOutsideCell: boolean;
-    i, nifFile, unitsX, unitsY, row2, column2, row, column, vertexCount, newCellX, newCellY: integer;
+    i, nifFile, row2, column2, row, column, vertexCount, newCellX, newCellY: integer;
     editorIdSnowNif, fileName, snowNifFile, xyz, vx, vy, vz, newVzStr, fileNameLand: string;
     point1, point2, point3, point4, landOffsetZ, newlandOffsetZ, cellOffsetDifference, newVz: double;
 
@@ -1227,8 +1241,6 @@ var
     snowNif, snowLodNif: TwbNifFile;
 begin
     Result := 0;
-    unitsX := cellX * 4096;
-    unitsY := cellY * 4096;
     editorIdSnowNif := wrldEdid + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
 
     landOffsetZ := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['offset'];
@@ -1375,8 +1387,7 @@ var
 begin
     Result := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] * SCALE_FACTOR_TERRAIN;
     alteration := joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].O[row].S[column];
-    if not Assigned(alteration) then Exit;
-    if alteration = '' then Exit;
+    if (varType(alteration) = varUString) then Exit;
     Result := Result + alteration;
 end;
 
@@ -1389,16 +1400,14 @@ function CreateLandscapeHeights(land, rCell, rWrld: IwbElement; wrldEdid: string
 var
     bLandHeightsExist, bHasWater: boolean;
     landOffsetZ, rowColumnOffsetZ, rowStartVal, landValue, landValueScaled, cellWaterHeightFloat: double;
-    cellX, cellY, unitsX, unitsY, row, column, iFlat, iHeightAlwaysBelowWater: integer;
+    cellX, cellY, row, column, iFlat, iHeightAlwaysBelowWater: integer;
     fileProvidingLand, rowColumn, cellWaterHeight: string;
 
-    landHeightData: IwbElement;
+    landHeightData, eRow: IwbElement;
 begin
     Result := False;
     cellX := GetElementNativeValues(rCell, 'XCLC\X');
     cellY := GetElementNativeValues(rCell, 'XCLC\Y');
-    unitsX := cellX * 4096;
-    unitsY := cellY * 4096;
     fileProvidingLand := GetFileName(GetFile(land));
     bHasWater := True;
     if GetElementEditValues(rCell, 'DATA\Has Water') = '0' then bHasWater := False;
@@ -1417,9 +1426,10 @@ begin
     iHeightAlwaysBelowWater := 8; // assume the cell is always below water
 
     for row := 0 to 32 do begin
+        eRow := ElementByPath(landHeightData, 'Row #' + IntToStr(row));
         for column := 0 to 32 do begin
-            rowColumn := 'Row #' + IntToStr(row) + '\Column #' + IntToStr(column);
-            rowColumnOffsetZ := GetElementNativeValues(landHeightData, rowColumn);
+            rowColumn := 'Column #' + IntToStr(column);
+            rowColumnOffsetZ := GetElementNativeValues(eRow, rowColumn);
             if rowColumnOffsetZ > 127 then rowColumnOffsetZ := rowColumnOffsetZ - 256;
 
             if(column = 0) then begin //check if first column
