@@ -69,3 +69,5 @@ __recovery/
 modules/
 /.vs
 Seasons/LandHeights.json
+Seasons/LandHeightsAlteredPreAlteration.json
+Seasons/LandHeightsPreAlteration.json
