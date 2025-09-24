@@ -1464,6 +1464,7 @@ var
     count, total, c, f, r, w, x, y, cellX, cellY, row, column: integer;
     fileProvidingLand, wrldEdid: string;
     alteration, landValue: double;
+    joLand: TJsonObject;
 begin
     count := 0;
     total := joLandscapeHeightsAltered.Count;
@@ -1475,15 +1476,22 @@ begin
                 cellX := joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].Names[x];
                 for y := 0 to Pred(joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].O[cellX].Count) do begin
                     cellY := joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].O[cellX].Names[y];
-                    for r := 0 to Pred(joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].Count) do begin
-                        row := joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].Names[r];
-                        for c := 0 to Pred(joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].O[row].Count) do begin
-                            column := joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].O[row].Names[c];
-                            alteration := joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].O[row].S[column];
-                            landValue := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column];
-                            joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] := alteration/SCALE_FACTOR_TERRAIN + landValue;
-                            AddMessage('Merging alterations into land heights: ' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+                    Inc(count);
+                    AddMessage(IntToStr(count) + #9 + 'Merging alterations into land heights: ' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+                    joLand := TJsonObject.Create;
+                    try
+                        joLand.Assign(joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY]);
+                        for r := 0 to Pred(joLand.Count) do begin
+                            row := joLand.Names[r];
+                            for c := 0 to Pred(joLand.O[row].Count) do begin
+                                column := joLand.O[row].Names[c];
+                                alteration := joLand.O[row].S[column];
+                                landValue := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column];
+                                joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] := alteration/SCALE_FACTOR_TERRAIN + landValue;
+                            end;
                         end;
+                    finally
+                        joLand.Free;
                     end;
                 end;
             end;
