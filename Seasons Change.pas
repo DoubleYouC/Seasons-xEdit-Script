@@ -8,7 +8,8 @@ unit Seasons;
 // ----------------------------------------------------
 
 var
-    bSaveLandHeights, bCreateLandscapeHeights, bCreateLandscapeSnowMeshes, bPlaceLandscapeSnow, bCreateTestPlugin, bUserAlterLandRulesChanged, bSaveUserRules: boolean;
+    bSaveLandHeights, bCreateLandscapeHeights, bCreateLandscapeSnowMeshes, bPlaceLandscapeSnow, bCreateTestPlugin, bUserAlterLandRulesChanged,
+    bLoadPreviousLandHeights, bSaveUserRules: boolean;
     uiScale: integer;
     sIgnoredWorldspaces: string;
 
@@ -50,9 +51,6 @@ begin
     tlLandRecords := TList.Create;
     tlBasesThatAlterLand := TList.Create;
 
-    if FileExists(wbScriptsPath + 'Seasons\LandHeightsPreAlteration.json') then
-        joLandscapeHeights.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsPreAlteration.json');
-
     if FileExists(wbScriptsPath + 'Seasons\LandHeightsAlteredPreAlteration.json') then
         joLandscapeHeightsAltered.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsAlteredPreAlteration.json');
 end;
@@ -93,6 +91,7 @@ begin
     bCreateLandscapeSnowMeshes := False;
     bPlaceLandscapeSnow := False;
     bCreateTestPlugin := False;
+    bLoadPreviousLandHeights := False;
 
     //Rules
     bSaveUserRules := False;
@@ -112,12 +111,21 @@ begin
     end;
     if bCreateTestPlugin then CreatePlugin;
 
+    if bLoadPreviousLandHeights then begin
+        if FileExists(wbScriptsPath + 'Seasons\LandHeights.json') then
+            joLandscapeHeights.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights.json');
+    end
+    else if FileExists(wbScriptsPath + 'Seasons\LandHeightsPreAlteration.json') then
+        joLandscapeHeights.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsPreAlteration.json');
+
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
     CollectRecords;
-    AlterLandHeightsForTheseBases;
-    ApplyAlterations;
-    FixLandscapeSeams;
+    if not bLoadPreviousLandHeights then begin
+        AlterLandHeightsForTheseBases;
+        ApplyAlterations;
+        FixLandscapeSeams;
+    end;
     ProcessLandRecords;
 end;
 
@@ -136,12 +144,12 @@ var
     fImage: TImage;
     pnl: TPanel;
     picSeasons: TPicture;
-    chkCreateTestPlugin, chkCreateLandscapeHeights, chkCreateLandscapeSnowMeshes, chkPlaceLandscapeSnow: TCheckBox;
+    chkCreateTestPlugin, chkCreateLandscapeHeights, chkCreateLandscapeSnowMeshes, chkPlaceLandscapeSnow, chkLoadLastLandHeights: TCheckBox;
 begin
     frm := TForm.Create(nil);
     try
         frm.Caption := 'Seasons Change';
-        frm.Width := 680;
+        frm.Width := 600;
         frm.Height := 480;
         frm.Position := poMainFormCenter;
         frm.BorderStyle := bsDialog;
@@ -187,10 +195,19 @@ begin
         chkCreateLandscapeHeights.Hint := 'Forces all land height values to be recalculated.';
         chkCreateLandscapeHeights.ShowHint := True;
 
+        chkLoadLastLandHeights := TCheckBox.Create(gbOptions);
+        chkLoadLastLandHeights.Parent := gbOptions;
+        chkLoadLastLandHeights.Left := chkCreateLandscapeHeights.Left + chkCreateLandscapeHeights.Width + 16;
+        chkLoadLastLandHeights.Top := chkCreateLandscapeHeights.Top;
+        chkLoadLastLandHeights.Width := 170;
+        chkLoadLastLandHeights.Caption := 'Load Last Land Heights';
+        chkLoadLastLandHeights.Hint := 'Skips generating alterations to land heights, using last Land Heights json.';
+        chkLoadLastLandHeights.ShowHint := True;
+
         chkCreateLandscapeSnowMeshes := TCheckBox.Create(gbOptions);
         chkCreateLandscapeSnowMeshes.Parent := gbOptions;
-        chkCreateLandscapeSnowMeshes.Left := chkCreateLandscapeHeights.Left + chkCreateLandscapeHeights.Width + 16;
-        chkCreateLandscapeSnowMeshes.Top := chkCreateLandscapeHeights.Top;
+        chkCreateLandscapeSnowMeshes.Left := 16;
+        chkCreateLandscapeSnowMeshes.Top := chkLoadLastLandHeights.Top + 24;
         chkCreateLandscapeSnowMeshes.Width := 170;
         chkCreateLandscapeSnowMeshes.Caption := 'Force Recreate Snow Models';
         chkCreateLandscapeSnowMeshes.Hint := 'Forces recreation of all snow models.';
@@ -244,6 +261,7 @@ begin
         chkCreateLandscapeHeights.Checked := bCreateLandscapeHeights;
         chkCreateLandscapeSnowMeshes.Checked := bCreateLandscapeSnowMeshes;
         chkPlaceLandscapeSnow.Checked := bPlaceLandscapeSnow;
+        chkLoadLastLandHeights.Checked := bLoadPreviousLandHeights;
 
         if frm.ShowModal <> mrOk then begin
             Result := False;
@@ -254,6 +272,7 @@ begin
         bCreateLandscapeHeights := chkCreateLandscapeHeights.Checked;
         bCreateLandscapeSnowMeshes := chkCreateLandscapeSnowMeshes.Checked;
         bPlaceLandscapeSnow := chkPlaceLandscapeSnow.Checked;
+        bLoadPreviousLandHeights := chkLoadLastLandHeights.Checked;
 
     finally
         frm.Free;
@@ -640,7 +659,6 @@ begin
                         joLandFiles.O[wrldEdid].O[cellX].S[cellY] := fileName;
                         if bCreateLandscapeSnowMeshes or bPlaceLandscapeSnow or bLandHasChanged then begin
                             tlLandRecords.Add(land);
-                            //joLandFiles.O[wrldEdid].O[cellX].S[cellY] := fileName;
                         end;
                         //if count > 10 then break;
                     end;
@@ -857,22 +875,22 @@ begin
             posY := posY + raw_y;
             posZ := posZ + raw_z;
             scale := scale * pmScale;
-            x1n := Ceil(x1 * scale);
-            y1n := Ceil(y1 * scale);
-            z1n := Ceil(z1 * scale);
-            x2n := Floor(x2 * scale);
-            y2n := Floor(y2 * scale);
-            z2n := Floor(z2 * scale);
+            x1n := Floor(x1 * scale);
+            y1n := Floor(y1 * scale);
+            z1n := Floor(z1 * scale);
+            x2n := Ceil(x2 * scale);
+            y2n := Ceil(y2 * scale);
+            z2n := Ceil(z2 * scale);
             AlterLandHeightsForThisPlacement(alteration, x1n, y1n, z1n, x2n, y2n, z2n, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, realBase, rWrld);
         end;
     end
     else begin
-        x1n := Ceil(x1 * scale);
-        y1n := Ceil(y1 * scale);
-        z1n := Ceil(z1 * scale);
-        x2n := Floor(x2 * scale);
-        y2n := Floor(y2 * scale);
-        z2n := Floor(z2 * scale);
+        x1n := Floor(x1 * scale);
+        y1n := Floor(y1 * scale);
+        z1n := Floor(z1 * scale);
+        x2n := Ceil(x2 * scale);
+        y2n := Ceil(y2 * scale);
+        z2n := Ceil(z2 * scale);
         AlterLandHeightsForThisPlacement(alteration, x1n, y1n, z1n, x2n, y2n, z2n, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, realBase, rWrld);
     end;
 end;
@@ -882,9 +900,9 @@ procedure AlterLandHeightsForThisPlacement(alteration, x1n, y1n, z1n, x2n, y2n, 
     Alters land heights for a specific placement of a base object.
 }
 var
-    i, j, k, row, column, cellXHere, cellYHere, vz, oldZ, landOffsetZ, newZ, width, height, numX, numY: integer;
+    i, j, k, row, row_closest, column, column_closest, cellXHere, cellYHere, vz, oldZ, landOffsetZ, newZ, width, height, numX, numY: integer;
     fileName: string;
-    raw_x, raw_y, raw_z, xHere, yHere, zHere, posXHere, posYHere, posZHere, alterationHere: double;
+    raw_x, raw_y, raw_z, xHere, yHere, zHere, posXHere, posYHere, posZHere, alterationHere, column_bias, row_bias, outskirts_bias: double;
     previousAlteration: variant;
 begin
     //Fix object bounds in case they are all 0
@@ -952,11 +970,14 @@ begin
                 continue; //No landscape in this cell.
             end;
 
-            alterationHere := alteration;
+            column_closest := Round((posXHere - (cellXHere * 4096))/128);
+            row_closest := Round((posYHere - (cellYHere * 4096))/128);
 
             //Find the closest vertex in this cell.
             for k := 0 to 3 do begin
-
+                row_bias := 0.5;
+                column_bias := 0.5;
+                outskirts_bias := 1;
 
                 if k = 0 then begin
                     column := Floor((posXHere - (cellXHere * 4096))/128);
@@ -977,17 +998,62 @@ begin
 
                 previousAlteration := joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column];
 
+                //We set the column and row bias for the alteration based on if it is the closest vertex.
+                //This should allow the alteration to taper at the edges.
+                if column = column_closest then column_bias := 1;
+                if row = row_closest then row_bias := 1;
+
+                if ((i = 0) or (i = numX) or (j = 0) or (j = numY)) then begin
+                    //We are on the outer limits of this alteration.
+                    //We will reduce the magnitude of the alteration.
+                    //This should allow the alteration to taper at the edges.
+                    outskirts_bias := 0.5;
+                end;
+                alterationHere := outskirts_bias * row_bias * column_bias * alteration;
+
                 if previousAlteration <> '' then begin
-                    if previousAlteration > 0 then begin
+                    if previousAlteration >= 0 then begin
                         //AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
-                        if alterationHere > 0 then continue;
-                        if alterationHere < 0 then alterationHere := alterationHere - previousAlteration;
+                        if ((previousAlteration = 0) or ((alterationHere > 0) and (alterationHere <= previousAlteration))) then continue;
                     end
                     else if previousAlteration < 0 then begin
                         //AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
-                        continue;
+                        if alterationHere > 0 then continue;
+                        if alterationHere >= previousAlteration then continue;
                     end;
                 end;
+
+                if alterationHere > 0 then begin
+                    if (row > 0) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row - 1].S[column], 0) < 0) then continue;
+                    if (row < 32) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row + 1].S[column], 0) < 0) then continue;
+                    if (column > 0) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column - 1], 0) < 0) then continue;
+                    if (column < 32) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column + 1], 0) < 0) then continue;
+                    // Check diagonals
+                    if (row > 0) and (column > 0) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row - 1].S[column - 1], 0) < 0) then continue;
+                    if (row > 0) and (column < 32) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row - 1].S[column + 1], 0) < 0) then continue;
+                    if (row < 32) and (column > 0) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row + 1].S[column - 1], 0) < 0) then continue;
+                    if (row < 32) and (column < 32) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row + 1].S[column + 1], 0) < 0) then continue;
+                end else if alterationHere < 0 then begin
+                    if (row > 0) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row - 1].S[column], 0) > 0) then
+                        joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row - 1].S[column] := 0;
+                    if (row < 32) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row + 1].S[column], 0) > 0) then
+                        joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row + 1].S[column] := 0;
+                    if (column > 0) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column - 1], 0) > 0) then
+                        joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column - 1] := 0;
+                    if (column < 32) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column + 1], 0) > 0) then
+                        joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column + 1] := 0;
+                    // Check diagonals
+                    if (row > 0) and (column > 0) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row - 1].S[column - 1], 0) > 0) then
+                        joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row - 1].S[column - 1] := 0;
+                    if (row > 0) and (column < 32) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row - 1].S[column + 1], 0) > 0) then
+                        joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row - 1].S[column + 1] := 0;
+                    if (row < 32) and (column > 0) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row + 1].S[column - 1], 0) > 0) then
+                        joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row + 1].S[column - 1] := 0;
+                    if (row < 32) and (column < 32) and (StrToFloatDef(joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row + 1].S[column + 1], 0) > 0) then
+                        joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row + 1].S[column + 1] := 0;
+                end;
+
+
 
                 landOffsetZ := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].S['offset'];
                 vz := joLandscapeHeights.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].A[row].S[column];
@@ -996,6 +1062,10 @@ begin
                     //AddMessage(#9 + #9 + #9 + 'Object is below the landscape vertex, so skipping it.');
                     continue; //The object is completely below this vertex, so skip it.
                 end;
+
+                // if alteration > 0 then begin
+                //     alterationHere := outskirts_bias * row_bias * column_bias * (posZHere - oldZ + alteration);
+                // end;
 
                 SetAlteredLandHeight(fileName, wrldEdid, cellXHere, cellYHere, row, column, alterationHere);
                 AddMessage(#9 + #9 + #9 + 'Altering land height at ' + IntToStr(column) + ',' + IntToStr(row) + ' in ' + wrldEdid + ' ' + IntToStr(cellXHere) + ' ' + IntToStr(cellYHere) + ' from ' + IntToStr(vz * SCALE_FACTOR_TERRAIN) + ' to ' + FloatToStr(vz * SCALE_FACTOR_TERRAIN + alterationHere));
@@ -1486,6 +1556,7 @@ begin
                             for c := 0 to Pred(joLand.O[row].Count) do begin
                                 column := joLand.O[row].Names[c];
                                 alteration := joLand.O[row].S[column];
+                                if alteration = 0 then continue;
                                 landValue := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column];
                                 joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] := alteration/SCALE_FACTOR_TERRAIN + landValue;
                             end;
