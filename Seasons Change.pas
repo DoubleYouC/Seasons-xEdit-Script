@@ -17,7 +17,7 @@ var
     statGroup, scolGroup: IwbGroupRecord;
     flatSnowStatic: IwbElement;
 
-    slPluginFiles: TStringList;
+    slPluginFiles, slLandscapeCells: TStringList;
     tlLandRecords, tlBasesThatAlterLand: TList;
     joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules: TJsonObject;
 
@@ -50,6 +50,7 @@ begin
     joUserAlterLandRules := TJsonObject.Create;
     tlLandRecords := TList.Create;
     tlBasesThatAlterLand := TList.Create;
+    slLandscapeCells := TStringList.Create;
 
     if FileExists(wbScriptsPath + 'Seasons\LandHeightsAlteredPreAlteration.json') then
         joLandscapeHeightsAltered.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsAlteredPreAlteration.json');
@@ -68,6 +69,7 @@ begin
     tlBasesThatAlterLand.Free;
     joLandscapeHeights.Free;
     joLandscapeHeightsAltered.Free;
+    slLandscapeCells.Free;
 
     if bSaveUserRules and bUserAlterLandRulesChanged then begin
         AddMessage('Saving ' + IntToStr(joUserAlterLandRules.Count) + ' object snow alteration user rule(s) to ' + wbDataPath + 'Seasons\AlterLandUserRules.json');
@@ -655,11 +657,16 @@ begin
                         cellY := GetElementNativeValues(rCell, 'XCLC\Y');
                         AddMessage(IntToStr(count) + #9 + ShortName(land) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
                         bLandHasChanged := CreateLandscapeHeights(land, WinningOverride(rCell), wWrld, wrldEdid);
-                        if bLandHasChanged then Inc(count);
+                        if bLandHasChanged then begin
+                            slLandscapeCells.Add(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+                            Inc(count);
+                        end;
                         joLandFiles.O[wrldEdid].O[cellX].S[cellY] := fileName;
                         if bCreateLandscapeSnowMeshes or bPlaceLandscapeSnow or bLandHasChanged then begin
                             tlLandRecords.Add(land);
                         end;
+                        if (bCreateLandscapeSnowMeshes and not bLandHasChanged) then
+                            slLandscapeCells.Add(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
                         //if count > 10 then break;
                     end;
                     //if count > 10 then break;
@@ -900,9 +907,9 @@ procedure AlterLandHeightsForThisPlacement(alteration, x1n, y1n, z1n, x2n, y2n, 
     Alters land heights for a specific placement of a base object.
 }
 var
-    i, j, k, row, row_closest, column, column_closest, cellXHere, cellYHere, vz, oldZ, landOffsetZ, newZ, width, height, numX, numY: integer;
+    i, j, k, row, row_closest, column, column_closest, cellXHere, cellYHere, vz, oldZ, landOffsetZ, newZ, width, height, numX, numY, alterationHere: integer;
     fileName: string;
-    raw_x, raw_y, raw_z, xHere, yHere, zHere, posXHere, posYHere, posZHere, alterationHere, column_bias, row_bias, outskirts_bias: double;
+    raw_x, raw_y, raw_z, xHere, yHere, zHere, posXHere, posYHere, posZHere, column_bias, row_bias, outskirts_bias, cellPosX, cellPosY: double;
     previousAlteration: variant;
 begin
     //Fix object bounds in case they are all 0
@@ -963,6 +970,11 @@ begin
             //Find the cell this position is in.
             cellXHere := Floor(posXHere/4096);
             cellYHere := Floor(posYHere/4096);
+
+            //Check if cell is in one of the slLandscapeCells, or neighbors.
+            if not (bCreateLandscapeSnowMeshes or bCreateLandscapeHeights) then
+                if not IsCellInRange(wrldEdid, cellXHere, cellYHere) then continue;
+
             //AddMessage(#9 + #9 + #9 + 'Position ' + FloatToStr(posXHere) + ',' + FloatToStr(posYHere) + ' is in cell ' + IntToStr(cellXHere) + ',' + IntToStr(cellYHere));
             fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
             if fileName = '' then begin
@@ -970,51 +982,59 @@ begin
                 continue; //No landscape in this cell.
             end;
 
-            column_closest := Round((posXHere - (cellXHere * 4096))/128);
-            row_closest := Round((posYHere - (cellYHere * 4096))/128);
+            cellPosX := (posXHere - (cellXHere * 4096))/128;
+            cellPosY := (posYHere - (cellYHere * 4096))/128;
+            column_closest := Round(cellPosX);
+            row_closest := Round(cellPosY);
 
             //Find the closest vertex in this cell.
             for k := 0 to 3 do begin
-                row_bias := 0.5;
-                column_bias := 0.5;
-                outskirts_bias := 1;
-
                 if k = 0 then begin
-                    column := Floor((posXHere - (cellXHere * 4096))/128);
-                    row := Floor((posYHere - (cellYHere * 4096))/128);
+                    column := Floor(cellPosX);
+                    row := Floor(cellPosY);
                 end
                 else if k = 1 then begin
-                    column := Floor((posXHere - (cellXHere * 4096))/128);
-                    row := Ceil((posYHere - (cellYHere * 4096))/128);
+                    column := Floor(cellPosX);
+                    row := Ceil(cellPosY);
                 end
                 else if k = 2 then begin
-                    column := Ceil((posXHere - (cellXHere * 4096))/128);
-                    row := Floor((posYHere - (cellYHere * 4096))/128);
+                    column := Ceil(cellPosX);
+                    row := Floor(cellPosY);
                 end
                 else begin
-                    column := Ceil((posXHere - (cellXHere * 4096))/128);
-                    row := Ceil((posYHere - (cellYHere * 4096))/128);
+                    column := Ceil(cellPosX);
+                    row := Ceil(cellPosY);
                 end;
 
-                previousAlteration := joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column];
+                row_bias := (1 - (Max(row, cellPosY) - Min(row, cellPosY))) * 2;
+                column_bias := (1 - (Max(column, cellPosX) - Min(column, cellPosX))) * 2;
+                outskirts_bias := 1;
 
-                //We set the column and row bias for the alteration based on if it is the closest vertex.
-                //This should allow the alteration to taper at the edges.
-                if column = column_closest then column_bias := 1;
-                if row = row_closest then row_bias := 1;
+                previousAlteration := joLandscapeHeightsAltered.O[fileName].O[wrldEdid].O[cellXHere].O[cellYHere].O[row].S[column];
 
                 if ((i = 0) or (i = numX) or (j = 0) or (j = numY)) then begin
                     //We are on the outer limits of this alteration.
                     //We will reduce the magnitude of the alteration.
                     //This should allow the alteration to taper at the edges.
-                    outskirts_bias := 0.5;
+                    outskirts_bias := 0.81;
+                end else begin
+                    row_bias := 1;
+                    column_bias := 1;
                 end;
-                alterationHere := outskirts_bias * row_bias * column_bias * alteration;
+                //We set the column and row bias for the alteration based on if it is the closest vertex.
+                if column = column_closest then column_bias := 1;
+                if row = row_closest then row_bias := 1;
+
+                alterationHere := Round((outskirts_bias * row_bias * column_bias * alteration)/SCALE_FACTOR_TERRAIN) * SCALE_FACTOR_TERRAIN;
+                if alterationHere = 0 then continue;
 
                 if previousAlteration <> '' then begin
-                    if previousAlteration >= 0 then begin
+                    if previousAlteration > 0 then begin
                         //AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
-                        if ((previousAlteration = 0) or ((alterationHere > 0) and (alterationHere <= previousAlteration))) then continue;
+                        if  ((alterationHere > 0) and (alterationHere <= previousAlteration)) then continue;
+                    end
+                    else if previousAlteration = 0 then begin
+                        if alterationHere > 0 then continue;
                     end
                     else if previousAlteration < 0 then begin
                         //AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
@@ -1063,10 +1083,6 @@ begin
                     continue; //The object is completely below this vertex, so skip it.
                 end;
 
-                // if alteration > 0 then begin
-                //     alterationHere := outskirts_bias * row_bias * column_bias * (posZHere - oldZ + alteration);
-                // end;
-
                 SetAlteredLandHeight(fileName, wrldEdid, cellXHere, cellYHere, row, column, alterationHere);
                 AddMessage(#9 + #9 + #9 + 'Altering land height at ' + IntToStr(column) + ',' + IntToStr(row) + ' in ' + wrldEdid + ' ' + IntToStr(cellXHere) + ' ' + IntToStr(cellYHere) + ' from ' + IntToStr(vz * SCALE_FACTOR_TERRAIN) + ' to ' + FloatToStr(vz * SCALE_FACTOR_TERRAIN + alterationHere));
             end;
@@ -1074,7 +1090,57 @@ begin
     end;
 end;
 
-function GetAlteredLandHeight(wrldEdid: string; cellX, cellY, row, column: integer; var fileNameLandHere: string): double;
+function IsCellInRange(wrldEdid: string; cellX, cellY: integer): boolean;
+var
+    idx: integer;
+begin
+    Result := False;
+    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+    if idx <> -1 then Result := True;
+    if Result then Exit;
+
+    //right x-1
+    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX - 1) + ' ' + IntToStr(cellY));
+    if idx <> -1 then Result := True;
+    if Result then Exit;
+
+    //left x+1
+    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX + 1) + ' ' + IntToStr(cellY));
+    if idx <> -1 then Result := True;
+    if Result then Exit;
+
+    //top y+1
+    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY + 1));
+    if idx <> -1 then Result := True;
+    if Result then Exit;
+
+    //bottom y -1
+    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY - 1));
+    if idx <> -1 then Result := True;
+    if Result then Exit;
+
+    //top right diagonal x-1 y+1
+    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX - 1) + ' ' + IntToStr(cellY + 1));
+    if idx <> -1 then Result := True;
+    if Result then Exit;
+
+    //top left diagonal x+1 y+1
+    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX + 1) + ' ' + IntToStr(cellY + 1));
+    if idx <> -1 then Result := True;
+    if Result then Exit;
+
+    //bottom right diagonal x+1 y-1
+    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX + 1) + ' ' + IntToStr(cellY - 1));
+    if idx <> -1 then Result := True;
+    if Result then Exit;
+
+    //bottom left diagonal x-1 y-1
+    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX - 1) + ' ' + IntToStr(cellY - 1));
+    if idx <> -1 then Result := True;
+    if Result then Exit;
+end;
+
+function GetAlteredLandHeight(wrldEdid: string; cellX, cellY, row, column: integer; var fileNameLandHere: string): integer;
 var
     alteration: variant;
 begin
@@ -1086,10 +1152,9 @@ begin
     Result := alteration;
 end;
 
-procedure SetAlteredLandHeight(fileNameLand, wrldEdid: string; cellX, cellY, row, column: integer; alterationHere: double);
+procedure SetAlteredLandHeight(fileNameLand, wrldEdid: string; cellX, cellY, row, column, alterationHere: integer);
 var
-    currentVz, neighborVz: double;
-    rowHere, columnHere: integer;
+    currentVz, neighborVz, rowHere, columnHere: integer;
     fileNameLand0, fileNameLand1, fileNameLand2: string;
 begin
     currentVz := alterationHere;
@@ -1228,10 +1293,13 @@ begin
         cellY := GetElementNativeValues(rCell, 'XCLC\Y');
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
+        if not bCreateLandscapeSnowMeshes then begin
+            if not IsCellInRange(wrldEdid, cellX, cellY) then continue;
+        end;
         fileName := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
 
         if joLandscapeHeights.O[fileName].O[wrldEdid].O[cellX].O[cellY].S['flags'] > 0 then continue; //skip flat and underwater landscape cells
-        AddMessage(IntToStr(i) + ' of ' + IntToStr(count) + #9 + ShortName(rLand) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+        AddMessage(IntToStr(i + 1) + ' of ' + IntToStr(count) + #9 + ShortName(rLand) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
 
         CreateLandscapeSnow(rLand, rCell, rWrld, wrldEdid, fileName, cellX, cellY);
         if bPlaceLandscapeSnow then PlaceLandscapeSnow(rLand, rCell, rWrld, wrldEdid, fileName, cellX, cellY);
@@ -1301,9 +1369,9 @@ end;
 function CreateLandscapeSnow(land, rCell, rWrld: IwbElement; wrldEdid, fileProvidingLand: string; cellX, cellY: integer): integer;
 var
     bVertexIsOutsideCell: boolean;
-    i, nifFile, row2, column2, row, column, vertexCount, newCellX, newCellY: integer;
+    i, nifFile, row2, column2, row, column, vertexCount, newCellX, newCellY, landOffsetZ, newlandOffsetZ,
+    point1, point2, point3, point4, cellOffsetDifference, newVz: integer;
     editorIdSnowNif, fileName, snowNifFile, xyz, vx, vy, vz, newVzStr, fileNameLand: string;
-    point1, point2, point3, point4, landOffsetZ, newlandOffsetZ, cellOffsetDifference, newVz: double;
 
     tsXYZ: TStrings;
     joLand: TJsonObject;
@@ -1440,6 +1508,31 @@ begin
                 end;
                 block.UpdateNormals;
                 block.UpdateTangents;
+                if nifFile = 0 then begin
+                    //We need to protect the border vertices' normals.
+                    for i := 0 to Pred(vertexCount) do begin
+                        vertex := vertexData[i];
+                        xyz := vertex.EditValues['Vertex'];
+                        tsXYZ := SplitString(xyz, ' ');
+                        vx := tsXYZ[0];
+                        vy := tsXYZ[1];
+
+                        row2 := Round(StrToFloatDef(vy, 9))/64; // dividing by 64 means row2 is twice the size of the actual row
+                        // if row2 is even, this row exists
+                        column2 := Round(StrToFloatDef(vx, 9))/64; // dividing by 64 means column2 is twice the size of the actual column
+                        // if column2 is even, this column exists
+                        if not (IsEven(row2) and IsEven(column2)) then continue;
+                        row := row2/2;
+                        column := column2/2;
+                        if not ((row = 0) or (row = 32) or (column = 0) or (column = 32)) then continue;
+                        vertex.EditValues['Normal'] := '0.003922 0.003922 1.000000';
+                        vertex.EditValues['Bitangent X'] := '1.000000';
+                        vertex.EditValues['Bitangent Y'] := '0.003922';
+                        vertex.EditValues['Bitangent Z'] := '0.003922';
+                        vertex.EditValues['Tangent'] := '0.003922 -1.000000 0.003922';
+
+                    end;
+                end;
                 snowNif.SaveToFile(snowNifFile);
             finally
                 snowNif.Free;
@@ -1459,7 +1552,7 @@ end;
 function CreateLandscapeHeights(land, rCell, rWrld: IwbElement; wrldEdid: string): boolean;
 var
     bLandHeightsExist, bHasWater: boolean;
-    landOffsetZ, rowColumnOffsetZ, rowStartVal, landValue, landValueScaled, cellWaterHeightFloat: double;
+    landOffsetZ, rowColumnOffsetZ, rowStartVal, landValue, landValueScaled, cellWaterHeightFloat,
     cellX, cellY, row, column, iFlat, iHeightAlwaysBelowWater: integer;
     fileProvidingLand, rowColumn, cellWaterHeight: string;
 
@@ -1473,7 +1566,7 @@ begin
     if GetElementEditValues(rCell, 'DATA\Has Water') = '0' then bHasWater := False;
     cellWaterHeight := GetElementEditValues(rCell, 'XCLW');
     if cellWaterHeight = 'Default' then cellWaterHeight := GetElementEditValues(rWrld, 'DNAM\Default Water Height');
-    cellWaterHeightFloat := StrToFloatDef(cellWaterHeight, 9);
+    cellWaterHeightFloat := StrToFloatDef(cellWaterHeight, 0);
 
     landOffsetZ := GetElementNativeValues(land, 'VHGT\Offset');
     landHeightData := ElementByPath(land, 'VHGT\Height Data');
@@ -1531,9 +1624,8 @@ procedure ApplyAlterations;
     Rasterize the alteration in joLandscapeHeightsAltered into joLandscapeHeights.
 }
 var
-    count, total, c, f, r, w, x, y, cellX, cellY, row, column: integer;
+    count, total, c, f, r, w, x, y, cellX, cellY, row, column, alteration, landValue: integer;
     fileProvidingLand, wrldEdid: string;
-    alteration, landValue: double;
     joLand: TJsonObject;
 begin
     count := 0;
@@ -1546,6 +1638,8 @@ begin
                 cellX := joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].Names[x];
                 for y := 0 to Pred(joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].O[cellX].Count) do begin
                     cellY := joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].O[cellX].Names[y];
+                    if not bCreateLandscapeSnowMeshes then
+                        if not IsCellInRange(wrldEdid, cellX, cellY) then continue;
                     Inc(count);
                     AddMessage(IntToStr(count) + #9 + 'Merging alterations into land heights: ' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
                     joLand := TJsonObject.Create;
@@ -1582,6 +1676,8 @@ begin
             cellX := joLandFiles.O[wrldEdid].Names[x];
             for y := 0 to Pred(joLandFiles.O[wrldEdid].O[cellX].Count) do begin
                 cellY := joLandFiles.O[wrldEdid].O[cellX].Names[y];
+                if not bCreateLandscapeSnowMeshes then
+                    if not IsCellInRange(wrldEdid, cellX, cellY) then continue;
                 fileProvidingLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
                 if joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['flags'] > 4 then continue; //skipping completely underwater cells for speed.
                 //For every landscape record we will check the edges for seams against the neighboring cell.
@@ -1599,8 +1695,7 @@ procedure FixLandscapeSeamsAgainstNeighbors(fileProvidingLand, wrldEdid: string;
     Fix landscape seams
 }
 var
-    row, rowHere, column, columnHere: integer;
-    currentVz, neighborVz: double;
+    row, rowHere, column, columnHere, currentVz, neighborVz: integer;
 begin
     // #####################################
     // Bottom-left corner r0 c0
@@ -1802,14 +1897,13 @@ begin
     // end;
 end;
 
-function GetLandHeightWithOffset(wrldEdid: string; cellX, cellY, row, column: integer): double;
+function GetLandHeightWithOffset(wrldEdid: string; cellX, cellY, row, column: integer): integer;
 {
     Get Land Height at this location including offset.
 }
 var
     fileNameLand: string;
-    offset: integer;
-    landValue: double;
+    offset, landValue: integer;
 begin
     Result := nil;
     fileNameLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
@@ -1819,7 +1913,7 @@ begin
     Result := landValue + offset;
 end;
 
-procedure SetLandHeightWithOffset(wrldEdid: string; cellX, cellY, row, column: integer; vz: double);
+procedure SetLandHeightWithOffset(wrldEdid: string; cellX, cellY, row, column, vz: integer);
 var
     fileNameLand: string;
     offset: integer;
