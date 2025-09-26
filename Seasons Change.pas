@@ -1371,9 +1371,9 @@ var
     bVertexIsOutsideCell: boolean;
     i, nifFile, row2, column2, row, column, vertexCount, newCellX, newCellY, landOffsetZ, newlandOffsetZ,
     point1, point2, point3, point4, cellOffsetDifference, newVz: integer;
-    editorIdSnowNif, fileName, snowNifFile, xyz, vx, vy, vz, newVzStr, fileNameLand: string;
+    editorIdSnowNif, fileName, snowNifFile, xyz, vx, vy, vz, newVzStr, fileNameLand, nx, ny, nz: string;
 
-    tsXYZ: TStrings;
+    tsXYZ, tsNormals: TStrings;
     joLand: TJsonObject;
 
     vertexData, vertex: TdfElement;
@@ -1502,14 +1502,14 @@ begin
                         else newVzStr := FloatToStr(newVz + 192);
                     end else if nifFile = 3 then begin
                         if bVertexIsOutsideCell then newVzStr := FloatToStr(newVz + 192)
-                        else newVzStr := FloatToStr(newVz + 576);
+                        else newVzStr := FloatToStr(newVz + 672);
                     end;
                     vertex.EditValues['Vertex'] := vx + ' ' + vy + ' ' + newVzStr;
                 end;
                 block.UpdateNormals;
                 block.UpdateTangents;
+                //We need to protect the border vertices' normals.
                 if nifFile = 0 then begin
-                    //We need to protect the border vertices' normals.
                     for i := 0 to Pred(vertexCount) do begin
                         vertex := vertexData[i];
                         xyz := vertex.EditValues['Vertex'];
@@ -1530,7 +1530,28 @@ begin
                         vertex.EditValues['Bitangent Y'] := '0.003922';
                         vertex.EditValues['Bitangent Z'] := '0.003922';
                         vertex.EditValues['Tangent'] := '0.003922 -1.000000 0.003922';
+                    end;
+                end else begin //We are attempting a different way to fix the seam on LOD models, since these are related to the extra sloped down vertices.
+                    for i := 0 to Pred(vertexCount) do begin
+                        vertex := vertexData[i];
+                        xyz := vertex.EditValues['Vertex'];
+                        tsXYZ := SplitString(xyz, ' ');
+                        vx := tsXYZ[0];
+                        vy := tsXYZ[1];
 
+                        row2 := Round(StrToFloatDef(vy, 9))/64; // dividing by 64 means row2 is twice the size of the actual row
+                        // if row2 is even, this row exists
+                        column2 := Round(StrToFloatDef(vx, 9))/64; // dividing by 64 means column2 is twice the size of the actual column
+                        // if column2 is even, this column exists
+                        if not (IsEven(row2) and IsEven(column2)) then continue;
+                        row := row2/2;
+                        column := column2/2;
+                        if not ((row = 0) or (row = 32) or (column = 0) or (column = 32)) then continue;
+                        tsNormals := vertex.EditValues['Normal'];
+                        nx := FloatToStr((StringToFloatDef(tsNormals[0], 0.003922)*3 + 0.003922)/4);
+                        ny := FloatToStr((StringToFloatDef(tsNormals[1], 0.003922)*3 + 0.003922)/4);
+                        nz := FloatToStr((StringToFloatDef(tsNormals[2], 1)*3 + 1)/4);
+                        vertex.EditValues['Normal'] := nx + ny + nz;
                     end;
                 end;
                 snowNif.SaveToFile(snowNifFile);
