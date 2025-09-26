@@ -1567,9 +1567,9 @@ begin
                         column := column2/2;
                         if not ((row = 0) or (row = 32) or (column = 0) or (column = 32)) then continue;
                         tsNormals := SplitString(vertex.EditValues['Normal'], ' ');
-                        nx := FloatToStr((StringToFloatDef(tsNormals[0], 0.003922)*3 + 0.003922)/4);
-                        ny := FloatToStr((StringToFloatDef(tsNormals[1], 0.003922)*3 + 0.003922)/4);
-                        nz := FloatToStr((StringToFloatDef(tsNormals[2], 1)*3 + 1)/4);
+                        nx := FloatToStr((StrToFloatDef(tsNormals[0], 0.003922)*3 + 0.003922)/4);
+                        ny := FloatToStr((StrToFloatDef(tsNormals[1], 0.003922)*3 + 0.003922)/4);
+                        nz := FloatToStr((StrToFloatDef(tsNormals[2], 1)*3 + 1)/4);
                         vertex.EditValues['Normal'] := nx + ' ' + ny + ' ' + nz;
                     end;
                 end;
