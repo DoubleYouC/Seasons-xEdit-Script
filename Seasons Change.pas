@@ -27,6 +27,7 @@ var
 const
     sSeasonsFileName = 'Seasons.esm';
     SCALE_FACTOR_TERRAIN = 8;
+    bsSCALE_FACTOR_TERRAIN = 3;
     // epsilon to use for CompareValue calls
     // between positions and rotations, positions have more significant decimals (6), so this is set
     // to compliment that
@@ -1366,7 +1367,22 @@ begin
     Result := newStatic;
 end;
 
+
 function CreateLandscapeSnow(land, rCell, rWrld: IwbElement; wrldEdid, fileProvidingLand: string; cellX, cellY: integer): integer;
+{
+    Creates snow mesh for a landscape cell.
+
+    Parameters:
+      land              - The LAND record element for the cell.
+      rCell             - The CELL record element for the cell.
+      rWrld             - The WRLD record element for the worldspace.
+      wrldEdid          - EditorID of the worldspace.
+      fileProvidingLand - Filename providing the LAND record.
+      cellX, cellY      - Cell coordinates.
+
+    Returns:
+      Integer indicating success (1) or failure (0).
+}
 var
     bVertexIsOutsideCell: boolean;
     i, nifFile, row2, column2, row, column, vertexCount, newCellX, newCellY, landOffsetZ, newlandOffsetZ,
@@ -1427,16 +1443,16 @@ begin
                     vz := tsXYZ[2];
 
                     // Use integer math where possible
-                    row2 := (Round(StrToFloatDef(vy, 9)) shr 6); // Divide by 64 using bit shift
+                    row2 := Round(StrToFloatDef(vy, 9)) div 64;
                     // dividing by 64 means row2 is twice the size of the actual row
                     // if row2 is even, this row exists
-                    column2 := (Round(StrToFloatDef(vx, 9)) shr 6);
+                    column2 := Round(StrToFloatDef(vx, 9)) div 64;
                     // dividing by 64 means column2 is twice the size of the actual column
                     // if column2 is even, this column exists
 
                     if (IsEven(row2) and IsEven(column2)) then begin
-                        row := row2 shr 1; // Divide by 2 using bit shift
-                        column := column2 shr 1;
+                        row := row2 div 2;
+                        column := column2 div 2;
                         if ((row < 0) or (row > 32) or (column < 0) or (column > 32)) then begin
                             // This will only happen for the LOD models. We have an overlap that goes to the neighboring cell so we can close some gaps for LOD.
                             bVertexIsOutsideCell := true;
@@ -1559,11 +1575,11 @@ begin
                         row := row2/2;
                         column := column2/2;
                         if not ((row = 0) or (row = 32) or (column = 0) or (column = 32)) then continue;
-                        tsNormals := vertex.EditValues['Normal'];
+                        tsNormals := SplitString(vertex.EditValues['Normal'], ' ');
                         nx := FloatToStr((StringToFloatDef(tsNormals[0], 0.003922)*3 + 0.003922)/4);
                         ny := FloatToStr((StringToFloatDef(tsNormals[1], 0.003922)*3 + 0.003922)/4);
                         nz := FloatToStr((StringToFloatDef(tsNormals[2], 1)*3 + 1)/4);
-                        vertex.EditValues['Normal'] := nx + ny + nz;
+                        vertex.EditValues['Normal'] := nx + ' ' + ny + ' ' + nz;
                     end;
                 end;
                 snowNif.SaveToFile(snowNifFile);
@@ -1654,7 +1670,7 @@ end;
 
 procedure ApplyAlterations;
 {
-    Rasterize the alteration in joLandscapeHeightsAltered into joLandscapeHeights.
+    Merges all alterations from joLandscapeHeightsAltered into joLandscapeHeights, modifying the latter in-place.
 }
 var
     count, total, c, f, r, w, x, y, cellX, cellY, row, column, alteration, landValue: integer;
@@ -1683,9 +1699,10 @@ begin
                             for c := 0 to Pred(joLand.O[row].Count) do begin
                                 column := joLand.O[row].Names[c];
                                 alteration := joLand.O[row].S[column];
+                                // Skip if alteration is zero to avoid unnecessary changes and maintain original land height
                                 if alteration = 0 then continue;
                                 landValue := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column];
-                                joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] := alteration/SCALE_FACTOR_TERRAIN + landValue;
+                                joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] := (alteration div SCALE_FACTOR_TERRAIN) + landValue;
                             end;
                         end;
                     finally
