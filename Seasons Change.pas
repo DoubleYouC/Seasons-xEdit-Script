@@ -790,6 +790,7 @@ begin
         if GetIsCleanDeleted(r) then continue;
         //if ElementExists(r, 'XESP') then continue; //skip enable parented references, since the object is not always present.
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+        if Signature(rCell) <> 'CELL' then continue;
         if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
@@ -803,10 +804,6 @@ begin
 end;
 
 procedure GetBounds(var x1, y1, z1, x2, y2, z2: integer; base: IwbElement);
-var
-    model: string;
-    nif: TwbNifFile;
-    block: TwbNifBlock;
 begin
     x1 := GetElementNativeValues(base, 'OBND\X1');
     y1 := GetElementNativeValues(base, 'OBND\Y1');
@@ -814,12 +811,6 @@ begin
     x2 := GetElementNativeValues(base, 'OBND\X2');
     y2 := GetElementNativeValues(base, 'OBND\Y2');
     z2 := GetElementNativeValues(base, 'OBND\Z2');
-    // if not ElementExists(base, 'Model') then Exit;
-    // model := wbNormalizeResourceName(GetElementEditValues(base, 'Model\MODL'), rewMesh);
-    // if not ResourceExists(model) then Exit;
-    // If the model exists, open it and find the bounds by vertex position.
-    // This could introduce errors however, if there is scaling or rotation of the block, and probably quite time consuming.
-    // Avoiding this for now.
 end;
 
 procedure AlterLandHeightsForThisRefr(r, base, fromBase: IwbElement; wrldEdid: string; alteration, x1, y1, z1, x2, y2, z2: integer; rWrld: IwbElement);
@@ -1599,6 +1590,16 @@ begin
 end;
 
 function CreateLandscapeHeights(land, rCell, rWrld: IwbElement; wrldEdid: string): boolean;
+{
+    Creates and stores the landscape height data for a given LAND record.
+    Parameters:
+      land      - The LAND record element for the cell.
+      rCell     - The CELL record element for the cell.
+      rWrld     - The WRLD record element for the worldspace.
+      wrldEdid  - EditorID of the worldspace.
+    Returns:
+      True if new height data was generated, False otherwise.
+}
 var
     bLandHeightsExist, bHasWater: boolean;
     landOffsetZ, rowColumnOffsetZ, rowStartVal, landValue, landValueScaled, cellWaterHeightFloat,
@@ -1620,8 +1621,10 @@ begin
     landOffsetZ := GetElementNativeValues(land, 'VHGT\Offset');
     landHeightData := ElementByPath(land, 'VHGT\Height Data');
 
-    bLandHeightsExist := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].Contains('offset');
-    if bLandHeightsExist and not bCreateLandscapeHeights then Exit; //If land heights already exist and we are not creating land heights, exit.
+    if not bCreateLandscapeHeights then begin
+        bLandHeightsExist := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].Contains('offset');
+        if bLandHeightsExist then Exit; //If land heights already exist and we are not creating land heights, exit.
+    end;
     Result := True;
     joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['offset'] := Round(landOffsetZ);
     iFlat := 4; // assume the cell is flat
@@ -1655,7 +1658,7 @@ begin
             end;
             joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].A[row].Add(Round(landValue));
             bSaveLandHeights := True;
-            Result := 1;
+            Result := True;
 
             // X Y Z coordinates. Shouldn't need these.
             // pX := FloatToStr(column * 128);
@@ -1742,7 +1745,13 @@ end;
 
 procedure FixLandscapeSeamsAgainstNeighbors(fileProvidingLand, wrldEdid: string; cellX, cellY: integer);
 {
-    Fix landscape seams
+    Algorithm:
+       For each border vertex of the landscape cell, compares its height with the corresponding vertex in neighboring cells.
+       If a neighboring vertex is lower, updates the current vertex to match the neighbor, thus eliminating visible seams.
+
+     Expected Side Effects:
+       Modifies the land height data in-place for the current cell and its border vertices, potentially lowering them to match adjacent cells.
+       Adds messages for each seam fix performed for traceability.
 }
 var
     row, rowHere, column, columnHere, currentVz, neighborVz: integer;
