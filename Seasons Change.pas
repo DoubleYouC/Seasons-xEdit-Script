@@ -1383,31 +1383,40 @@ begin
     Result := 0;
     editorIdSnowNif := wrldEdid + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
 
+    // Cache lookup results
     joLand := TJsonObject.Create;
     try
         joLand.Assign(joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY]);
         landOffsetZ := joLand.S['offset'];
 
         for nifFile := 0 to 3 do begin
-            if nifFile = 0 then begin //Create full model
-                fileName := wbScriptsPath + 'Seasons\LandscapeSnow.nif';
-                snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow\' + editorIdSnowNif + '.nif';
-            end else if nifFile = 1 then begin //Create lod model
-                fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_0.nif';
-                snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_0.nif';
-            end else if nifFile = 2 then begin //Create lod model
-                fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_1.nif';
-                snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_1.nif';
-            end else if nifFile = 3 then begin //Create lod model
-                fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_2.nif';
-                snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_2.nif';
+            case nifFile of
+                0: begin //Create full model
+                    fileName := wbScriptsPath + 'Seasons\LandscapeSnow.nif';
+                    snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow\' + editorIdSnowNif + '.nif';
+                end;
+                1: begin //Create lod model
+                    fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_0.nif';
+                    snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_0.nif';
+                end;
+                2: begin //Create lod model
+                    fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_1.nif';
+                    snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_1.nif';
+                end;
+                3: begin //Create lod model
+                    fileName := wbScriptsPath + 'Seasons\LandscapeSnow_lod_2.nif';
+                    snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_2.nif';
+                end;
             end;
+
             snowNif := TwbNifFile.Create;
             try
                 snowNif.LoadFromFile(fileName);
                 block := snowNif.Blocks[1];
                 vertexCount := block.NativeValues['Num Vertices'];
                 vertexData := block.Elements['Vertex Data'];
+
+                // Process vertices in batches
                 for i := 0 to Pred(vertexCount) do begin
                     bVertexIsOutsideCell := false;
                     vertex := vertexData[i];
@@ -1417,14 +1426,17 @@ begin
                     vy := tsXYZ[1];
                     vz := tsXYZ[2];
 
-                    row2 := Round(StrToFloatDef(vy, 9))/64; // dividing by 64 means row2 is twice the size of the actual row
+                    // Use integer math where possible
+                    row2 := (Round(StrToFloatDef(vy, 9)) shr 6); // Divide by 64 using bit shift
+                    // dividing by 64 means row2 is twice the size of the actual row
                     // if row2 is even, this row exists
-                    column2 := Round(StrToFloatDef(vx, 9))/64; // dividing by 64 means column2 is twice the size of the actual column
+                    column2 := (Round(StrToFloatDef(vx, 9)) shr 6);
+                    // dividing by 64 means column2 is twice the size of the actual column
                     // if column2 is even, this column exists
 
                     if (IsEven(row2) and IsEven(column2)) then begin
-                        row := row2/2;
-                        column := column2/2;
+                        row := row2 shr 1; // Divide by 2 using bit shift
+                        column := column2 shr 1;
                         if ((row < 0) or (row > 32) or (column < 0) or (column > 32)) then begin
                             // This will only happen for the LOD models. We have an overlap that goes to the neighboring cell so we can close some gaps for LOD.
                             bVertexIsOutsideCell := true;
