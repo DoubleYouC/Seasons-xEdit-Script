@@ -13,13 +13,13 @@ var
     uiScale: integer;
     sIgnoredWorldspaces: string;
 
-    SeasonsMainFile, plugin: IwbFile;
+    SeasonsMainFile: IwbFile;
     statGroup, scolGroup: IwbGroupRecord;
     flatSnowStatic: IwbElement;
 
     slPluginFiles, slLandscapeCells: TStringList;
-    tlLandRecords, tlBasesThatAlterLand: TList;
-    joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules: TJsonObject;
+    tlLandRecords, tlBasesThatAlterLand, tlStats, tlWinterDecals: TList;
+    joWinningCells, joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules: TJsonObject;
 
     lvAlterLandRules: TListView;
     btnAlterLandRuleOk, btnAlterLandRuleCancel: TButton;
@@ -49,9 +49,12 @@ begin
     joLandFiles := TJsonObject.Create;
     joAlterLandRules := TJsonObject.Create;
     joUserAlterLandRules := TJsonObject.Create;
+    joWinningCells := TJsonObject.Create;
     tlLandRecords := TList.Create;
     tlBasesThatAlterLand := TList.Create;
+    tlStats := TList.Create;
     slLandscapeCells := TStringList.Create;
+    tlWinterDecals := TList.Create;
 
     if FileExists(wbScriptsPath + 'Seasons\LandHeightsAlteredPreAlteration.json') then
         joLandscapeHeightsAltered.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsAlteredPreAlteration.json');
@@ -68,9 +71,12 @@ begin
     joLandFiles.Free;
     tlLandRecords.Free;
     tlBasesThatAlterLand.Free;
+    tlStats.Free;
     joLandscapeHeights.Free;
     joLandscapeHeightsAltered.Free;
+    joWinningCells.Free;
     slLandscapeCells.Free;
+    tlWinterDecals.Free;
 
     if bSaveUserRules and bUserAlterLandRulesChanged then begin
         AddMessage('Saving ' + IntToStr(joUserAlterLandRules.Count) + ' object snow alteration user rule(s) to ' + wbDataPath + 'Seasons\AlterLandUserRules.json');
@@ -124,12 +130,14 @@ begin
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
     CollectRecords;
-    if not bLoadPreviousLandHeights then begin
-        AlterLandHeightsForTheseBases;
-        ApplyAlterations;
-        FixLandscapeSeams;
-    end;
-    ProcessLandRecords;
+    // if not bLoadPreviousLandHeights then begin
+    //     AlterLandHeightsForTheseBases;
+    //     ApplyAlterations;
+    //     FixLandscapeSeams;
+    // end;
+    // ProcessLandRecords;
+    ProcessStats;
+    CreateWinterDecals;
 end;
 
 // ----------------------------------------------------
@@ -650,12 +658,14 @@ begin
                     for cellidx := 0 to Pred(ElementCount(subblock)) do begin
                         rCell := ElementByIndex(subblock, cellidx);
                         if (Signature(rCell) <> 'CELL') or GetIsPersistent(rCell) then continue;
+                        cellX := GetElementNativeValues(rCell, 'XCLC\X');
+                        cellY := GetElementNativeValues(rCell, 'XCLC\Y');
+                        joWinningCells.O[wrldEdid].O[cellX].S[cellY] := RecordFormIdFileId(rCell);
                         land := GetLandscapeForCell(rCell);
                         if not Assigned(land) then continue;
                         if not IsWinningOverride(land) then continue;
                         if not ElementExists(land, 'VHGT') then continue;
-                        cellX := GetElementNativeValues(rCell, 'XCLC\X');
-                        cellY := GetElementNativeValues(rCell, 'XCLC\Y');
+
                         AddMessage(IntToStr(count) + #9 + ShortName(land) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
                         bLandHasChanged := CreateLandscapeHeights(land, WinningOverride(rCell), wWrld, wrldEdid);
                         if bLandHasChanged then begin
@@ -683,6 +693,7 @@ begin
             if not IsWinningOverride(r) then continue;
             if ReferencedByCount(r) = 0 then continue;
             recordid := RecordFormIdFileId(r);
+            tlStats.Add(r);
             if not joAlterLandRules.Contains(recordid) then continue;
             tlBasesThatAlterLand.Add(r);
         end;
@@ -745,6 +756,189 @@ begin
     end;
 end;
 
+procedure ProcessStats;
+{
+    Process STAT records.
+}
+var
+    i: integer;
+    model, winterDecal: string;
+
+    r, rModl: IwbElement;
+begin
+    for i := 0 to Pred(tlStats.Count) do begin
+        r := ObjectToElement(tlStats[i]);
+        rModl := ElementByPath(r, 'Model\MODL');
+        if not Assigned(rModl) then continue;
+        model := wbNormalizeResourceName(GetEditValue(rModl), resMesh);
+        winterDecal := StringReplace(model, 'meshes', 'meshes\WinterDecals', [rfIgnoreCase]);
+        if ResourceExists(winterDecal) then tlWinterDecals.Add(r);
+    end;
+end;
+
+procedure CreateWinterDecals;
+{
+    Creates winter decals.
+}
+var
+    i: integer;
+    model, winterDecal, statEdid: string;
+
+    base, rWinterDecal: IwbElement;
+begin
+    if not Assigned(SeasonsMainFile) then Exit;
+    for i := 0 to Pred(tlWinterDecals.Count) do begin
+        base := ObjectToElement(tlWinterDecals[i]);
+        model := wbNormalizeResourceName(GetElementEditValues(base, 'Model\MODL'), resMesh);
+        winterDecal := StringReplace(model, 'meshes', 'meshes\WinterDecals', [rfIgnoreCase]);
+        statEdid := GetElementEditValues(base, 'EDID');
+        rWinterDecal := CreateNewStat(winterDecal, '', '', '', 'winterDecal_' + statEdid);
+        AddMessage('Processing Winter Decals: ' + #9 + statEdid);
+        ProcessWinterDecalREFRs(base, base, rWinterDecal, False);
+    end;
+end;
+
+procedure ProcessWinterDecalREFRs(base, fromBase, rWinterDecal: IwbElement; bSCOL: boolean);
+{
+    Places winter decals;
+}
+var
+    i, j: integer;
+    scale, posX, posY, posZ, rotX, rotY, rotZ, pmPosX, pmPosY, pmPosZ, pmRotX, pmRotY, pmRotZ, pmScale,
+    posXHere, posYHere, posZHere, raw_x, raw_y, raw_z, rawr_x, rawr_y, rawr_z: double;
+    wrldEdid, onam, baseRecordId: string;
+
+    position, positionHere: TwbVector;
+
+    r, rCell, rWrld, scolParts, scolPart, placements, placement: IwbElement;
+begin
+    for i := Pred(ReferencedByCount(base)) downto 0 do begin
+        r := ReferencedByIndex(base, i);
+        if Signature(r) = 'SCOL' then begin
+            ProcessWinterDecalREFRs(r, base, rWinterDecal, True);
+            continue;
+        end;
+        if Signature(r) <> 'REFR' then continue;
+        if not IsWinningOverride(r) then continue;
+        if GetIsDeleted(r) then continue;
+        if ElementExists(r, 'XESP') then continue; //skip enable parented objects for now. TODO make a way to have "double XESP"
+        rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+        if Signature(rCell) <> 'CELL' then continue;
+        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+        rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+        if Signature(rWrld) <> 'WRLD' then continue;
+        if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
+        wrldEdid := GetElementEditValues(rWrld, 'EDID');
+
+        if ElementExists(r, 'XSCL') then scale := GetElementNativeValues(r, 'XSCL') else scale := 1;
+        posX := GetElementNativeValues(r, 'DATA\Position\X');
+        posY := GetElementNativeValues(r, 'DATA\Position\Y');
+        posZ := GetElementNativeValues(r, 'DATA\Position\Z');
+        rotX := GetElementNativeValues(r, 'DATA\Rotation\X');
+        rotY := GetElementNativeValues(r, 'DATA\Rotation\Y');
+        rotZ := GetElementNativeValues(r, 'DATA\Rotation\Z');
+
+        if bSCOL then begin
+            baseRecordId := RecordFormIdFileId(fromBase);
+            scolParts := ElementByPath(base, 'Parts');
+            for j := 0 to Pred(ElementCount(scolParts)) do begin
+                scolPart := ElementByIndex(scolParts, j);
+                onam := RecordFormIdFileId(LinksTo(ElementByPath(scolPart, 'ONAM')));
+                if SameText(onam, baseRecordId) then begin
+                    break;
+                end;
+            end;
+            placements := ElementByPath(scolPart, 'DATA');
+            for j := 0 to Pred(ElementCount(placements)) do begin
+                placement := ElementByIndex(placements, j);
+
+                pmPosX := GetElementNativeValues(placement, 'Position\X') * scale;
+                pmPosY := GetElementNativeValues(placement, 'Position\Y') * scale;
+                pmPosZ := GetElementNativeValues(placement, 'Position\Z') * scale;
+                pmRotX := GetElementNativeValues(placement, 'Rotation\X');
+                pmRotY := GetElementNativeValues(placement, 'Rotation\Y');
+                pmRotZ := GetElementNativeValues(placement, 'Rotation\Z');
+                pmScale := GetElementNativeValues(placement, 'Scale') * scale;
+
+                if ((rotX = 0) and (rotY = 0) and (rotZ = 0)) then begin
+                    raw_x := pmPosX;
+                    raw_y := pmPosY;
+                    raw_z := pmPosZ;
+                end else begin
+                    rotate_position(
+                        pmPosX, pmPosY, pmPosZ,         // initial position
+                        rotX, rotY, rotZ,              // rotation to apply - x y z
+                        raw_x, raw_y, raw_z           // (output) raw final position
+                    );
+                end;
+
+                if ((pmRotX = 0) and (pmRotY = 0) and (pmRotZ = 0)) then begin
+                    rawr_x := rotX;
+                    rawr_Y := rotY;
+                    rawr_Z := rotZ;
+                end else begin
+                    rotate_rotation(
+                        rotX, rotY, rotZ,                  // initial rotation
+                        pmRotX, pmRotY, pmRotZ,           // rotation to apply - x y z
+                        rawr_x, rawr_y, rawr_z           // (output) raw rotation
+                    );
+                end;
+
+                posXHere := posX + raw_x;
+                posYHere := posY + raw_y;
+                posZHere := posZ + raw_z;
+                PlaceWinterDecal(r, rWinterDecal, rWrld, wrldEdid, posXHere, posYHere, posZHere, rawr_x, rawr_y, rawr_z, pmScale);
+            end;
+        end;
+        PlaceWinterDecal(r, rWinterDecal, rWrld, wrldEdid, posX, posY, posZ, rotX, rotY, rotZ, scale);
+    end;
+end;
+
+procedure PlaceWinterDecal(r, rWinterDecal, rWrld: IwbElement; wrldEdid: string; posX, posY, posZ, rotX, rotY, rotZ, scale: double);
+var
+    winterDecalFormid, cellRecordId: string;
+
+    position: TwbVector;
+    c: TwbGridCell;
+
+    rCell, nCell, winterDecalRef, base, eScale: IwbElement;
+begin
+    AddMessage(#9 + ShortName(r) + #9 + IntToStr(Round(posX)) + ', ' + IntToStr(Round(posY)) + ', ' + IntToStr(Round(posZ)));
+    position.x := posX;
+    position.y := posY;
+    position.z := posZ;
+    c := wbPositionToGridCell(position);
+    cellRecordId := joWinningCells.O[wrldEdid].O[c.X].S[c.Y];
+    if cellRecordId = '' then Exit;
+
+    rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
+    if not Assigned(rCell) then Exit;
+
+    AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
+    AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
+  	SortMasters(SeasonsMainFile);
+    wbCopyElementToFile(rWrld, SeasonsMainFile, False, True);
+    nCell := wbCopyElementToFile(rCell, SeasonsMainFile, False, True);
+    winterDecalRef := Add(nCell, 'REFR', True);
+    winterDecalFormid := IntToHex(GetLoadOrderFormID(rWinterDecal), 8);
+
+    SetElementEditValues(winterDecalRef, 'DATA\Position\X', posX);
+    SetElementEditValues(winterDecalRef, 'DATA\Position\Y', posY);
+    SetElementEditValues(winterDecalRef, 'DATA\Position\Z', posZ);
+    SetElementEditValues(winterDecalRef, 'DATA\Rotation\X', rotX);
+    SetElementEditValues(winterDecalRef, 'DATA\Rotation\Y', rotY);
+    SetElementEditValues(winterDecalRef, 'DATA\Rotation\Z', rotZ);
+
+    if scale <> 1 then begin
+        eScale := Add(winterDecalRef, 'XSCL', True);
+        SetNativeValue(eScale, scale);
+    end;
+
+    base := ElementByPath(winterDecalRef, 'NAME');
+    SetEditValue(base, winterDecalFormid);
+    AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', Name(r));
+end;
+
 procedure AlterLandHeightsForTheseBases;
 {
     Alters land heights for certain base objects placed near landscape.
@@ -758,14 +952,14 @@ begin
         GetBounds(x1, y1, z1, x2, y2, z2, base);
         alteration := joAlterLandRules.S[RecordFormIdFileId(base)];
         AddMessage('Processing base ' + #9 + Name(base) + #9 + IntToStr(alteration));
-        ProcessBasesThatAlterLand(base, base, alteration, x1, y1, z1, x2, y2, z2);
+        ProcessBasesThatAlterLand(base, base, alteration, x1, y1, z1, x2, y2, z2, False);
     end;
     if bCreateLandscapeHeights then begin
         joLandscapeHeightsAltered.SaveToFile(wbScriptsPath + 'Seasons\LandHeightsAltered.json', False, TEncoding.UTF8, True);
     end;
 end;
 
-function ProcessBasesThatAlterLand(base, fromBase: IwbElement; alteration, x1, y1, z1, x2, y2, z2: integer): boolean;
+function ProcessBasesThatAlterLand(base, fromBase: IwbElement; alteration, x1, y1, z1, x2, y2, z2: integer; bSCOL: boolean): boolean;
 {
     Process a base object to see if it alters land heights.
 }
@@ -781,7 +975,8 @@ begin
         //If so, we need to alter the land heights near the reference.
         r := ReferencedByIndex(base, i);
         if Signature(r) = 'SCOL' then begin
-            ProcessBasesThatAlterLand(r, base, alteration, x1, y1, z1, x2, y2, z2);
+            ProcessBasesThatAlterLand(r, base, alteration, x1, y1, z1, x2, y2, z2, True);
+            // if SCOL, then the next iteration, r becomes the base, and base becomes the fromBase
             continue;
         end;
         if Signature(r) <> 'REFR' then continue;
@@ -799,7 +994,7 @@ begin
 
         // If we got this far, this REFR is in an exterior cell with landscape, and we will need to alter the land heights IF it is close enough to the landscape.
         AddMessage(#9 + 'Processing reference ' + #9 + ShortName(r) + #9 + wrldEdid);
-        AlterLandHeightsForThisRefr(r, base, fromBase, wrldEdid, alteration, x1, y1, z1, x2, y2, z2, rWrld);
+        AlterLandHeightsForThisRefr(r, base, fromBase, wrldEdid, alteration, x1, y1, z1, x2, y2, z2, rWrld, bSCOL);
     end;
 end;
 
@@ -813,23 +1008,19 @@ begin
     z2 := GetElementNativeValues(base, 'OBND\Z2');
 end;
 
-procedure AlterLandHeightsForThisRefr(r, base, fromBase: IwbElement; wrldEdid: string; alteration, x1, y1, z1, x2, y2, z2: integer; rWrld: IwbElement);
+procedure AlterLandHeightsForThisRefr(r, base, fromBase: IwbElement; wrldEdid: string; alteration, x1, y1, z1, x2, y2, z2: integer; rWrld: IwbElement; bSCOL: boolean);
 {
     Alters land heights for a specific reference.
 }
 var
-    bSCOL: boolean;
     i, x1n, y1n, z1n, x2n, y2n, z2n: integer;
-    scale, posX, posY, posZ, rotX, rotY, rotZ, pmScale, pmPosX, pmPosY, pmPosZ, pmRotX, pmRotY, pmRotZ: double;
+    scale, posX, posY, posZ, rotX, rotY, rotZ, pmScale, pmPosX, pmPosY, pmPosZ, pmRotX, pmRotY, pmRotZ,
+    posXHere, posYHere, posZHere, raw_x, raw_y, raw_z, rawr_x, rawr_y, rawr_z: double;
+    onam, baseRecordId: string;
 
-    realBase, scolParts, scolPart, onam, placements, placement: IwbElement;
+    realBase, scolParts, scolPart, placements, placement: IwbElement;
 begin
-    //Determine which object to use for bounds. If the base is a SCOL, we need to use the fromBase instead.
-    if Signature(base) = 'SCOL' then begin
-        realBase := fromBase;
-        bSCOL := True;
-    end else realBase := base;
-
+    // If this was from an scol, r is the placed SCOL reference, base is the SCOL, and fromBase is the underlying STAT
     //Get scale and position of the reference.
     if ElementExists(r, 'XSCL') then scale := GetElementNativeValues(r, 'XSCL') else scale := 1;
     posX := GetElementNativeValues(r, 'DATA\Position\X');
@@ -841,46 +1032,61 @@ begin
 
     //If the object is an SCOL, we need to adjust the position to be the SCOL placement position.
     if bSCOL then begin
-        scolParts := ElementByPath(r, 'Parts');
+        baseRecordId := RecordFormIdFileId(fromBase);
+        scolParts := ElementByPath(base, 'Parts');
         for i := 0 to Pred(ElementCount(scolParts)) do begin
             scolPart := ElementByIndex(scolParts, i);
-            onam := LinksTo(ElementByPath(scolPart, 'ONAM'));
-            if onam = realBase then break;
+            onam := RecordFormIdFileId(LinksTo(ElementByPath(scolPart, 'ONAM')));
+            if SameText(onam, baseRecordId) then begin
+                break;
+            end;
         end;
-        placements := ElementByPath(scolPart, 'Placements');
+        placements := ElementByPath(scolPart, 'DATA');
         for i := 0 to Pred(ElementCount(placements)) do begin
             placement := ElementByIndex(placements, i);
 
-            pmPosX := GetElementNativeValues(placement, 'Position\X');
-            pmPosY := GetElementNativeValues(placement, 'Position\Y');
-            pmPosZ := GetElementNativeValues(placement, 'Position\Z');
+            pmPosX := GetElementNativeValues(placement, 'Position\X') * scale;
+            pmPosY := GetElementNativeValues(placement, 'Position\Y') * scale;
+            pmPosZ := GetElementNativeValues(placement, 'Position\Z') * scale;
             pmRotX := GetElementNativeValues(placement, 'Rotation\X');
             pmRotY := GetElementNativeValues(placement, 'Rotation\Y');
             pmRotZ := GetElementNativeValues(placement, 'Rotation\Z');
-            pmScale := GetElementNativeValues(placement, 'Scale');
-            if ((pmRotX = 0) and (pmRotY = 0) and (pmRotZ = 0)) then begin
+            pmScale := GetElementNativeValues(placement, 'Scale') * scale;
+
+            if ((rotX = 0) and (rotY = 0) and (rotZ = 0)) then begin
                 raw_x := pmPosX;
                 raw_y := pmPosY;
                 raw_z := pmPosZ;
             end else begin
                 rotate_position(
                     pmPosX, pmPosY, pmPosZ,         // initial position
-                    pmRotX, pmRotY, pmRotZ,        // rotation to apply - x y z
+                    rotX, rotY, rotZ,              // rotation to apply - x y z
                     raw_x, raw_y, raw_z           // (output) raw final position
                 );
             end;
 
-            posX := posX + raw_x;
-            posY := posY + raw_y;
-            posZ := posZ + raw_z;
-            scale := scale * pmScale;
-            x1n := Floor(x1 * scale);
-            y1n := Floor(y1 * scale);
-            z1n := Floor(z1 * scale);
-            x2n := Ceil(x2 * scale);
-            y2n := Ceil(y2 * scale);
-            z2n := Ceil(z2 * scale);
-            AlterLandHeightsForThisPlacement(alteration, x1n, y1n, z1n, x2n, y2n, z2n, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, realBase, rWrld);
+            if ((pmRotX = 0) and (pmRotY = 0) and (pmRotZ = 0)) then begin
+                rawr_x := rotX;
+                rawr_Y := rotY;
+                rawr_Z := rotZ;
+            end else begin
+                rotate_rotation(
+                    rotX, rotY, rotZ,                  // initial rotation
+                    pmRotX, pmRotY, pmRotZ,           // rotation to apply - x y z
+                    rawr_x, rawr_y, rawr_z           // (output) raw rotation
+                );
+            end;
+
+            posXHere := posX + raw_x;
+            posYHere := posY + raw_y;
+            posZHere := posZ + raw_z;
+            x1n := Floor(x1 * pmScale);
+            y1n := Floor(y1 * pmScale);
+            z1n := Floor(z1 * pmScale);
+            x2n := Ceil(x2 * pmScale);
+            y2n := Ceil(y2 * pmScale);
+            z2n := Ceil(z2 * pmScale);
+            AlterLandHeightsForThisPlacement(alteration, x1n, y1n, z1n, x2n, y2n, z2n, posXHere, posYHere, posZHere, rawr_x, rawr_y, rawr_z, wrldEdid, realBase, rWrld);
         end;
     end
     else begin
@@ -1567,9 +1773,9 @@ begin
                         column := column2/2;
                         if not ((row = 0) or (row = 32) or (column = 0) or (column = 32)) then continue;
                         tsNormals := SplitString(vertex.EditValues['Normal'], ' ');
-                        nx := FloatToStr((StrToFloatDef(tsNormals[0], 0.003922)*3 + 0.003922)/4);
-                        ny := FloatToStr((StrToFloatDef(tsNormals[1], 0.003922)*3 + 0.003922)/4);
-                        nz := FloatToStr((StrToFloatDef(tsNormals[2], 1)*3 + 1)/4);
+                        nx := FloatToStr((StrToFloatDef(tsNormals[0], 0.003922) + 0.003922)/2);
+                        ny := FloatToStr((StrToFloatDef(tsNormals[1], 0.003922) + 0.003922)/2);
+                        nz := FloatToStr((StrToFloatDef(tsNormals[2], 1) + 1)/2);
                         vertex.EditValues['Normal'] := nx + ' ' + ny + ' ' + nz;
                     end;
                 end;
@@ -2145,43 +2351,6 @@ begin
         if Signature(r) <> 'LAND' then continue;
         Result := r;
         Exit;
-    end;
-end;
-
-function GetCellFromWorldspace(Worldspace: IInterface; GridX, GridY: integer): IInterface;
-var
-    blockidx, subblockidx, cellidx: integer;
-    wrldgrup, block, subblock, cell: IInterface;
-    Grid, GridBlock, GridSubBlock: TwbGridCell;
-    LabelBlock, LabelSubBlock: Cardinal;
-begin
-    Grid := wbGridCell(GridX, GridY);
-    GridSubBlock := wbSubBlockFromGridCell(Grid);
-    LabelSubBlock := wbGridCellToGroupLabel(GridSubBlock);
-    GridBlock := wbBlockFromSubBlock(GridSubBlock);
-    LabelBlock := wbGridCellToGroupLabel(GridBlock);
-
-    wrldgrup := ChildGroup(Worldspace);
-    // iterate over Exterior Blocks
-    for blockidx := 0 to Pred(ElementCount(wrldgrup)) do begin
-        block := ElementByIndex(wrldgrup, blockidx);
-        if GroupLabel(block) <> LabelBlock then Continue;
-        // iterate over SubBlocks
-        for subblockidx := 0 to Pred(ElementCount(block)) do begin
-            subblock := ElementByIndex(block, subblockidx);
-            if GroupLabel(subblock) <> LabelSubBlock then Continue;
-            // iterate over Cells
-            for cellidx := 0 to Pred(ElementCount(subblock)) do begin
-                cell := ElementByIndex(subblock, cellidx);
-                if (Signature(cell) <> 'CELL') or GetIsPersistent(cell) then Continue;
-                if (GetElementNativeValues(cell, 'XCLC\X') = Grid.x) and (GetElementNativeValues(cell, 'XCLC\Y') = Grid.y) then begin
-                    Result := cell;
-                    Exit;
-                end;
-            end;
-            Break;
-        end;
-        Break;
     end;
 end;
 
