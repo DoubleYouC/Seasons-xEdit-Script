@@ -42,7 +42,7 @@ procedure CreateObjects;
     Creates objects.
 }
 begin
-    slPluginFiles := TStringList.Create;
+
     joSeasons := TJsonObject.Create;
     joLandscapeHeights := TJsonObject.Create;
     joLandscapeHeightsAltered := TJsonObject.Create;
@@ -50,14 +50,14 @@ begin
     joAlterLandRules := TJsonObject.Create;
     joUserAlterLandRules := TJsonObject.Create;
     joWinningCells := TJsonObject.Create;
+
     tlLandRecords := TList.Create;
     tlBasesThatAlterLand := TList.Create;
     tlStats := TList.Create;
-    slLandscapeCells := TStringList.Create;
     tlWinterDecals := TList.Create;
 
-    if FileExists(wbScriptsPath + 'Seasons\LandHeightsAlteredPreAlteration.json') then
-        joLandscapeHeightsAltered.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsAlteredPreAlteration.json');
+    slPluginFiles := TStringList.Create;
+    slLandscapeCells := TStringList.Create;
 end;
 
 function Finalize: integer;
@@ -65,18 +65,21 @@ function Finalize: integer;
     This function is called at the end.
 }
 begin
-    slPluginFiles.Free;
+
     joSeasons.Free;
     joAlterLandRules.Free;
     joLandFiles.Free;
-    tlLandRecords.Free;
-    tlBasesThatAlterLand.Free;
-    tlStats.Free;
     joLandscapeHeights.Free;
     joLandscapeHeightsAltered.Free;
     joWinningCells.Free;
-    slLandscapeCells.Free;
+
+    tlLandRecords.Free;
+    tlBasesThatAlterLand.Free;
+    tlStats.Free;
     tlWinterDecals.Free;
+
+    slPluginFiles.Free;
+    slLandscapeCells.Free;
 
     if bSaveUserRules and bUserAlterLandRulesChanged then begin
         AddMessage('Saving ' + IntToStr(joUserAlterLandRules.Count) + ' object snow alteration user rule(s) to ' + wbDataPath + 'Seasons\AlterLandUserRules.json');
@@ -111,8 +114,9 @@ begin
     AddMessage('UI scale: ' + IntToStr(uiScale));
 
     CreateObjects;
+    if FileExists(wbScriptsPath + 'Seasons\LandHeightsAlteredPreAlteration.json') then
+        joLandscapeHeightsAltered.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsAlteredPreAlteration.json');
     FetchRules;
-
 
     if not MainMenuForm then begin
         Result := 1;
@@ -136,8 +140,8 @@ begin
     //     FixLandscapeSeams;
     // end;
     // ProcessLandRecords;
-    ProcessStats;
-    CreateWinterDecals;
+    // ProcessStats;
+    // CreateWinterDecals;
 end;
 
 // ----------------------------------------------------
@@ -394,12 +398,13 @@ begin
     end;
 end;
 
-function EditAlterLandRuleForm(var key: string; var alteration: integer; keyReadOnly: boolean): boolean;
+function EditAlterLandRuleForm(var key, edid: string; var alteration: integer; keyReadOnly: boolean): boolean;
 var
     frmRule: TForm;
     pnl: TPanel;
     btnOk, btnCancel: TButton;
-    edEditorID, edKey, edAlteration: TEdit;
+    edAlteration: TEdit;
+    cbEditorID, cbKey: TComboBox;
 begin
     frmRule := TForm.Create(nil);
     try
@@ -412,32 +417,33 @@ begin
         frmRule.OnKeyDown := FormKeyDown;
         frmRule.OnClose := frmAlterLandRuleFormClose;
 
-        edEditorID := TEdit.Create(frmRule);
-        edEditorID.Parent := frmRule;
-        edEditorID.Name := 'edEditorID';
-        edEditorID.Left := 120;
-        edEditorID.Top := 12;
-        edEditorID.Width := frmRule.Width - 150;
-        edEditorID.Text := EditorID(GetRecordFromFormIdFileId(key));
-        edEditorID.ReadOnly := True;
-        CreateLabel(frmRule, 16, edEditorID.Top + 4, 'Editor ID');
+        cbEditorID := TComboBox.Create(frmRule);
+        cbEditorID.Parent := frmRule;
+        cbEditorID.Name := 'cbEditorID';
+        cbEditorID.Left := 120;
+        cbEditorID.Top := 12;
+        cbEditorID.Width := frmRule.Width - 150;
+        cbEditorID.Style := csDropDown;
+        CreateLabel(frmRule, 16, cbEditorID.Top + 4, 'Editor ID');
 
-        edKey := TEdit.Create(frmRule);
-        edKey.Parent := frmRule;
-        edKey.Name := 'edKey';
-        edKey.Left := 120;
-        edKey.Top := edEditorID.Top + 28;
-        edKey.Width := frmRule.Width - 150;
-        edKey.ReadOnly := keyReadOnly;
-        CreateLabel(frmRule, 16, edKey.Top + 4, 'ID');
+        cbKey := TComboBox.Create(frmRule);
+        cbKey.Parent := frmRule;
+        cbKey.Name := 'cbKey';
+        cbKey.Left := 120;
+        cbKey.Top := cbEditorID.Top + 28;
+        cbKey.Width := frmRule.Width - 150;
+
+        cbKey.OnExit := KeyChange;
+        cbKey.Style := csDropDown;
+        CreateLabel(frmRule, 16, cbKey.Top + 4, 'ID');
 
         edAlteration := TEdit.Create(frmRule);
         edAlteration.Parent := frmRule;
         edAlteration.Name := 'edAlteration';
         edAlteration.Left := 120;
-        edAlteration.Top := edKey.Top + 28;
+        edAlteration.Top := cbKey.Top + 28;
         edAlteration.Width := frmRule.Width - 150;
-        CreateLabel(frmRule, 16, edAlteration.Top + 4, 'LOD4');
+        CreateLabel(frmRule, 16, edAlteration.Top + 4, 'Alteration');
 
         btnOk := TButton.Create(frmRule);
         btnOk.Parent := frmRule;
@@ -465,12 +471,22 @@ begin
         frmRule.ScaleBy(uiScale, 100);
         frmRule.Font.Size := 8;
 
-        edKey.Text := key;
+        cbEditorID.Items.Add(edid);
+        cbEditorID.ItemIndex := 0;
+        cbEditorID.Enabled := False;
+
+        cbKey.Items.Add(key);
+        cbKey.ItemIndex := 0;
+        cbKey.Enabled := keyReadOnly;
+
         edAlteration.Text := IntToStr(alteration);
 
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         if frmRule.ShowModal <> mrOk then Exit;
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-        key := edKey.Text;
+        key := cbKey.Text;
+        edid := cbEditorID.Text;
         alteration := StrToInt(edAlteration.Text);
         Result := True;
     finally
@@ -487,9 +503,35 @@ var
     key: string;
 begin
     key := joAlterLandRules.Names[Item.Index];
-    Item.Caption := EditorID(GetRecordFromFormIdFileId(key));
+    Item.Caption := joAlterLandRules.O[key].S['editorid'];
     Item.SubItems.Add(key);
-    Item.SubItems.Add(joAlterLandRules.S[key]);
+    Item.SubItems.Add(joAlterLandRules.O[key].S['alteration']);
+end;
+
+procedure KeyChange(Sender: TObject);
+var
+    bSuccess: boolean;
+    key, edid: string;
+    cbKey, cbEditorID: TComboBox;
+    frm: TForm;
+begin
+    bSuccess := False;
+    cbKey := TComboBox(Sender);
+    frm := GetParentForm(cbKey);
+    cbEditorID := TComboBox(frm.FindComponent('cbEditorID'));
+    key := cbKey.Text;
+    if ContainsText(key, ':') then begin
+        try
+            edid := EditorID(GetRecordFromFormIdFileId(key));
+            bSuccess := True;
+        except
+            bSuccess := False;
+        end;
+    end else begin
+        if IsValidHex(key) then ShowMessage('yes');
+    end;
+
+    cbEditorID.Text := edid;
 end;
 
 procedure lvAlterLandRulesDblClick(Sender: TObject);
@@ -506,16 +548,19 @@ procedure AlterLandRulesMenuAddClick(Sender: TObject);
 }
 var
     idx, alteration: integer;
-    key: string;
+    key, edid: string;
 begin
     key := '';
-    alteration := -32;
+    edid := '';
+    alteration := 16;
 
-    if not EditAlterLandRuleForm(key, alteration, False) then Exit;
+    if not EditAlterLandRuleForm(key, edid, alteration, True) then Exit;
 
-    joAlterLandRules.S[key] := alteration;
+    joAlterLandRules.O[key].S['editorid'] := edid;
+    joAlterLandRules.O[key].S['alteration'] := alteration;
 
-    joUserAlterLandRules.S[key] := joAlterLandRules.S[key];
+    joUserAlterLandRules.O[key].S['editorid'] := edid;
+    joUserAlterLandRules.O[key].S['alteration'] := alteration;
     bUserAlterLandRulesChanged := True;
 
     lvAlterLandRules.Items.Count := joAlterLandRules.Count;
@@ -528,19 +573,22 @@ procedure AlterLandRulesMenuEditClick(Sender: TObject);
 }
 var
     idx, alteration: integer;
-    key: string;
+    key, edid: string;
 begin
     if not Assigned(lvAlterLandRules.Selected) then Exit;
     idx := lvAlterLandRules.Selected.Index;
 
     key := joAlterLandRules.Names[idx];
-    alteration := joAlterLandRules.S[key];
+    edid := joAlterLandRules.O[key].S['editorid'];
+    alteration := joAlterLandRules.O[key].S['alteration'];
 
-    if not EditAlterLandRuleForm(key, alteration, True) then Exit;
+    if not EditAlterLandRuleForm(key, edid, alteration, False) then Exit;
 
-    joAlterLandRules.S[key] := alteration;
+    joAlterLandRules.O[key].S['editorid'] := edid;
+    joAlterLandRules.O[key].S['alteration'] := alteration;
 
-    joUserAlterLandRules.S[key] := joAlterLandRules.S[key];
+    joUserAlterLandRules.O[key].S['editorid'] := edid;
+    joUserAlterLandRules.O[key].S['alteration'] := alteration;
     bUserAlterLandRulesChanged := True;
 
     lvAlterLandRules.Items.Count := joAlterLandRules.Count;
@@ -565,7 +613,7 @@ begin
         bUserAlterLandRulesChanged := True;
         lvAlterLandRules.Items.Count := joAlterLandRules.Count;
         lvAlterLandRules.Refresh;
-    end else MessageDlg('This rule cannot be deleted.', mtInformation, [mbOk], 0);
+    end else MessageDlg('This rule cannot be deleted. You may set the alteration to 0' + #13#10 + 'if your really want it to not be used.', mtInformation, [mbOk], 0);
 end;
 
 procedure frmAlterLandRuleFormClose(Sender: TObject; var Action: TCloseAction);
@@ -574,7 +622,7 @@ procedure frmAlterLandRuleFormClose(Sender: TObject; var Action: TCloseAction);
 }
 begin
     if TForm(Sender).ModalResult <> mrOk then Exit;
-    if TEdit(TForm(Sender).FindComponent('edKey')).Text = '' then begin
+    if TComboBox(TForm(Sender).FindComponent('cbKey')).Text = '' then begin
         MessageDlg('ID must not be empty.', mtInformation, [mbOk], 0);
         Action := caNone;
     end;
@@ -695,6 +743,7 @@ begin
             recordid := RecordFormIdFileId(r);
             tlStats.Add(r);
             if not joAlterLandRules.Contains(recordid) then continue;
+            AddMessage('Alteration rule found for ' + EditorID(r));
             tlBasesThatAlterLand.Add(r);
         end;
 
@@ -705,6 +754,7 @@ begin
             if ReferencedByCount(r) = 0 then continue;
             recordid := RecordFormIdFileId(r);
             if not joAlterLandRules.Contains(recordid) then continue;
+            AddMessage('Alteration rule found for ' + EditorID(r));
             tlBasesThatAlterLand.Add(r);
         end;
 
@@ -715,6 +765,7 @@ begin
             if ReferencedByCount(r) = 0 then continue;
             recordid := RecordFormIdFileId(r);
             if not joAlterLandRules.Contains(recordid) then continue;
+            AddMessage('Alteration rule found for ' + EditorID(r));
             tlBasesThatAlterLand.Add(r);
         end;
 
@@ -725,6 +776,7 @@ begin
             if ReferencedByCount(r) = 0 then continue;
             recordid := RecordFormIdFileId(r);
             if not joAlterLandRules.Contains(recordid) then continue;
+            AddMessage('Alteration rule found for ' + EditorID(r));
             tlBasesThatAlterLand.Add(r);
         end;
 
@@ -735,6 +787,7 @@ begin
             if ReferencedByCount(r) = 0 then continue;
             recordid := RecordFormIdFileId(r);
             if not joAlterLandRules.Contains(recordid) then continue;
+            AddMessage('Alteration rule found for ' + EditorID(r));
             tlBasesThatAlterLand.Add(r);
         end;
 
@@ -745,6 +798,7 @@ begin
             if ReferencedByCount(r) = 0 then continue;
             recordid := RecordFormIdFileId(r);
             if not joAlterLandRules.Contains(recordid) then continue;
+            AddMessage('Alteration rule found for ' + EditorID(r));
             tlBasesThatAlterLand.Add(r);
         end;
 
@@ -945,21 +999,24 @@ procedure AlterLandHeightsForTheseBases;
 }
 var
     i, alteration, x1, y1, z1, x2, y2, z2: integer;
+    baseRecordId: string;
+
     base: IwbElement;
 begin
     for i:= 0 to Pred(tlBasesThatAlterLand.Count) do begin
         base := ObjectToElement(tlBasesThatAlterLand[i]);
         GetBounds(x1, y1, z1, x2, y2, z2, base);
-        alteration := joAlterLandRules.S[RecordFormIdFileId(base)];
+        baseRecordId := RecordFormIdFileId(base);
+        alteration := joAlterLandRules.O[baseRecordId].S['alteration'];
         AddMessage('Processing base ' + #9 + Name(base) + #9 + IntToStr(alteration));
-        ProcessBasesThatAlterLand(base, base, alteration, x1, y1, z1, x2, y2, z2, False);
+        ProcessBasesThatAlterLand(base, base, alteration, x1, y1, z1, x2, y2, z2, False, baseRecordId);
     end;
     if bCreateLandscapeHeights then begin
         joLandscapeHeightsAltered.SaveToFile(wbScriptsPath + 'Seasons\LandHeightsAltered.json', False, TEncoding.UTF8, True);
     end;
 end;
 
-function ProcessBasesThatAlterLand(base, fromBase: IwbElement; alteration, x1, y1, z1, x2, y2, z2: integer; bSCOL: boolean): boolean;
+function ProcessBasesThatAlterLand(base, fromBase: IwbElement; alteration, x1, y1, z1, x2, y2, z2: integer; bSCOL: boolean; baseRecordId: string): boolean;
 {
     Process a base object to see if it alters land heights.
 }
@@ -975,7 +1032,7 @@ begin
         //If so, we need to alter the land heights near the reference.
         r := ReferencedByIndex(base, i);
         if Signature(r) = 'SCOL' then begin
-            ProcessBasesThatAlterLand(r, base, alteration, x1, y1, z1, x2, y2, z2, True);
+            ProcessBasesThatAlterLand(r, base, alteration, x1, y1, z1, x2, y2, z2, True, baseRecordId);
             // if SCOL, then the next iteration, r becomes the base, and base becomes the fromBase
             continue;
         end;
@@ -993,8 +1050,10 @@ begin
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
         // If we got this far, this REFR is in an exterior cell with landscape, and we will need to alter the land heights IF it is close enough to the landscape.
-        AddMessage(#9 + 'Processing reference ' + #9 + ShortName(r) + #9 + wrldEdid);
-        AlterLandHeightsForThisRefr(r, base, fromBase, wrldEdid, alteration, x1, y1, z1, x2, y2, z2, rWrld, bSCOL);
+        alterationRefr := joAlterLandRules.O[baseRecordId].O['references'].O[RecordFormIdFileId(r)].S['alteration'];
+        if alterationRefr = '' then alterationRefr := alteration;
+        AddMessage(#9 + 'Processing reference ' + #9 + ShortName(r) + #9 + wrldEdid + #9 + IntToStr(alterationRefr));
+        AlterLandHeightsForThisRefr(r, base, fromBase, wrldEdid, alterationRefr, x1, y1, z1, x2, y2, z2, rWrld, bSCOL);
     end;
 end;
 
@@ -1008,7 +1067,7 @@ begin
     z2 := GetElementNativeValues(base, 'OBND\Z2');
 end;
 
-procedure AlterLandHeightsForThisRefr(r, base, fromBase: IwbElement; wrldEdid: string; alteration, x1, y1, z1, x2, y2, z2: integer; rWrld: IwbElement; bSCOL: boolean);
+procedure AlterLandHeightsForThisRefr(r, base, fromBase: IwbElement; wrldEdid: string; alterationRefr, x1, y1, z1, x2, y2, z2: integer; rWrld: IwbElement; bSCOL: boolean);
 {
     Alters land heights for a specific reference.
 }
@@ -1086,7 +1145,7 @@ begin
             x2n := Ceil(x2 * pmScale);
             y2n := Ceil(y2 * pmScale);
             z2n := Ceil(z2 * pmScale);
-            AlterLandHeightsForThisPlacement(alteration, x1n, y1n, z1n, x2n, y2n, z2n, posXHere, posYHere, posZHere, rawr_x, rawr_y, rawr_z, wrldEdid, realBase, rWrld);
+            AlterLandHeightsForThisPlacement(alterationRefr, x1n, y1n, z1n, x2n, y2n, z2n, posXHere, posYHere, posZHere, rawr_x, rawr_y, rawr_z, wrldEdid, realBase, rWrld);
         end;
     end
     else begin
@@ -1096,11 +1155,11 @@ begin
         x2n := Ceil(x2 * scale);
         y2n := Ceil(y2 * scale);
         z2n := Ceil(z2 * scale);
-        AlterLandHeightsForThisPlacement(alteration, x1n, y1n, z1n, x2n, y2n, z2n, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, realBase, rWrld);
+        AlterLandHeightsForThisPlacement(alterationRefr, x1n, y1n, z1n, x2n, y2n, z2n, posX, posY, posZ, rotX, rotY, rotZ, wrldEdid, realBase, rWrld);
     end;
 end;
 
-procedure AlterLandHeightsForThisPlacement(alteration, x1n, y1n, z1n, x2n, y2n, z2n: integer; posX, posY, posZ, rotX, rotY, rotZ: double; wrldEdid: string; realBase, rWrld: IwbElement);
+procedure AlterLandHeightsForThisPlacement(alterationRefr, x1n, y1n, z1n, x2n, y2n, z2n: integer; posX, posY, posZ, rotX, rotY, rotZ: double; wrldEdid: string; realBase, rWrld: IwbElement);
 {
     Alters land heights for a specific placement of a base object.
 }
@@ -1223,7 +1282,7 @@ begin
                 if column = column_closest then column_bias := 1;
                 if row = row_closest then row_bias := 1;
 
-                alterationHere := Round((outskirts_bias * row_bias * column_bias * alteration)/SCALE_FACTOR_TERRAIN) * SCALE_FACTOR_TERRAIN;
+                alterationHere := Round((outskirts_bias * row_bias * column_bias * alterationRefr)/SCALE_FACTOR_TERRAIN) * SCALE_FACTOR_TERRAIN;
                 if alterationHere = 0 then continue;
 
                 if previousAlteration <> '' then begin
@@ -1773,9 +1832,9 @@ begin
                         column := column2/2;
                         if not ((row = 0) or (row = 32) or (column = 0) or (column = 32)) then continue;
                         tsNormals := SplitString(vertex.EditValues['Normal'], ' ');
-                        nx := FloatToStr((StrToFloatDef(tsNormals[0], 0.003922) + 0.003922)/2);
-                        ny := FloatToStr((StrToFloatDef(tsNormals[1], 0.003922) + 0.003922)/2);
-                        nz := FloatToStr((StrToFloatDef(tsNormals[2], 1) + 1)/2);
+                        nx := FloatToStr((StrToFloatDef(tsNormals[0], 0.003922)*2 + 0.003922)/3);
+                        ny := FloatToStr((StrToFloatDef(tsNormals[1], 0.003922)*2 + 0.003922)/3);
+                        nz := FloatToStr((StrToFloatDef(tsNormals[2], 1)*2 + 1)/3);
                         vertex.EditValues['Normal'] := nx + ' ' + ny + ' ' + nz;
                     end;
                 end;
@@ -2194,8 +2253,8 @@ procedure FetchRules;
     Loads the Rule JSON files.
 }
 var
-    i, c: integer;
-    f, j, key: string;
+    a, c, i: integer;
+    f, j, key, refKey: string;
 begin
     for i := 0 to Pred(FileCount) do begin
         f := GetFileName(FileByIndex(i));
@@ -2213,10 +2272,14 @@ begin
         joUserAlterLandRules.LoadFromResource(j);
         for c := 0 to Pred(joUserAlterLandRules.Count) do begin
             key := joUserAlterLandRules.Names[c];
-            joAlterLandRules.S[key] := joUserAlterLandRules.S[key];
+            joAlterLandRules.O[key].S['editorid'] := joUserAlterLandRules.O[key].S['editorid'];
+            joAlterLandRules.O[key].S['alteration'] := joUserAlterLandRules.O[key].S['alteration'];
+            for a := 0 to Pred(joUserAlterLandRules.O[key].O['references'].Count) do begin
+                refKey := joUserAlterLandRules.O[key].O['references'].Names[a];
+                joAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := joUserAlterLandRules.O[key].O['references'].O[refKey].S['alteration'];
+            end;
         end;
     end;
-    SortAlterLandJSONObjectKeys;
 end;
 
 procedure LoadRules(f: string);
@@ -2225,7 +2288,7 @@ procedure LoadRules(f: string);
 }
 var
     c, a: integer;
-    j, key: string;
+    j, key, refKey: string;
 
     sub: TJsonObject;
 begin
@@ -2258,7 +2321,12 @@ begin
             sub.LoadFromResource(j);
             for c := 0 to Pred(sub.Count) do begin
                 key := sub.Names[c];
-                joAlterLandRules.S[key] := sub.S[key];
+                joAlterLandRules.O[key].S['editorid'] := sub.O[key].S['editorid'];
+                joAlterLandRules.O[key].S['alteration'] := sub.O[key].S['alteration'];
+                for a := 0 to Pred(sub.O[key].O['references'].Count) do begin
+                    refKey := sub.O[key].O['references'].Names[a];
+                    joAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := sub.O[key].O['references'].O[refKey].S['alteration'];
+                end;
             end;
         finally
             sub.Free;
@@ -2684,6 +2752,28 @@ begin
         SortedKeys.Free;
         NewJSONObj.Free;
     end;
+end;
+
+function IsHexChar(C: Char): Boolean;
+var
+    hexchars: string;
+    i: integer;
+begin
+    hexchars := '0123456789abcdefABCDEF';
+    Result := (Pos(C, hexchars) > 0);
+end;
+
+function IsValidHex(s: string): Boolean;
+var
+    i: Integer;
+    charHere: char;
+begin
+    Result := (s <> '');
+    for i := 1 to Length(s) do
+        if not IsHexChar(Copy(s, i, 1)) then begin
+            Result := False;
+            break;
+        end;
 end;
 
 procedure SortAlterLandJSONObjectKeys;
