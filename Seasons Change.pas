@@ -19,7 +19,7 @@ var
 
     slPluginFiles, slLandscapeCells: TStringList;
     tlLandRecords, tlBasesThatAlterLand, tlStats, tlWinterDecals: TList;
-    joWinningCells, joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules: TJsonObject;
+    joWinningCells, joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules, joLoadOrderFormIDFileID: TJsonObject;
 
     lvAlterLandRules: TListView;
     btnAlterLandRuleOk, btnAlterLandRuleCancel: TButton;
@@ -50,6 +50,7 @@ begin
     joAlterLandRules := TJsonObject.Create;
     joUserAlterLandRules := TJsonObject.Create;
     joWinningCells := TJsonObject.Create;
+    joLoadOrderFormIDFileID := TJsonObject.Create;
 
     tlLandRecords := TList.Create;
     tlBasesThatAlterLand := TList.Create;
@@ -72,6 +73,7 @@ begin
     joLandscapeHeights.Free;
     joLandscapeHeightsAltered.Free;
     joWinningCells.Free;
+    joLoadOrderFormIDFileID.Free;
 
     tlLandRecords.Free;
     tlBasesThatAlterLand.Free;
@@ -410,7 +412,7 @@ begin
     try
         frmRule.Caption := 'Object Landscape Snow Alteration Rule';
         frmRule.Width := 600;
-        frmRule.Height := 300;
+        frmRule.Height := 180;
         frmRule.Position := poMainFormCenter;
         frmRule.BorderStyle := bsDialog;
         frmRule.KeyPreview := True;
@@ -467,7 +469,7 @@ begin
         pnl.Width := frmRule.Width - 32;
         pnl.Height := 2;
 
-        frmRule.Height := btnOk.Top + (4 * btnOk.Height);
+        frmRule.Height := btnOk.Top + (3 * btnOk.Height);
         frmRule.ScaleBy(uiScale, 100);
         frmRule.Font.Size := 8;
 
@@ -511,14 +513,21 @@ end;
 procedure KeyChange(Sender: TObject);
 var
     bSuccess: boolean;
-    key, edid: string;
+    key, edid, fileName, fileFormId, recordId, baseRecordId: string;
+    formid: cardinal;
+
+    f: IwbFile;
+    r, base: IwbElement;
+
     cbKey, cbEditorID: TComboBox;
+    edAlteration: TEdit;
     frm: TForm;
 begin
     bSuccess := False;
     cbKey := TComboBox(Sender);
     frm := GetParentForm(cbKey);
     cbEditorID := TComboBox(frm.FindComponent('cbEditorID'));
+    edAlteration := TEdit(frm.FindComponent('edAlteration'));
     key := cbKey.Text;
     if ContainsText(key, ':') then begin
         try
@@ -528,10 +537,34 @@ begin
             bSuccess := False;
         end;
     end else begin
-        if IsValidHex(key) then ShowMessage('yes');
+        if IsValidHex(key) then begin
+            formid := '$' + key;
+            f := GetFileFromLoadOrderFormID(formid);
+            if Assigned(f) then begin
+                fileName := GetFileName(f);
+                fileFormId := IntToHex(LoadOrderFormIDtoFileFormID(f, key), 8);
+                recordId := fileFormId + ':' + fileName;
+                r := GetRecordFromFormIdFileId(recordId);
+                if Assigned(r) then begin
+                    if Signature(r) = 'REFR' then begin
+                        base := LinksTo(ElementByPath(r, 'NAME'));
+                        baseRecordId := RecordFormIdFileId(base);
+                        cbKey.Text := baseRecordId;
+                        edid := EditorID(base);
+                        bSuccess := True;
+                        if joAlterLandRules.Contains(baseRecordId) then begin
+                            edAlteration.Text := joAlterLandRules.O[baseRecordId].S['alteration'];
+                        end;
+                    end else begin
+                        edid := EditorID(r);
+                        bSuccess := True;
+                    end;
+                end;
+            end;
+        end;
     end;
 
-    cbEditorID.Text := edid;
+    if bSuccess then cbEditorID.Text := edid;
 end;
 
 procedure lvAlterLandRulesDblClick(Sender: TObject);
@@ -2254,16 +2287,25 @@ procedure FetchRules;
 }
 var
     a, c, i: integer;
-    f, j, key, refKey: string;
+    fileName, j, key, refKey, fileLoadOrderHexPrefix: string;
+
+    f: IwbFile;
 begin
     for i := 0 to Pred(FileCount) do begin
-        f := GetFileName(FileByIndex(i));
-        if f = 'Fallout4.exe' then continue;
-        if f = sSeasonsFileName then begin
-            SeasonsMainFile := FileByIndex(i);
+        f := FileByIndex(i);
+        fileName := GetFileName(f);
+        if fileName = 'Fallout4.exe' then continue;
+        if fileName = sSeasonsFileName then begin
+            SeasonsMainFile := f;
         end;
-        slPluginFiles.Add(f);
-        LoadRules(f);
+        slPluginFiles.Add(fileName);
+        LoadRules(fileName);
+
+        if not IsEslFile(f) then continue;
+        //Need to map the load order hex prefixes for ESLs so we can match load order formids to them.
+        fileLoadOrderHexPrefix := GetLoadOrderFormIDFileIDHexPrefix(f);
+        if not Assigned(fileLoadOrderHexPrefix) then continue;
+        joLoadOrderFormIDFileID.S[fileLoadOrderHexPrefix] := fileName;
     end;
 
     j := 'Seasons\AlterLandUserRules.json';
@@ -2812,6 +2854,77 @@ begin
         joEDIDKeyMap.Free;
         NewJSONObj.Free;
     end;
+end;
+
+function GetFileFromLoadOrderFormID(formid: cardinal): IwbFile;
+{
+    Attempts to get the file from a load order formid.
+    Requires joLoadOrderFormIDFileID was made.
+}
+var
+    loadOrderIdx, eslIdx: cardinal;
+begin
+    Result := nil;
+
+    loadOrderIdx := ($FF000000 and formid) shr 24;
+    if (loadOrderIdx = $FE) then begin
+        //ESL
+        eslIdx := (formid and $FFFFF000) shr 12;
+        Result := FileByName(joLoadOrderFormIDFileID.S[IntToHex(eslIdx, 5)]);
+    end else begin
+        Result := FileByLoadOrderFileID(loadOrderIdx);
+    end;
+end;
+
+function GetLoadOrderFormIDFileIDHexPrefix(f: IwbFile): string;
+{
+    Given a file, finds the load order formid prefix in hex.
+}
+var
+    loadOrderIdx, eslIdx, loadOrderFormId: cardinal;
+    e: IwbElement;
+begin
+    Result := nil;
+    e := GetFirstMasteredElement(f);
+    if not Assigned(e) then Exit;
+    loadOrderFormId := GetLoadOrderFormID(e);
+    loadOrderIdx := ($FF000000 and loadOrderFormId) shr 24;
+    if (loadOrderIdx = $FE) then begin
+        eslIdx := (loadOrderFormId and $FFFFF000) shr 12;
+        Result := IntToHex(eslIdx, 5);
+    end else begin
+        Result := IntToHex(loadOrderIdx, 2);
+    end;
+end;
+
+function GetFirstMasteredElement(f: IwbFile): IwbElement;
+{
+    Returns the first mastered element in a file.
+}
+var
+    i, j: integer;
+
+    e, g: IwbElement;
+begin
+    Result := nil;
+    //We start with 1 since the element at index 0 is the file header.
+    for i := 1 to Pred(ElementCount(f)) do begin
+        g := ElementByIndex(f, i);
+        if SameText(Signature(g), 'GRUP') then begin
+            for j := 0 to Pred(ElementCount(g)) do begin
+                e := ElementByIndex(g, j);
+                if IsMaster(e) then begin
+                    Result := e;
+                    Exit;
+                end;
+            end;
+        end;
+    end;
+end;
+
+function IsEslFile(f: IwbFile): boolean;
+begin
+    Result := (GetElementEditValues(ElementByIndex(f, 0), 'Record Header\Record Flags\ESL') = '1');
 end;
 
 
