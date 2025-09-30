@@ -121,6 +121,7 @@ begin
     FetchRules;
 
     if not MainMenuForm then begin
+        Finalize;
         Result := 1;
         Exit;
     end;
@@ -163,6 +164,7 @@ var
     picSeasons: TPicture;
     chkCreateTestPlugin, chkCreateLandscapeHeights, chkCreateLandscapeSnowMeshes, chkPlaceLandscapeSnow, chkLoadLastLandHeights: TCheckBox;
 begin
+    Result := False;
     frm := TForm.Create(nil);
     try
         frm.Caption := 'Seasons Change';
@@ -171,7 +173,6 @@ begin
         frm.Position := poMainFormCenter;
         frm.BorderStyle := bsDialog;
         frm.KeyPreview := True;
-        frm.OnClose := frmOptionsFormClose;
         frm.OnKeyDown := FormKeyDown;
 
         picSeasons := TPicture.Create;
@@ -280,17 +281,14 @@ begin
         chkPlaceLandscapeSnow.Checked := bPlaceLandscapeSnow;
         chkLoadLastLandHeights.Checked := bLoadPreviousLandHeights;
 
-        if frm.ShowModal <> mrOk then begin
-            Result := False;
-            Exit;
-        end else Result := True;
+        if frm.ShowModal <> mrOk then Exit;
 
         bCreateTestPlugin := chkCreateTestPlugin.Checked;
         bCreateLandscapeHeights := chkCreateLandscapeHeights.Checked;
         bCreateLandscapeSnowMeshes := chkCreateLandscapeSnowMeshes.Checked;
         bPlaceLandscapeSnow := chkPlaceLandscapeSnow.Checked;
         bLoadPreviousLandHeights := chkLoadLastLandHeights.Checked;
-
+        Result := True;
     finally
         frm.Free;
     end;
@@ -321,6 +319,7 @@ var
     lbl: TLabel;
     frm: TForm;
 begin
+    Result := False;
     frm := TForm.Create(nil);
     try
         frm.Caption := 'Rule Editor';
@@ -335,6 +334,7 @@ begin
 
         lvAlterLandRules := TListView.Create(frm);
         lvAlterLandRules.Parent := frm;
+        lvAlterLandRules.Name := 'ListView';
 
         lvAlterLandRules.Top := 24;
         lvAlterLandRules.Width := frm.Width - 36;
@@ -373,12 +373,14 @@ begin
 
         btnAlterLandRuleOk := TButton.Create(frm);
         btnAlterLandRuleOk.Parent := frm;
+        btnAlterLandRuleOk.Name := 'OK';
         btnAlterLandRuleOk.Caption := 'OK';
         btnAlterLandRuleOk.ModalResult := mrOk;
         btnAlterLandRuleOk.Top := lvAlterLandRules.Height + lvAlterLandRules.Top + 8;
 
         btnAlterLandRuleCancel := TButton.Create(frm);
         btnAlterLandRuleCancel.Parent := frm;
+        btnAlterLandRuleCancel.Name := 'Cancel';
         btnAlterLandRuleCancel.Caption := 'Cancel';
         btnAlterLandRuleCancel.ModalResult := mrCancel;
         btnAlterLandRuleCancel.Top := btnAlterLandRuleOk.Top;
@@ -389,12 +391,9 @@ begin
         frm.ScaleBy(uiScale, 100);
         frm.Font.Size := 8;
 
-        if frm.ShowModal <> mrOk then begin
-            Result := False;
-            Exit;
-        end
-        else Result := True;
+        if frm.ShowModal <> mrOk then Exit;
 
+        Result := True;
     finally
         frm.Free;
     end;
@@ -404,10 +403,11 @@ function EditAlterLandRuleForm(var key, edid: string; var alteration: integer; k
 var
     frmRule: TForm;
     pnl: TPanel;
-    btnOk, btnCancel: TButton;
+    btnOk, btnCancel, btnReferences: TButton;
     edAlteration: TEdit;
     cbEditorID, cbKey: TComboBox;
 begin
+    Result := False;
     frmRule := TForm.Create(nil);
     try
         frmRule.Caption := 'Object Landscape Snow Alteration Rule';
@@ -445,19 +445,30 @@ begin
         edAlteration.Left := 120;
         edAlteration.Top := cbKey.Top + 28;
         edAlteration.Width := frmRule.Width - 150;
+        edAlteration.OnKeyPress := alterationValidation;
         CreateLabel(frmRule, 16, edAlteration.Top + 4, 'Alteration');
 
         btnOk := TButton.Create(frmRule);
         btnOk.Parent := frmRule;
+        btnOk.Name := 'OK';
         btnOk.Caption := 'OK';
         btnOk.ModalResult := mrOk;
         btnOk.Top := edAlteration.Top + (2 * edAlteration.Height);
 
         btnCancel := TButton.Create(frmRule);
         btnCancel.Parent := frmRule;
+        btnCancel.Name := 'Cancel';
         btnCancel.Caption := 'Cancel';
         btnCancel.ModalResult := mrCancel;
         btnCancel.Top := btnOk.Top;
+
+        btnReferences := TButton.Create(frmRule);
+        btnReferences.Parent := frmRule;
+        btnReferences.Name := 'btnReferences';
+        btnReferences.Caption := 'References';
+        btnReferences.OnClick := ReferenceRules;
+        btnReferences.Top := btnOk.Top;
+        btnReferences.Left := 16;
 
         btnOk.Left := frmRule.Width - btnOk.Width - btnCancel.Width - 32;
         btnCancel.Left := btnOk.Left + btnOk.Width + 8;
@@ -480,6 +491,8 @@ begin
         cbKey.Items.Add(key);
         cbKey.ItemIndex := 0;
         cbKey.Enabled := keyReadOnly;
+
+        if SameText(cbKey.Text, '') then btnReferences.Enabled := False;
 
         edAlteration.Text := IntToStr(alteration);
 
@@ -510,6 +523,21 @@ begin
     Item.SubItems.Add(joAlterLandRules.O[key].S['alteration']);
 end;
 
+procedure alterationValidation(Sender: TObject; var Key: Char);
+var
+    validChars: string;
+
+    edAlteration: TEdit;
+begin
+    if Key = #8 then Exit;
+    validChars := '0123456789';
+    if Pos(Key, validChars) > 0 then Exit;
+    if Key <> '-' then Key := #0;
+    edAlteration := TEdit(Sender);
+    if (edAlteration.SelStart <> 0) or (Pos('-', edAlteration.Text) > 0) then
+        Key := #0;
+end;
+
 procedure KeyChange(Sender: TObject);
 var
     bSuccess: boolean;
@@ -522,6 +550,7 @@ var
     cbKey, cbEditorID: TComboBox;
     edAlteration: TEdit;
     frm: TForm;
+    btnReferences: TButton;
 begin
     bSuccess := False;
     cbKey := TComboBox(Sender);
@@ -554,7 +583,8 @@ begin
                         bSuccess := True;
                         if joAlterLandRules.Contains(baseRecordId) then begin
                             edAlteration.Text := joAlterLandRules.O[baseRecordId].S['alteration'];
-                        end;
+                            ShowMessage('Found an existing base object rule for this reference.' + #13#10 + 'If you need to alter this reference differently from the base, use the References button to make a rule for it attached to this base.');
+                        end else ShowMessage('Changed the formid to reference the base object.' + #13#10 + 'If you only want to modify this reference, set the alteration for this base object to 0,' + #13#10 + 'and then add your alteration via the References button.');
                     end else begin
                         edid := EditorID(r);
                         bSuccess := True;
@@ -564,7 +594,11 @@ begin
         end;
     end;
 
-    if bSuccess then cbEditorID.Text := edid;
+    if bSuccess then begin
+        cbEditorID.Text := edid;
+        btnReferences := TButton(frm.FindComponent('btnReferences'));
+        btnReferences.Enabled := true;
+    end;
 end;
 
 procedure lvAlterLandRulesDblClick(Sender: TObject);
@@ -667,21 +701,451 @@ end;
 
 procedure frmAlterLandResize(Sender: TObject);
 {
-    Handle resizing of elements in the rule menu.
+    Handle resizing of elements in the Alter Land rule menu.
 }
 var
     frm: TForm;
+    btnOK, btnCancel: TButton;
+    lv: TListView;
 begin
     try
         frm := TForm(Sender);
-        lvAlterLandRules.Width := frm.Width - 36;
-        lvAlterLandRules.Left := (frm.Width - lvAlterLandRules.Width)/2;
-        lvAlterLandRules.Height := frm.Height - btnAlterLandRuleOk.Height - btnAlterLandRuleOk.Height - btnAlterLandRuleOk.Height - btnAlterLandRuleOk.Height;
+        btnOK := TButton(frm.FindComponent('OK'));
+        btnCancel := TButton(frm.FindComponent('Cancel'));
+        lv := TListView(frm.FindComponent('ListView'));
 
-        btnAlterLandRuleOk.Top := lvAlterLandRules.Height + lvAlterLandRules.Top + 8;
-        btnAlterLandRuleCancel.Top := btnAlterLandRuleOk.Top;
-        btnAlterLandRuleOk.Left := (frm.Width - btnAlterLandRuleOk.Width - btnAlterLandRuleCancel.Width - 8)/2;
-        btnAlterLandRuleCancel.Left := btnAlterLandRuleOk.Left + btnAlterLandRuleOk.Width + 8;
+        lv.Width := frm.Width - 36;
+        lv.Left := (frm.Width - lv.Width)/2;
+        lv.Height := frm.Height - btnOK.Height - btnOK.Height - btnOK.Height - btnOK.Height;
+
+        btnOK.Top := lv.Height + lv.Top + 8;
+        btnCancel.Top := btnOK.Top;
+        btnOK.Left := (frm.Width - btnOK.Width - btnCancel.Width - 8)/2;
+        btnCancel.Left := btnOK.Left + btnOK.Width + 8;
+    except
+        frm := TForm(Sender);
+    end;
+end;
+
+function ReferenceRules(Sender: TObject): Boolean;
+var
+    i: integer;
+    key: string;
+
+    mnRules: TPopupMenu;
+    MenuItem: TMenuItem;
+    lbl: TLabel;
+    frm, frmEditRule: TForm;
+    cbBase: TComboBox;
+    btnOK, btnCancel: TButton;
+    lvReferenceRules: TListView;
+begin
+    frmEditRule := GetParentForm(TButton(Sender));
+    key := TComboBox(frmEditRule.FindComponent('cbKey')).Text;
+    frm := TForm.Create(nil);
+    try
+        frm.Caption := 'Reference Rules';
+        frm.Width := 600;
+        frm.Height := 600;
+        frm.Position := poMainFormCenter;
+        frm.BorderStyle := bsSizeable;
+        frm.KeyPreview := True;
+        frm.OnClose := frmOptionsFormClose;
+        frm.OnKeyDown := FormKeyDown;
+        frm.OnResize := frmReferenceRulesResize;
+
+        cbBase := TComboBox.Create(frm);
+        cbBase.Parent := frm;
+        cbBase.Name := 'cbBase';
+        cbBase.Width := 250;
+        cbBase.Left := frm.Width/2 - cbBase.Width/2;
+        cbBase.Enabled := False;
+
+        lvReferenceRules := TListView.Create(frm);
+        lvReferenceRules.Parent := frm;
+        lvReferenceRules.Name := 'ListView';
+
+        lvReferenceRules.Top := 24;
+        lvReferenceRules.Width := frm.Width - 36;
+        lvReferenceRules.Left := (frm.Width - lvReferenceRules.Width)/2;
+        lvReferenceRules.Height := frm.Height - 110;
+        lvReferenceRules.ReadOnly := True;
+        lvReferenceRules.ViewStyle := vsReport;
+        lvReferenceRules.RowSelect := True;
+        lvReferenceRules.DoubleBuffered := True;
+        lvReferenceRules.Columns.Add.Caption := 'Reference';
+        lvReferenceRules.Columns[0].Width := 350;
+        lvReferenceRules.Columns.Add.Caption := 'Alteration';
+        lvReferenceRules.Columns[1].Width := 275;
+        lvReferenceRules.OwnerData := True;
+        lvReferenceRules.OnData := lvReferenceRulesData;
+        lvReferenceRules.Items.Count := joAlterLandRules.O[key].O['References'].Count;
+
+        mnRules := TPopupMenu.Create(frm);
+        lvReferenceRules.PopupMenu := mnRules;
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Name := 'MenuItem';
+        MenuItem.Caption := 'Add';
+        MenuItem.OnClick := ReferenceRulesMenuAddClick;
+        mnRules.Items.Add(MenuItem);
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Caption := 'Delete';
+        MenuItem.OnClick := ReferenceRulesMenuDeleteClick;
+        mnRules.Items.Add(MenuItem);
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Caption := 'Edit';
+        MenuItem.OnClick := ReferenceRulesMenuEditClick;
+        mnRules.Items.Add(MenuItem);
+
+        btnOK := TButton.Create(frm);
+        btnOK.Parent := frm;
+        btnOK.Name := 'OK';
+        btnOK.Caption := 'OK';
+        btnOK.ModalResult := mrOk;
+        btnOK.Top := lvReferenceRules.Height + lvReferenceRules.Top + 8;
+
+        btnCancel := TButton.Create(frm);
+        btnCancel.Parent := frm;
+        btnCancel.Name := 'Cancel';
+        btnCancel.Caption := 'Cancel';
+        btnCancel.ModalResult := mrCancel;
+        btnCancel.Top := btnOK.Top;
+
+        btnOK.Left := (frm.Width - btnOK.Width - btnCancel.Width - 8)/2;
+        btnCancel.Left := btnOK.Left + btnOK.Width + 8;
+
+        frm.ScaleBy(uiScale, 100);
+        frm.Font.Size := 8;
+
+        cbBase.Text := key;
+
+        if frm.ShowModal <> mrOk then begin
+            Result := False;
+            Exit;
+        end
+        else Result := True;
+
+    finally
+        frm.Free;
+    end;
+end;
+
+function EditReferenceRuleForm(var key, refKey: string; var alteration: integer; keyReadOnly: boolean): boolean;
+var
+    frmRule: TForm;
+    pnl: TPanel;
+    btnOk, btnCancel, btnReferences: TButton;
+    edAlteration: TEdit;
+    cbBase, cbRefKey: TComboBox;
+begin
+    Result := False;
+    frmRule := TForm.Create(nil);
+    try
+        frmRule.Caption := 'Reference Alteration Rule';
+        frmRule.Width := 600;
+        frmRule.Height := 180;
+        frmRule.Position := poMainFormCenter;
+        frmRule.BorderStyle := bsDialog;
+        frmRule.KeyPreview := True;
+        frmRule.OnKeyDown := FormKeyDown;
+        frmRule.OnClose := frmEditReferenceRuleFormClose;
+
+        cbBase := TComboBox.Create(frmRule);
+        cbBase.Parent := frmRule;
+        cbBase.Name := 'cbBase';
+        cbBase.Left := 120;
+        cbBase.Top := 12;
+        cbBase.Width := frmRule.Width - 150;
+        cbBase.Style := csDropDown;
+        CreateLabel(frmRule, 16, cbBase.Top + 4, 'Base ID');
+
+        cbRefKey := TComboBox.Create(frmRule);
+        cbRefKey.Parent := frmRule;
+        cbRefKey.Name := 'cbRefKey';
+        cbRefKey.Left := 120;
+        cbRefKey.Top := cbBase.Top + 28;
+        cbRefKey.Width := frmRule.Width - 150;
+
+        cbRefKey.OnExit := RefKeyChange;
+        cbRefKey.Style := csDropDown;
+        CreateLabel(frmRule, 16, cbRefKey.Top + 4, 'ID');
+
+        edAlteration := TEdit.Create(frmRule);
+        edAlteration.Parent := frmRule;
+        edAlteration.Name := 'edAlteration';
+        edAlteration.Left := 120;
+        edAlteration.Top := cbRefKey.Top + 28;
+        edAlteration.Width := frmRule.Width - 150;
+        edAlteration.OnKeyPress := alterationValidation;
+        CreateLabel(frmRule, 16, edAlteration.Top + 4, 'Alteration');
+
+        btnOk := TButton.Create(frmRule);
+        btnOk.Parent := frmRule;
+        btnOk.Name := 'OK';
+        btnOk.Caption := 'OK';
+        btnOk.ModalResult := mrOk;
+        btnOk.Top := edAlteration.Top + (2 * edAlteration.Height);
+
+        btnCancel := TButton.Create(frmRule);
+        btnCancel.Parent := frmRule;
+        btnCancel.Name := 'Cancel';
+        btnCancel.Caption := 'Cancel';
+        btnCancel.ModalResult := mrCancel;
+        btnCancel.Top := btnOk.Top;
+
+        btnOk.Left := frmRule.Width - btnOk.Width - btnCancel.Width - 32;
+        btnCancel.Left := btnOk.Left + btnOk.Width + 8;
+
+        pnl := TPanel.Create(frmRule);
+        pnl.Parent := frmRule;
+        pnl.Left := 10;
+        pnl.Top := btnOk.Top - 12;
+        pnl.Width := frmRule.Width - 32;
+        pnl.Height := 2;
+
+        frmRule.Height := btnOk.Top + (3 * btnOk.Height);
+        frmRule.ScaleBy(uiScale, 100);
+        frmRule.Font.Size := 8;
+
+        cbBase.Items.Add(key);
+        cbBase.ItemIndex := 0;
+        cbBase.Enabled := False;
+
+        cbRefKey.Items.Add(refKey);
+        cbRefKey.ItemIndex := 0;
+        cbRefKey.Enabled := keyReadOnly;
+
+        edAlteration.Text := IntToStr(alteration);
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        if frmRule.ShowModal <> mrOk then Exit;
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        key := cbBase.Text;
+        refKey := cbRefKey.Text;
+        alteration := StrToInt(edAlteration.Text);
+        Result := True;
+    finally
+        frmRule.Free;
+    end;
+end;
+
+procedure RefKeyChange(Sender: TObject);
+var
+    bReferenceFound: boolean;
+    baseRecordId, fileFormId, fileName, refKey: string;
+    formid: cardinal;
+
+    r, base: IwbElement;
+    f: IwbFile;
+
+    cbBase, cbRefKey: TComboBox;
+    edAlteration: TEdit;
+    frm: TForm;
+begin
+    bReferenceFound := False;
+    cbRefKey := TComboBox(Sender);
+    frm := GetParentForm(cbRefKey);
+    cbBase := TComboBox(frm.FindComponent('cbBase'));
+    edAlteration := TEdit(frm.FindComponent('edAlteration'));
+
+    refKey := cbRefKey.Text;
+    if ContainsText(refKey, ':') then begin
+        r := GetRecordFromFormIdFileId(refKey);
+        if (Assigned(r) and SameText(Signature(r), 'REFR'))
+            then bReferenceFound := True;
+    end
+    else if IsValidHex(refKey) then begin
+        formid := '$' + refKey;
+        f := GetFileFromLoadOrderFormID(formid);
+        if Assigned(f) then begin
+            fileName := GetFileName(f);
+            fileFormId := IntToHex(LoadOrderFormIDtoFileFormID(f, refKey), 8);
+            refKey := fileFormId + ':' + fileName;
+            r := GetRecordFromFormIdFileId(refKey);
+            if (Assigned(r) and SameText(Signature(r), 'REFR'))
+                then bReferenceFound := True;
+        end;
+    end;
+
+    if bReferenceFound then begin
+        base := LinksTo(ElementByPath(r, 'NAME'));
+        baseRecordId := RecordFormIdFileId(base);
+        if joAlterLandRules.Contains(baseRecordId) then begin
+            cbRefKey.Text := refKey;
+            cbBase.Text := baseRecordId;
+        end else begin
+            ShowMessage(refKey + ' is the REFR of a base object ' + baseRecordId + ' that does not have a base object rule.'
+            + #13#10 + 'You must add the base object rule first.')
+            cbRefKey.Text := #0;
+        end;
+    end else ShowMessage(refKey + ' does not appear to be valid.');
+end;
+
+procedure frmEditReferenceRuleFormClose(Sender: TObject; var Action: TCloseAction);
+{
+    Close rule edit menu handler.
+}
+begin
+    if TForm(Sender).ModalResult <> mrOk then Exit;
+    if TComboBox(TForm(Sender).FindComponent('cbRefKey')).Text = '' then begin
+        MessageDlg('Reference ID must not be empty.', mtInformation, [mbOk], 0);
+        Action := caNone;
+    end;
+    if TEdit(TForm(Sender).FindComponent('edAlteration')).Text = '' then begin
+        MessageDlg('Alteration must not be empty.', mtInformation, [mbOk], 0);
+        Action := caNone;
+    end;
+end;
+
+procedure lvReferenceRulesData(Sender: TObject; Item: TListItem);
+{
+    Populate lvReferenceRules
+}
+var
+    i: integer;
+    key, refKey: string;
+
+    frm: TForm;
+    cbBase: TComboBox;
+begin
+    frm := GetParentForm(TListView(Sender));
+    cbBase := TComboBox(frm.FindComponent('cbBase'));
+    key := cbBase.Text;
+
+    refKey := joAlterLandRules.O[key].O['References'].Names[Item.Index];
+    Item.Caption := refKey;
+    Item.SubItems.Add(joAlterLandRules.O[key].O['References'].O[refKey].S['alteration']);
+end;
+
+procedure ReferenceRulesMenuEditClick(Sender: TObject);
+{
+    Edit rule
+}
+var
+    idx, alteration: integer;
+    key, refKey: string;
+
+    lvReferenceRules: TListView;
+    frm: TForm;
+    cbBase: TComboBox;
+    MenuItem: TMenuItem;
+begin
+    MenuItem := TMenuItem(Sender);
+    frm := TForm(MenuItem.Owner.Owner);
+    lvReferenceRules := TListView(frm.FindComponent('ListView'));
+    cbBase := TComboBox(frm.FindComponent('cbBase'));
+    key := cbBase.Text;
+
+    if not Assigned(lvReferenceRules.Selected) then Exit;
+    idx := lvReferenceRules.Selected.Index;
+
+    refKey := joAlterLandRules.O[key].O['references'].Names[idx];
+    alteration := joAlterLandRules.O[key].O['references'].O[refKey].S['alteration'];
+
+    if not EditReferenceRuleForm(key, refKey, alteration, False) then Exit;
+
+    joAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := alteration;
+    joUserAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := alteration;
+    bUserAlterLandRulesChanged := True;
+
+    lvReferenceRules.Items.Count := joAlterLandRules.O[key].O['references'].Count;
+    lvReferenceRules.Refresh;
+end;
+
+procedure ReferenceRulesMenuAddClick(Sender: TObject);
+{
+    Add rule
+}
+var
+    alteration: integer;
+    key, refKey: string;
+
+    lvReferenceRules: TListView;
+    frm: TForm;
+    cbBase: TComboBox;
+    MenuItem: TMenuItem;
+begin
+    MenuItem := TMenuItem(Sender);
+    frm := TForm(MenuItem.Owner.Owner);
+    lvReferenceRules := TListView(frm.FindComponent('ListView'));
+    cbBase := TComboBox(frm.FindComponent('cbBase'));
+    key := cbBase.Text;
+
+    refKey := '';
+    alteration := 16;
+
+    if not EditReferenceRuleForm(key, refKey, alteration, True) then Exit;
+
+    cbBase.Text := key;
+
+    joAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := alteration;
+    joUserAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := alteration;
+    bUserAlterLandRulesChanged := True;
+
+    lvReferenceRules.Items.Count := joAlterLandRules.O[key].O['references'].Count;
+    lvReferenceRules.Refresh;
+end;
+
+procedure ReferenceRulesMenuDeleteClick(Sender: TObject);
+{
+    Delete rule
+}
+var
+    idx, uidx: integer;
+    key, refKey: string;
+
+    lvReferenceRules: TListView;
+    frm: TForm;
+    cbBase: TComboBox;
+    MenuItem: TMenuItem;
+begin
+    MenuItem := TMenuItem(Sender);
+    frm := TForm(MenuItem.Owner.Owner);
+    lvReferenceRules := TListView(frm.FindComponent('ListView'));
+    cbBase := TComboBox(frm.FindComponent('cbBase'));
+    key := cbBase.Text;
+    if not Assigned(lvReferenceRules.Selected) then Exit;
+    idx := lvReferenceRules.Selected.Index;
+    refKey := joAlterLandRules.O[key].O['references'].Names[idx];
+    uidx := joUserAlterLandRules.O[key].O['references'].IndexOf(key);
+    if uidx > -1 then begin
+        joAlterLandRules.O[key].O['references'].Delete(idx);
+        joUserAlterLandRules.O[key].O['references'].Delete(uidx);
+        bUserAlterLandRulesChanged := True;
+        lvReferenceRules.Items.Count := joAlterLandRules.O[key].O['references'].Count;
+        lvReferenceRules.Refresh;
+    end else MessageDlg('This rule cannot be deleted. You may set the alteration to 0' + #13#10 + 'if your really want it to not be used.', mtInformation, [mbOk], 0);
+end;
+
+procedure frmReferenceRulesResize(Sender: TObject);
+{
+    Handle resizing of elements in the Reference Rule menu.
+}
+var
+    frm: TForm;
+    btnOK, btnCancel: TButton;
+    lv: TListView;
+    cbBase: TComboBox;
+begin
+    try
+        frm := TForm(Sender);
+        btnOK := TButton(frm.FindComponent('OK'));
+        btnCancel := TButton(frm.FindComponent('Cancel'));
+        lv := TListView(frm.FindComponent('ListView'));
+        cbBase := TComboBox(frm.FindComponent('cbBase'));
+
+        lv.Width := frm.Width - 36;
+        lv.Left := (frm.Width - lv.Width)/2;
+        lv.Height := frm.Height - btnOK.Height - btnOK.Height - btnOK.Height - btnOK.Height;
+
+        cbBase.Left := frm.Width/2 - cbBase.Width/2;
+
+
+        btnOK.Top := lv.Height + lv.Top + 8;
+        btnCancel.Top := btnOK.Top;
+        btnOK.Left := (frm.Width - btnOK.Width - btnCancel.Width - 8)/2;
+        btnCancel.Left := btnOK.Left + btnOK.Width + 8;
     except
         frm := TForm(Sender);
     end;
