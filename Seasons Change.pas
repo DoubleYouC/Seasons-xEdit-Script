@@ -1735,7 +1735,7 @@ begin
 
             //Check if cell is in one of the slLandscapeCells, or neighbors.
             if not (bCreateLandscapeSnowMeshes or bCreateLandscapeHeights) then
-                if not IsCellInRange(wrldEdid, cellXHere, cellYHere) then continue;
+                if not IsCellInRange(wrldEdid, cellXHere, cellYHere, True) then continue;
 
             //AddMessage(#9 + #9 + #9 + 'Position ' + FloatToStr(posXHere) + ',' + FloatToStr(posYHere) + ' is in cell ' + IntToStr(cellXHere) + ',' + IntToStr(cellYHere));
             fileName := joLandFiles.O[wrldEdid].O[cellXHere].S[cellYHere];
@@ -1852,7 +1852,7 @@ begin
     end;
 end;
 
-function IsCellInRange(wrldEdid: string; cellX, cellY: integer): boolean;
+function IsCellInRange(wrldEdid: string; cellX, cellY: integer; bCheckNeighbors: boolean): boolean;
 var
     idx: integer;
 begin
@@ -1860,6 +1860,7 @@ begin
     idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
     if idx <> -1 then Result := True;
     if Result then Exit;
+    if not bCheckNeighbors then Exit;
 
     //right x-1
     idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX - 1) + ' ' + IntToStr(cellY));
@@ -2056,7 +2057,7 @@ begin
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
         if not bCreateLandscapeSnowMeshes then begin
-            if not IsCellInRange(wrldEdid, cellX, cellY) then continue;
+            if not IsCellInRange(wrldEdid, cellX, cellY, False) then continue;
         end;
         fileName := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
 
@@ -2461,7 +2462,7 @@ begin
                 for y := 0 to Pred(joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].O[cellX].Count) do begin
                     cellY := joLandscapeHeightsAltered.O[fileProvidingLand].O[wrldEdid].O[cellX].Names[y];
                     if not bCreateLandscapeSnowMeshes then
-                        if not IsCellInRange(wrldEdid, cellX, cellY) then continue;
+                        if not IsCellInRange(wrldEdid, cellX, cellY, False) then continue;
                     Inc(count);
                     AddMessage(IntToStr(count) + #9 + 'Merging alterations into land heights: ' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
                     joLand := TJsonObject.Create;
@@ -2500,7 +2501,7 @@ begin
             for y := 0 to Pred(joLandFiles.O[wrldEdid].O[cellX].Count) do begin
                 cellY := joLandFiles.O[wrldEdid].O[cellX].Names[y];
                 if not bCreateLandscapeSnowMeshes then
-                    if not IsCellInRange(wrldEdid, cellX, cellY) then continue;
+                    if not IsCellInRange(wrldEdid, cellX, cellY, False) then continue;
                 fileProvidingLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
                 if joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['flags'] > 4 then continue; //skipping completely underwater cells for speed.
                 //For every landscape record we will check the edges for seams against the neighboring cell.
