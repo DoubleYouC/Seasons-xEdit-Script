@@ -137,12 +137,12 @@ begin
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
     CollectRecords;
-    // if not bLoadPreviousLandHeights then begin
-    //     AlterLandHeightsForTheseBases;
-    //     ApplyAlterations;
-    //     FixLandscapeSeams;
-    // end;
-    // ProcessLandRecords;
+    if not bLoadPreviousLandHeights then begin
+        AlterLandHeightsForTheseBases;
+        ApplyAlterations;
+        FixLandscapeSeams;
+    end;
+    ProcessLandRecords;
     // ProcessStats;
     // CreateWinterDecals;
 end;
@@ -1254,7 +1254,6 @@ begin
             recordid := RecordFormIdFileId(r);
             tlStats.Add(r);
             if not joAlterLandRules.Contains(recordid) then continue;
-            AddMessage('Alteration rule found for ' + EditorID(r));
             tlBasesThatAlterLand.Add(r);
         end;
 
@@ -1265,7 +1264,6 @@ begin
             if ReferencedByCount(r) = 0 then continue;
             recordid := RecordFormIdFileId(r);
             if not joAlterLandRules.Contains(recordid) then continue;
-            AddMessage('Alteration rule found for ' + EditorID(r));
             tlBasesThatAlterLand.Add(r);
         end;
 
@@ -1276,7 +1274,6 @@ begin
             if ReferencedByCount(r) = 0 then continue;
             recordid := RecordFormIdFileId(r);
             if not joAlterLandRules.Contains(recordid) then continue;
-            AddMessage('Alteration rule found for ' + EditorID(r));
             tlBasesThatAlterLand.Add(r);
         end;
 
@@ -1287,7 +1284,6 @@ begin
             if ReferencedByCount(r) = 0 then continue;
             recordid := RecordFormIdFileId(r);
             if not joAlterLandRules.Contains(recordid) then continue;
-            AddMessage('Alteration rule found for ' + EditorID(r));
             tlBasesThatAlterLand.Add(r);
         end;
 
@@ -1298,7 +1294,6 @@ begin
             if ReferencedByCount(r) = 0 then continue;
             recordid := RecordFormIdFileId(r);
             if not joAlterLandRules.Contains(recordid) then continue;
-            AddMessage('Alteration rule found for ' + EditorID(r));
             tlBasesThatAlterLand.Add(r);
         end;
 
@@ -1309,7 +1304,6 @@ begin
             if ReferencedByCount(r) = 0 then continue;
             recordid := RecordFormIdFileId(r);
             if not joAlterLandRules.Contains(recordid) then continue;
-            AddMessage('Alteration rule found for ' + EditorID(r));
             tlBasesThatAlterLand.Add(r);
         end;
 
@@ -1533,7 +1527,7 @@ function ProcessBasesThatAlterLand(base, fromBase: IwbElement; alteration, x1, y
 }
 var
     i: integer;
-    wrldEdid: string;
+    alterationRefr, wrldEdid: string;
 
     r, rCell, rWrld: IwbElement;
 begin
@@ -1562,9 +1556,9 @@ begin
 
         // If we got this far, this REFR is in an exterior cell with landscape, and we will need to alter the land heights IF it is close enough to the landscape.
         alterationRefr := joAlterLandRules.O[baseRecordId].O['references'].O[RecordFormIdFileId(r)].S['alteration'];
-        if alterationRefr = '' then alterationRefr := alteration;
-        AddMessage(#9 + 'Processing reference ' + #9 + ShortName(r) + #9 + wrldEdid + #9 + IntToStr(alterationRefr));
-        AlterLandHeightsForThisRefr(r, base, fromBase, wrldEdid, alterationRefr, x1, y1, z1, x2, y2, z2, rWrld, bSCOL);
+        if alterationRefr = '' then alterationRefr := IntToStr(alteration);
+        AddMessage(#9 + 'Processing reference ' + #9 + ShortName(r) + #9 + wrldEdid + #9 + alterationRefr);
+        AlterLandHeightsForThisRefr(r, base, fromBase, wrldEdid, StrToInt(alterationRefr), x1, y1, z1, x2, y2, z2, rWrld, bSCOL);
     end;
 end;
 
