@@ -917,6 +917,8 @@ begin
 
         edAlteration.Text := IntToStr(alteration);
 
+        btnOk.Enabled := False;
+
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         if frmRule.ShowModal <> mrOk then Exit;
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -942,14 +944,17 @@ var
     cbBase, cbRefKey: TComboBox;
     edAlteration: TEdit;
     frm: TForm;
+    btnOk: TButton;
 begin
     bReferenceFound := False;
     cbRefKey := TComboBox(Sender);
     frm := GetParentForm(cbRefKey);
     cbBase := TComboBox(frm.FindComponent('cbBase'));
     edAlteration := TEdit(frm.FindComponent('edAlteration'));
+    btnOk := TButton(frm.FindComponent('OK'));
 
     refKey := cbRefKey.Text;
+    if refKey = '' then Exit;
     if ContainsText(refKey, ':') then begin
         r := GetRecordFromFormIdFileId(refKey);
         if (Assigned(r) and SameText(Signature(r), 'REFR'))
@@ -974,12 +979,17 @@ begin
         if joAlterLandRules.Contains(baseRecordId) then begin
             cbRefKey.Text := refKey;
             cbBase.Text := baseRecordId;
+            btnOk.Enabled := True;
         end else begin
             ShowMessage(refKey + ' is the REFR of a base object ' + baseRecordId + ' that does not have a base object rule.'
-            + #13#10 + 'You must add the base object rule first.')
+            + #13#10 + 'You must add the base object rule first.');
             cbRefKey.Text := #0;
+            btnOk.Enabled := False;
         end;
-    end else ShowMessage(refKey + ' does not appear to be valid.');
+    end else begin
+        ShowMessage(refKey + ' is not a valid REFR.');
+        btnOk.Enabled := False;
+    end;
 end;
 
 procedure frmEditReferenceRuleFormClose(Sender: TObject; var Action: TCloseAction);
@@ -1013,9 +1023,9 @@ begin
     cbBase := TComboBox(frm.FindComponent('cbBase'));
     key := cbBase.Text;
 
-    refKey := joAlterLandRules.O[key].O['References'].Names[Item.Index];
+    refKey := joAlterLandRules.O[key].O['references'].Names[Item.Index];
     Item.Caption := refKey;
-    Item.SubItems.Add(joAlterLandRules.O[key].O['References'].O[refKey].S['alteration']);
+    Item.SubItems.Add(joAlterLandRules.O[key].O['references'].O[refKey].S['alteration']);
 end;
 
 procedure ReferenceRulesMenuEditClick(Sender: TObject);
@@ -1046,6 +1056,8 @@ begin
     if not EditReferenceRuleForm(key, refKey, alteration, False) then Exit;
 
     joAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := alteration;
+    joUserAlterLandRules.O[key].S['editorid'] := joAlterLandRules.O[key].S['editorid'];
+    joUserAlterLandRules.O[key].S['alteration'] := joAlterLandRules.O[key].S['alteration'];
     joUserAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := alteration;
     bUserAlterLandRulesChanged := True;
 
@@ -1073,13 +1085,15 @@ begin
     key := cbBase.Text;
 
     refKey := '';
-    alteration := 16;
+    alteration := 24;
 
     if not EditReferenceRuleForm(key, refKey, alteration, True) then Exit;
 
     cbBase.Text := key;
 
     joAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := alteration;
+    joUserAlterLandRules.O[key].S['editorid'] := joAlterLandRules.O[key].S['editorid'];
+    joUserAlterLandRules.O[key].S['alteration'] := joAlterLandRules.O[key].S['alteration'];
     joUserAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := alteration;
     bUserAlterLandRulesChanged := True;
 
