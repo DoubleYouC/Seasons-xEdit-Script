@@ -567,7 +567,7 @@ begin
         end;
     end else begin
         if IsValidHex(key) then begin
-            formid := '$' + key;
+            formid := StrToInt('$' + key);
             f := GetFileFromLoadOrderFormID(formid);
             if Assigned(f) then begin
                 fileName := GetFileName(f);
@@ -961,7 +961,7 @@ begin
             then bReferenceFound := True;
     end
     else if IsValidHex(refKey) then begin
-        formid := '$' + refKey;
+        formid := StrToInt('$' + refKey);
         f := GetFileFromLoadOrderFormID(formid);
         if Assigned(f) then begin
             fileName := GetFileName(f);
@@ -3340,14 +3340,15 @@ function GetFileFromLoadOrderFormID(formid: cardinal): IwbFile;
     Requires joLoadOrderFormIDFileID was made.
 }
 var
-    loadOrderIdx, eslIdx: cardinal;
+    loadOrderIdx, eslIdx, mask: cardinal;
 begin
     Result := nil;
-
-    loadOrderIdx := ($FF000000 and formid) shr 24;
+    mask := $FF000000;
+    loadOrderIdx := (mask and formid) shr 24;
     if (loadOrderIdx = $FE) then begin
         //ESL
-        eslIdx := (formid and $FFFFF000) shr 12;
+        mask := $FFFFF000;
+        eslIdx := (mask and formid) shr 12;
         Result := FileByName(joLoadOrderFormIDFileID.S[IntToHex(eslIdx, 5)]);
     end else begin
         Result := FileByLoadOrderFileID(loadOrderIdx);
