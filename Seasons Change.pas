@@ -779,7 +779,7 @@ begin
         lvReferenceRules.Columns[1].Width := 275;
         lvReferenceRules.OwnerData := True;
         lvReferenceRules.OnData := lvReferenceRulesData;
-        lvReferenceRules.Items.Count := joAlterLandRules.O[key].O['References'].Count;
+        lvReferenceRules.Items.Count := joAlterLandRules.O[key].O['references'].Count;
 
         mnRules := TPopupMenu.Create(frm);
         lvReferenceRules.PopupMenu := mnRules;
