@@ -917,7 +917,7 @@ begin
 
         edAlteration.Text := IntToStr(alteration);
 
-        btnOk.Enabled := False;
+        btnOk.Enabled := not keyReadOnly;
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         if frmRule.ShowModal <> mrOk then Exit;
@@ -1122,7 +1122,7 @@ begin
     if not Assigned(lvReferenceRules.Selected) then Exit;
     idx := lvReferenceRules.Selected.Index;
     refKey := joAlterLandRules.O[key].O['references'].Names[idx];
-    uidx := joUserAlterLandRules.O[key].O['references'].IndexOf(key);
+    uidx := joUserAlterLandRules.O[key].O['references'].IndexOf(refKey);
     if uidx > -1 then begin
         joAlterLandRules.O[key].O['references'].Delete(idx);
         joUserAlterLandRules.O[key].O['references'].Delete(uidx);
