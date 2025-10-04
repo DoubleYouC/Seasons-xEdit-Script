@@ -575,7 +575,7 @@ begin
                 recordId := fileFormId + ':' + fileName;
                 r := GetRecordFromFormIdFileId(recordId);
                 if Assigned(r) then begin
-                    if Signature(r) = 'REFR' then begin
+                    if Pos(Signature(r),'REFR,PHZD') <> 0 then begin
                         base := LinksTo(ElementByPath(r, 'NAME'));
                         baseRecordId := RecordFormIdFileId(base);
                         cbKey.Text := baseRecordId;
@@ -957,7 +957,7 @@ begin
     if refKey = '' then Exit;
     if ContainsText(refKey, ':') then begin
         r := GetRecordFromFormIdFileId(refKey);
-        if (Assigned(r) and SameText(Signature(r), 'REFR'))
+        if (Assigned(r) and (Pos(Signature(r),'REFR,PHZD') <> 0))
             then bReferenceFound := True;
     end
     else if IsValidHex(refKey) then begin
@@ -968,7 +968,7 @@ begin
             fileFormId := IntToHex(LoadOrderFormIDtoFileFormID(f, refKey), 8);
             refKey := fileFormId + ':' + fileName;
             r := GetRecordFromFormIdFileId(refKey);
-            if (Assigned(r) and SameText(Signature(r), 'REFR'))
+            if (Assigned(r) and (Pos(Signature(r),'REFR,PHZD') <> 0))
                 then bReferenceFound := True;
         end;
     end;
@@ -982,13 +982,13 @@ begin
             btnOk.Enabled := True;
             if joAlterLandRules.O[baseRecordId].O['references'].Contains(refKey) then ShowMessage('This reference rule already exists.');
         end else begin
-            ShowMessage(refKey + ' is the REFR of a base object ' + baseRecordId + ' that does not have a base object rule.'
+            ShowMessage(refKey + ' is the reference of a base object ' + baseRecordId + ' that does not have a base object rule.'
             + #13#10 + 'You must add the base object rule first.');
             cbRefKey.Text := #0;
             btnOk.Enabled := False;
         end;
     end else begin
-        ShowMessage(refKey + ' is not a valid REFR.');
+        ShowMessage(refKey + ' is not a valid reference.');
         btnOk.Enabled := False;
     end;
 end;
@@ -1308,6 +1308,16 @@ begin
             tlBasesThatAlterLand.Add(r);
         end;
 
+        g := GroupBySignature(f, 'HAZD');
+        for j := 0 to Pred(ElementCount(g)) do begin
+            r := ElementByIndex(g, j);
+            if not IsWinningOverride(r) then continue;
+            if ReferencedByCount(r) = 0 then continue;
+            recordid := RecordFormIdFileId(r);
+            if not joAlterLandRules.Contains(recordid) then continue;
+            tlBasesThatAlterLand.Add(r);
+        end;
+
     end;
     AddMessage('New LAND Records: ' + IntToStr(count));
     if bCreateLandscapeHeights then begin
@@ -1542,7 +1552,7 @@ begin
             // if SCOL, then the next iteration, r becomes the base, and base becomes the fromBase
             continue;
         end;
-        if Signature(r) <> 'REFR' then continue;
+        if Pos(Signature(r), 'REFR,PHZD') = 0 then continue;
         if not IsWinningOverride(r) then continue;
         if GetIsDeleted(r) then continue;
         if GetIsCleanDeleted(r) then continue;
@@ -1564,7 +1574,19 @@ begin
 end;
 
 procedure GetBounds(var x1, y1, z1, x2, y2, z2: integer; base: IwbElement);
+var
+    radius: integer;
 begin
+    if SameText(Signature(base), 'HAZD') then begin
+        radius := Round(GetElementNativeValues(base, 'DNAM\Radius') * 32 div 3);
+        x1 := -1 * radius;
+        y1 := -1 * radius;
+        z1 := -64
+        x2 := radius;
+        y2 := radius;
+        z2 := 64;
+        Exit;
+    end;
     x1 := GetElementNativeValues(base, 'OBND\X1');
     y1 := GetElementNativeValues(base, 'OBND\Y1');
     z1 := GetElementNativeValues(base, 'OBND\Z1');
