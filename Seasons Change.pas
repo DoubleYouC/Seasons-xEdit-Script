@@ -1190,134 +1190,151 @@ var
     recordid, fileName, wrldEdid: string;
 
     tlLand: TList;
+    slHideQuads: TStringList;
 
     f: IwbFile;
     g, wrldgroup: IwbGroupRecord;
-    r, rWrld, wWrld, block, subblock, rCell, land: IwbElement;
+    r, rWrld, wWrld, block, subblock, rCell, wCell, land, landFlags: IwbElement;
 begin
+    slHideQuads := TStringList.Create;
     count := 0;
-    for i := 0 to Pred(FileCount) do begin
-        f := FileByIndex(i);
-        fileName := GetFileName(f);
+    try
+        for i := 0 to Pred(FileCount) do begin
+            f := FileByIndex(i);
+            fileName := GetFileName(f);
 
-        //Collect LAND
-        g := GroupBySignature(f, 'WRLD');
-        for j := 0 to Pred(ElementCount(g)) do begin
-            rWrld := ElementByIndex(g, j);
-            recordid := RecordFormIdFileId(rWrld);
-            if Pos(recordid, sIgnoredWorldspaces) <> 0 then continue;
-            wrldEdid := GetElementEditValues(rWrld, 'EDID');
-            wWrld := WinningOverride(rWrld);
-            if GetElementNativeValues(wWrld, 'DATA\No Landscape') = 1 then continue;
+            //Collect LAND
+            g := GroupBySignature(f, 'WRLD');
+            for j := 0 to Pred(ElementCount(g)) do begin
+                rWrld := ElementByIndex(g, j);
+                recordid := RecordFormIdFileId(rWrld);
+                if Pos(recordid, sIgnoredWorldspaces) <> 0 then continue;
+                wrldEdid := GetElementEditValues(rWrld, 'EDID');
+                wWrld := WinningOverride(rWrld);
+                if GetElementNativeValues(wWrld, 'DATA\No Landscape') = 1 then continue;
 
-            wrldgroup := ChildGroup(rWrld);
-            for blockidx := 0 to Pred(ElementCount(wrldgroup)) do begin
-                block := ElementByIndex(wrldgroup, blockidx);
-                for subblockidx := 0 to Pred(ElementCount(block)) do begin
-                    subblock := ElementByIndex(block, subblockidx);
-                    for cellidx := 0 to Pred(ElementCount(subblock)) do begin
-                        rCell := ElementByIndex(subblock, cellidx);
-                        if (Signature(rCell) <> 'CELL') or GetIsPersistent(rCell) then continue;
-                        cellX := GetElementNativeValues(rCell, 'XCLC\X');
-                        cellY := GetElementNativeValues(rCell, 'XCLC\Y');
-                        joWinningCells.O[wrldEdid].O[cellX].S[cellY] := RecordFormIdFileId(rCell);
-                        land := GetLandscapeForCell(rCell);
-                        if not Assigned(land) then continue;
-                        if not IsWinningOverride(land) then continue;
-                        if not ElementExists(land, 'VHGT') then continue;
+                wrldgroup := ChildGroup(rWrld);
+                for blockidx := 0 to Pred(ElementCount(wrldgroup)) do begin
+                    block := ElementByIndex(wrldgroup, blockidx);
+                    for subblockidx := 0 to Pred(ElementCount(block)) do begin
+                        subblock := ElementByIndex(block, subblockidx);
+                        for cellidx := 0 to Pred(ElementCount(subblock)) do begin
+                            rCell := ElementByIndex(subblock, cellidx);
+                            if (Signature(rCell) <> 'CELL') or GetIsPersistent(rCell) then continue;
+                            cellX := GetElementNativeValues(rCell, 'XCLC\X');
+                            cellY := GetElementNativeValues(rCell, 'XCLC\Y');
+                            joWinningCells.O[wrldEdid].O[cellX].S[cellY] := RecordFormIdFileId(rCell);
+                            land := GetLandscapeForCell(rCell);
+                            if not Assigned(land) then continue;
+                            if not IsWinningOverride(land) then continue;
+                            if not ElementExists(land, 'VHGT') then continue;
+                            wCell := WinningOverride(rCell);
+                            landFlags := ElementByPath(wCell, 'XCLC\Land Flags');
+                            if GetElementEditValues(landFlags, 'Hide - Quad 1') <> '0'
+                                then slHideQuads.Add(ShortName(rCell) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'has hidden land quad 1.');
+                            if GetElementEditValues(landFlags, 'Hide - Quad 2') <> '0'
+                                then slHideQuads.Add(ShortName(rCell) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'has hidden land quad 2.');
+                            if GetElementEditValues(landFlags, 'Hide - Quad 3') <> '0'
+                                then slHideQuads.Add(ShortName(rCell) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'has hidden land quad 3.');
+                            if GetElementEditValues(landFlags, 'Hide - Quad 4') <> '0'
+                                then slHideQuads.Add(ShortName(rCell) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'has hidden land quad 4.');
 
-                        AddMessage(IntToStr(count) + #9 + ShortName(land) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
-                        bLandHasChanged := CreateLandscapeHeights(land, WinningOverride(rCell), wWrld, wrldEdid);
-                        if bLandHasChanged then begin
-                            slLandscapeCells.Add(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
-                            Inc(count);
+                            AddMessage(IntToStr(count) + #9 + ShortName(land) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+                            bLandHasChanged := CreateLandscapeHeights(land, wCell, wWrld, wrldEdid);
+                            if bLandHasChanged then begin
+                                slLandscapeCells.Add(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+                                Inc(count);
+                            end;
+                            joLandFiles.O[wrldEdid].O[cellX].S[cellY] := fileName;
+                            if bCreateLandscapeSnowMeshes or bPlaceLandscapeSnow or bLandHasChanged then begin
+                                tlLandRecords.Add(land);
+                            end;
+                            if (bCreateLandscapeSnowMeshes and not bLandHasChanged) then
+                                slLandscapeCells.Add(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+                            //if count > 10 then break;
                         end;
-                        joLandFiles.O[wrldEdid].O[cellX].S[cellY] := fileName;
-                        if bCreateLandscapeSnowMeshes or bPlaceLandscapeSnow or bLandHasChanged then begin
-                            tlLandRecords.Add(land);
-                        end;
-                        if (bCreateLandscapeSnowMeshes and not bLandHasChanged) then
-                            slLandscapeCells.Add(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
                         //if count > 10 then break;
                     end;
                     //if count > 10 then break;
                 end;
                 //if count > 10 then break;
             end;
-            //if count > 10 then break;
-        end;
 
-        g := GroupBySignature(f, 'STAT');
-        for j := 0 to Pred(ElementCount(g)) do begin
-            r := ElementByIndex(g, j);
-            if not IsWinningOverride(r) then continue;
-            if ReferencedByCount(r) = 0 then continue;
-            recordid := RecordFormIdFileId(r);
-            tlStats.Add(r);
-            if not joAlterLandRules.Contains(recordid) then continue;
-            tlBasesThatAlterLand.Add(r);
-        end;
+            g := GroupBySignature(f, 'STAT');
+            for j := 0 to Pred(ElementCount(g)) do begin
+                r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
+                if ReferencedByCount(r) = 0 then continue;
+                recordid := RecordFormIdFileId(r);
+                tlStats.Add(r);
+                if not joAlterLandRules.Contains(recordid) then continue;
+                tlBasesThatAlterLand.Add(r);
+            end;
 
-        g := GroupBySignature(f, 'SCOL');
-        for j := 0 to Pred(ElementCount(g)) do begin
-            r := ElementByIndex(g, j);
-            if not IsWinningOverride(r) then continue;
-            if ReferencedByCount(r) = 0 then continue;
-            recordid := RecordFormIdFileId(r);
-            if not joAlterLandRules.Contains(recordid) then continue;
-            tlBasesThatAlterLand.Add(r);
-        end;
+            g := GroupBySignature(f, 'SCOL');
+            for j := 0 to Pred(ElementCount(g)) do begin
+                r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
+                if ReferencedByCount(r) = 0 then continue;
+                recordid := RecordFormIdFileId(r);
+                if not joAlterLandRules.Contains(recordid) then continue;
+                tlBasesThatAlterLand.Add(r);
+            end;
 
-        g := GroupBySignature(f, 'FURN');
-        for j := 0 to Pred(ElementCount(g)) do begin
-            r := ElementByIndex(g, j);
-            if not IsWinningOverride(r) then continue;
-            if ReferencedByCount(r) = 0 then continue;
-            recordid := RecordFormIdFileId(r);
-            if not joAlterLandRules.Contains(recordid) then continue;
-            tlBasesThatAlterLand.Add(r);
-        end;
+            g := GroupBySignature(f, 'FURN');
+            for j := 0 to Pred(ElementCount(g)) do begin
+                r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
+                if ReferencedByCount(r) = 0 then continue;
+                recordid := RecordFormIdFileId(r);
+                if not joAlterLandRules.Contains(recordid) then continue;
+                tlBasesThatAlterLand.Add(r);
+            end;
 
-        g := GroupBySignature(f, 'ACTI');
-        for j := 0 to Pred(ElementCount(g)) do begin
-            r := ElementByIndex(g, j);
-            if not IsWinningOverride(r) then continue;
-            if ReferencedByCount(r) = 0 then continue;
-            recordid := RecordFormIdFileId(r);
-            if not joAlterLandRules.Contains(recordid) then continue;
-            tlBasesThatAlterLand.Add(r);
-        end;
+            g := GroupBySignature(f, 'ACTI');
+            for j := 0 to Pred(ElementCount(g)) do begin
+                r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
+                if ReferencedByCount(r) = 0 then continue;
+                recordid := RecordFormIdFileId(r);
+                if not joAlterLandRules.Contains(recordid) then continue;
+                tlBasesThatAlterLand.Add(r);
+            end;
 
-        g := GroupBySignature(f, 'MSTT');
-        for j := 0 to Pred(ElementCount(g)) do begin
-            r := ElementByIndex(g, j);
-            if not IsWinningOverride(r) then continue;
-            if ReferencedByCount(r) = 0 then continue;
-            recordid := RecordFormIdFileId(r);
-            if not joAlterLandRules.Contains(recordid) then continue;
-            tlBasesThatAlterLand.Add(r);
-        end;
+            g := GroupBySignature(f, 'MSTT');
+            for j := 0 to Pred(ElementCount(g)) do begin
+                r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
+                if ReferencedByCount(r) = 0 then continue;
+                recordid := RecordFormIdFileId(r);
+                if not joAlterLandRules.Contains(recordid) then continue;
+                tlBasesThatAlterLand.Add(r);
+            end;
 
-        g := GroupBySignature(f, 'LIGH');
-        for j := 0 to Pred(ElementCount(g)) do begin
-            r := ElementByIndex(g, j);
-            if not IsWinningOverride(r) then continue;
-            if ReferencedByCount(r) = 0 then continue;
-            recordid := RecordFormIdFileId(r);
-            if not joAlterLandRules.Contains(recordid) then continue;
-            tlBasesThatAlterLand.Add(r);
-        end;
+            g := GroupBySignature(f, 'LIGH');
+            for j := 0 to Pred(ElementCount(g)) do begin
+                r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
+                if ReferencedByCount(r) = 0 then continue;
+                recordid := RecordFormIdFileId(r);
+                if not joAlterLandRules.Contains(recordid) then continue;
+                tlBasesThatAlterLand.Add(r);
+            end;
 
-        g := GroupBySignature(f, 'HAZD');
-        for j := 0 to Pred(ElementCount(g)) do begin
-            r := ElementByIndex(g, j);
-            if not IsWinningOverride(r) then continue;
-            if ReferencedByCount(r) = 0 then continue;
-            recordid := RecordFormIdFileId(r);
-            if not joAlterLandRules.Contains(recordid) then continue;
-            tlBasesThatAlterLand.Add(r);
-        end;
+            g := GroupBySignature(f, 'HAZD');
+            for j := 0 to Pred(ElementCount(g)) do begin
+                r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
+                if ReferencedByCount(r) = 0 then continue;
+                recordid := RecordFormIdFileId(r);
+                if not joAlterLandRules.Contains(recordid) then continue;
+                tlBasesThatAlterLand.Add(r);
+            end;
 
+        end;
+    finally
+        ListStringsInStringList(slHideQuads);
+        slHideQuads.Free;
     end;
     AddMessage('New LAND Records: ' + IntToStr(count));
     if bCreateLandscapeHeights then begin
@@ -3436,6 +3453,20 @@ end;
 function IsEslFile(f: IwbFile): boolean;
 begin
     Result := (GetElementEditValues(ElementByIndex(f, 0), 'Record Header\Record Flags\ESL') = '1');
+end;
+
+procedure ListStringsInStringList(sl: TStringList);
+{
+    Given a TStringList, add a message for all items in the list.
+}
+var
+    i, count: integer;
+begin
+    count := sl.Count;
+    if count < 1 then Exit;
+    AddMessage('=======================================================================================');
+    for i := 0 to Pred(count) do AddMessage(sl[i]);
+    AddMessage('=======================================================================================');
 end;
 
 
