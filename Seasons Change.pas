@@ -980,6 +980,7 @@ begin
             cbRefKey.Text := refKey;
             cbBase.Text := baseRecordId;
             btnOk.Enabled := True;
+            if joAlterLandRules.O[baseRecordId].O['references'].Contains(refKey) then ShowMessage('This reference rule already exists.');
         end else begin
             ShowMessage(refKey + ' is the REFR of a base object ' + baseRecordId + ' that does not have a base object rule.'
             + #13#10 + 'You must add the base object rule first.');
@@ -1570,6 +1571,20 @@ begin
     x2 := GetElementNativeValues(base, 'OBND\X2');
     y2 := GetElementNativeValues(base, 'OBND\Y2');
     z2 := GetElementNativeValues(base, 'OBND\Z2');
+end;
+
+procedure AddObjectBounds(var x1, y1, z1, x2, y2, z2: integer; base: IwbElement);
+var
+    obnd: IwbElement;
+begin
+    obnd := ElementByPath(base, 'OBND');
+    if not Assigned(obnd) then obnd := Add(base, 'OBND', True);
+    SetElementNativeValues(obnd, 'X1', x1);
+    SetElementNativeValues(obnd, 'Y1', y1);
+    SetElementNativeValues(obnd, 'Z1', z1);
+    SetElementNativeValues(obnd, 'X2', x2);
+    SetElementNativeValues(obnd, 'Y2', y2);
+    SetElementNativeValues(obnd, 'Z2', z2);
 end;
 
 procedure AlterLandHeightsForThisRefr(r, base, fromBase: IwbElement; wrldEdid: string; alterationRefr, x1, y1, z1, x2, y2, z2: integer; rWrld: IwbElement; bSCOL: boolean);
