@@ -586,6 +586,7 @@ begin
                             ShowMessage('Found an existing base object rule for this reference.' + #13#10 + 'If you need to alter this reference differently from the base, use the References button to make a rule for it attached to this base.');
                         end else ShowMessage('Changed the formid to reference the base object.' + #13#10 + 'If you only want to modify this reference, set the alteration for this base object to 0,' + #13#10 + 'and then add your alteration via the References button.');
                     end else begin
+                        cbKey.Text := recordId;
                         edid := EditorID(r);
                         bSuccess := True;
                     end;
