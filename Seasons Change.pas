@@ -1241,12 +1241,12 @@ begin
                                 then slHideQuads.Add(ShortName(rCell) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'has hidden land quad 4.');
 
                             AddMessage(IntToStr(count) + #9 + ShortName(land) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+                            joLandFiles.O[wrldEdid].O[cellX].S[cellY] := fileName;
                             bLandHasChanged := CreateLandscapeHeights(land, wCell, wWrld, wrldEdid);
                             if bLandHasChanged then begin
                                 slLandscapeCells.Add(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
                                 Inc(count);
                             end;
-                            joLandFiles.O[wrldEdid].O[cellX].S[cellY] := fileName;
                             if bCreateLandscapeSnowMeshes or bPlaceLandscapeSnow or bLandHasChanged then begin
                                 tlLandRecords.Add(land);
                             end;
@@ -2535,21 +2535,21 @@ begin
             cellX := joLandFiles.O[wrldEdid].Names[x];
             for y := 0 to Pred(joLandFiles.O[wrldEdid].O[cellX].Count) do begin
                 cellY := joLandFiles.O[wrldEdid].O[cellX].Names[y];
-                if not bCreateLandscapeSnowMeshes then
-                    if not IsCellInRange(wrldEdid, cellX, cellY, False) then continue;
+                // if not bCreateLandscapeSnowMeshes then
+                //     if not IsCellInRange(wrldEdid, cellX, cellY, False) then continue;
                 fileProvidingLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
                 if joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['flags'] > 4 then continue; //skipping completely underwater cells for speed.
                 //For every landscape record we will check the edges for seams against the neighboring cell.
                 Inc(count);
                 AddMessage(IntToStr(count) + #9 + ' Checking landscape seams at' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
-                FixLandscapeSeamsAgainstNeighbors(fileProvidingLand, wrldEdid, cellX, cellY);
+                FixLandscapeSeamsAgainstNeighbors(wrldEdid, cellX, cellY);
             end;
         end;
     end;
     joLandscapeHeights.SaveToFile(wbScriptsPath + 'Seasons\LandHeights.json', False, TEncoding.UTF8, True);
 end;
 
-procedure FixLandscapeSeamsAgainstNeighbors(fileProvidingLand, wrldEdid: string; cellX, cellY: integer);
+procedure FixLandscapeSeamsAgainstNeighbors(wrldEdid: string; cellX, cellY: integer);
 {
     Algorithm:
        For each border vertex of the landscape cell, compares its height with the corresponding vertex in neighboring cells.
