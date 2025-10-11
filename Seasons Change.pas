@@ -1570,16 +1570,16 @@ begin
             // if SCOL, then the next iteration, r becomes the base, and base becomes the fromBase
             continue;
         end;
-        if Pos(Signature(r), 'REFR,PHZD') = 0 then continue;
+        if (Pos(Signature(r), 'REFR,PHZD') = 0) then continue;
         if not IsWinningOverride(r) then continue;
         if GetIsDeleted(r) then continue;
         if GetIsCleanDeleted(r) then continue;
         //if ElementExists(r, 'XESP') then continue; //skip enable parented references, since the object is not always present.
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
-        if Signature(rCell) <> 'CELL' then continue;
-        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+        if (Signature(rCell) <> 'CELL') then continue;
+        if (GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1) then continue;
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
-        if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
+        if (Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) > 0) then continue;
 
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
@@ -1595,16 +1595,16 @@ procedure GetBounds(var x1, y1, z1, x2, y2, z2: integer; base: IwbElement);
 var
     radius: integer;
 begin
-    if SameText(Signature(base), 'HAZD') then begin
-        radius := Round(GetElementNativeValues(base, 'DNAM\Radius') * 32 div 3);
-        x1 := -1 * radius;
-        y1 := -1 * radius;
-        z1 := -64
-        x2 := radius;
-        y2 := radius;
-        z2 := 64;
-        Exit;
-    end;
+    // if SameText(Signature(base), 'HAZD') then begin
+    //     radius := Round(GetElementNativeValues(base, 'DNAM\Radius') * 32 div 3);
+    //     x1 := -1 * radius;
+    //     y1 := -1 * radius;
+    //     z1 := -64;
+    //     x2 := radius;
+    //     y2 := radius;
+    //     z2 := 64;
+    //     Exit;
+    // end;
     x1 := GetElementNativeValues(base, 'OBND\X1');
     y1 := GetElementNativeValues(base, 'OBND\Y1');
     z1 := GetElementNativeValues(base, 'OBND\Z1');
@@ -2351,8 +2351,10 @@ begin
                     end;
                     vertex.EditValues['Vertex'] := vx + ' ' + vy + ' ' + newVzStr;
                 end;
-                block.UpdateNormals;
-                block.UpdateTangents;
+                if nifFile > 1 then begin
+                    block.UpdateNormals;
+                    block.UpdateTangents;
+                end;
                 //We need to protect the border vertices' normals.
                 if nifFile = 0 then begin
                     for i := 0 to Pred(vertexCount) do begin
@@ -2375,28 +2377,6 @@ begin
                         vertex.EditValues['Bitangent Y'] := '0.003922';
                         vertex.EditValues['Bitangent Z'] := '0.003922';
                         vertex.EditValues['Tangent'] := '0.003922 -1.000000 0.003922';
-                    end;
-                end else begin //We are attempting a different way to fix the seam on LOD models, since these are related to the extra sloped down vertices.
-                    for i := 0 to Pred(vertexCount) do begin
-                        vertex := vertexData[i];
-                        xyz := vertex.EditValues['Vertex'];
-                        tsXYZ := SplitString(xyz, ' ');
-                        vx := tsXYZ[0];
-                        vy := tsXYZ[1];
-
-                        row2 := Round(StrToFloatDef(vy, 9))/64; // dividing by 64 means row2 is twice the size of the actual row
-                        // if row2 is even, this row exists
-                        column2 := Round(StrToFloatDef(vx, 9))/64; // dividing by 64 means column2 is twice the size of the actual column
-                        // if column2 is even, this column exists
-                        if not (IsEven(row2) and IsEven(column2)) then continue;
-                        row := row2/2;
-                        column := column2/2;
-                        if not ((row = 0) or (row = 32) or (column = 0) or (column = 32)) then continue;
-                        tsNormals := SplitString(vertex.EditValues['Normal'], ' ');
-                        nx := FloatToStr((StrToFloatDef(tsNormals[0], 0.003922)*2 + 0.003922)/3);
-                        ny := FloatToStr((StrToFloatDef(tsNormals[1], 0.003922)*2 + 0.003922)/3);
-                        nz := FloatToStr((StrToFloatDef(tsNormals[2], 1)*2 + 1)/3);
-                        vertex.EditValues['Normal'] := nx + ' ' + ny + ' ' + nz;
                     end;
                 end;
                 snowNif.SaveToFile(snowNifFile);
