@@ -137,10 +137,10 @@ begin
     CollectRecords;
     if not bLoadPreviousLandHeights then begin
         // AlterLandHeightsForTheseBases;
-        ApplyAlterations;
+        // ApplyAlterations;
         FixLandscapeSeams;
     end;
-    // ProcessLandRecords;
+    ProcessLandRecords;
     // ProcessStats;
     // CreateWinterDecals;
 end;
@@ -2032,7 +2032,7 @@ procedure ProcessLandRecords;
 }
 var
     i, cellX, cellY, count: integer;
-    wrldEdid, fileName: string;
+    wrldEdid: string;
 
     rLand, rCell, rWrld: IwbElement;
 begin
@@ -2051,15 +2051,17 @@ begin
         if not LandHeightsExist(wrldEdid, cellX, cellY) then continue;
         AddMessage(IntToStr(i + 1) + ' of ' + IntToStr(count) + #9 + ShortName(rLand) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
 
-        CreateLandscapeSnow(rLand, rCell, rWrld, wrldEdid, fileName, cellX, cellY);
-        if bPlaceLandscapeSnow then PlaceLandscapeSnow(rLand, rCell, rWrld, wrldEdid, fileName, cellX, cellY);
+        CreateLandscapeSnow(rLand, rCell, rWrld, wrldEdid, cellX, cellY);
+        if bPlaceLandscapeSnow then PlaceLandscapeSnow(rLand, rCell, rWrld, wrldEdid, cellX, cellY);
     end;
 end;
 
-function PlaceLandscapeSnow(land, rCell, rWrld: IwbElement; wrldEdid, fileProvidingLand: string; cellX, cellY: integer): integer;
+function PlaceLandscapeSnow(land, rCell, rWrld: IwbElement; wrldEdid: string; cellX, cellY: integer): integer;
 var
     unitsX, unitsY, landOffsetZ: integer;
     editorIdSnowNif, snowModel, snowLodModel0, snowLodModel1, snowLodModel2, snowStaticFormid: string;
+
+    joLand: TJsonObject;
 
     snowStatic, nCell, snowRef, base: IwbElement;
 begin
@@ -2082,8 +2084,13 @@ begin
         snowStatic := flatSnowStatic;
     end else snowStatic := CreateNewStat(snowModel, snowLodModel0, snowLodModel1, snowLodModel2, editorIdSnowNif);
 
-    fileProvidingLand := GetFileName(GetFile(land));
-    landOffsetZ := joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['offset'] * SCALE_FACTOR_TERRAIN;
+    joLand := TJsonObject.Create;
+    try
+        joLand.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json');
+        landOffsetZ := joLand.S['offset'] * SCALE_FACTOR_TERRAIN;
+    except
+        joLand.Free;
+    end;
 
     AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
     AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
@@ -2117,7 +2124,7 @@ begin
 end;
 
 
-function CreateLandscapeSnow(land, rCell, rWrld: IwbElement; wrldEdid, fileProvidingLand: string; cellX, cellY: integer): integer;
+function CreateLandscapeSnow(land, rCell, rWrld: IwbElement; wrldEdid: string; cellX, cellY: integer): integer;
 {
     Creates snow mesh for a landscape cell.
 
@@ -2133,13 +2140,13 @@ function CreateLandscapeSnow(land, rCell, rWrld: IwbElement; wrldEdid, fileProvi
       Integer indicating success (1) or failure (0).
 }
 var
-    bVertexIsOutsideCell: boolean;
+    bVertexIsOutsideCell, bNeighborExists: boolean;
     i, nifFile, row2, column2, row, column, vertexCount, newCellX, newCellY, landOffsetZ, newlandOffsetZ,
     point1, point2, point3, point4, cellOffsetDifference, newVz: integer;
     editorIdSnowNif, fileName, snowNifFile, xyz, vx, vy, vz, newVzStr, fileNameLand, nx, ny, nz: string;
 
     tsXYZ, tsNormals: TStrings;
-    joLand: TJsonObject;
+    joLand, joNeighbor: TJsonObject;
 
     vertexData, vertex: TdfElement;
     block: TwbNifBlock;
@@ -2151,7 +2158,7 @@ begin
     // Cache lookup results
     joLand := TJsonObject.Create;
     try
-        joLand.Assign(joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY]);
+        joLand.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json');
         landOffsetZ := joLand.S['offset'];
 
         for nifFile := 0 to 3 do begin
@@ -2212,23 +2219,29 @@ begin
                             else if column > 32 then newCellX := cellX + 1;
                             if row < 0 then newCellY := cellY - 1
                             else if row > 32 then newCellY := cellY + 1;
-                            fileNameLand := joLandFiles.O[wrldEdid].O[newCellX].S[newCellY];
+                            bNeighborExists := LandHeightsExist(wrldEdid, newCellX, newCellY);
 
-                            if fileNameLand <> '' then begin
-                                //If the neighboring cell does exist, we need to compare the offset values, as that will affect the newVz.
-                                newlandOffsetZ := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[newCellX].O[newCellY].S['offset'];
-                                // We will need to add this difference to the final vz value;
-                                cellOffsetDifference := landOffsetZ - newlandOffsetZ;
+                            if bNeighborExists then begin
+                                joNeighbor := TJsonObject.Create;
+                                try
+                                    joNeighbor.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\x' + IntToStr(newCellX) + 'y' + IntToStr(newCellY) + '.json');
+                                    //If the neighboring cell does exist, we need to compare the offset values, as that will affect the newVz.
+                                    newlandOffsetZ := joNeighbor.S['offset'];
+                                    // We will need to add this difference to the final vz value;
+                                    cellOffsetDifference := landOffsetZ - newlandOffsetZ;
 
-                                //Get the correct row/column for the overlap cell vertex we wish to go by.
-                                // Since our LOD only has resolution of 4 rows/columns, we use 3 or 29.
-                                if column < 0 then column := 29
-                                else if column > 32 then column := 3;
-                                if row < 0 then row := 29
-                                else if row > 32 then row := 3;
+                                    //Get the correct row/column for the overlap cell vertex we wish to go by.
+                                    // Since our LOD only has resolution of 4 rows/columns, we use 3 or 29.
+                                    if column < 0 then column := 29
+                                    else if column > 32 then column := 3;
+                                    if row < 0 then row := 29
+                                    else if row > 32 then row := 3;
 
-                                //We subtract the cellOffsetDifference from the final z value.
-                                newVz := (joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[newCellX].O[newCellY].A[row].S[column] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                                    //We subtract the cellOffsetDifference from the final z value.
+                                    newVz := (joNeighbor.A[row].S[column] - cellOffsetDifference) * SCALE_FACTOR_TERRAIN;
+                                finally
+                                    joNeighbor.Free;
+                                end;
                             end
                             else begin
                                 //If the neighboring cell does not exist, we should change the row/column to the vertex that is closest and use that for the newVz
@@ -2283,7 +2296,7 @@ begin
                     end;
                     vertex.EditValues['Vertex'] := vx + ' ' + vy + ' ' + newVzStr;
                 end;
-                if nifFile > 1 then begin
+                if nifFile < 2 then begin
                     block.UpdateNormals;
                     block.UpdateTangents;
                 end;
@@ -2791,6 +2804,7 @@ begin
     joLand := TJsonObject.Create;
     try
         joLand.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json');
+        if joLand.S['offset'] = '' then Exit;
         offset := joLand.S['offset'];
         landValue := joLand.A[row].S[column];
         Result := landValue + offset;
