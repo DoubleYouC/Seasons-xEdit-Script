@@ -136,8 +136,8 @@ begin
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
     CollectRecords;
     if not bLoadPreviousLandHeights then begin
-        // AlterLandHeightsForTheseBases;
-        // ApplyAlterations;
+        AlterLandHeightsForTheseBases;
+        ApplyAlterations;
         FixLandscapeSeams;
     end;
     ProcessLandRecords;
@@ -1721,6 +1721,7 @@ procedure AlterLandHeightsForThisPlacement(alterationRefr, x1n, y1n, z1n, x2n, y
     Alters land heights for a specific placement of a base object.
 }
 var
+    bWasAltered: boolean;
     i, j, k, row, row_closest, column, column_closest, cellXHere, cellYHere, vz, oldZ, landOffsetZ, newZ, width, height, numX, numY, alterationHere: integer;
     fileName, landFile: string;
     raw_x, raw_y, raw_z, xHere, yHere, zHere, posXHere, posYHere, posZHere, column_bias, row_bias, outskirts_bias, cellPosX, cellPosY: double;
@@ -1789,21 +1790,23 @@ begin
 
             landFile := wrldEdid + '\x' + IntToStr(cellXHere) + 'y' + IntToStr(cellYHere) + '.json';
             if not FileExists(wbScriptsPath + 'Seasons\LandHeights\' + landFile) then continue;
+
+            //Check if cell is in one of the slLandscapeCells, or neighbors.
+            // if not (bCreateLandscapeSnowMeshes or bCreateLandscapeHeights) then
+            //     if not IsCellInRange(wrldEdid, cellXHere, cellYHere, True) then continue;
+
+            //AddMessage(#9 + #9 + #9 + 'Position ' + FloatToStr(posXHere) + ',' + FloatToStr(posYHere) + ' is in cell ' + IntToStr(cellXHere) + ',' + IntToStr(cellYHere));
+
+            cellPosX := (posXHere - (cellXHere * 4096))/128;
+            cellPosY := (posYHere - (cellYHere * 4096))/128;
+            column_closest := Round(cellPosX);
+            row_closest := Round(cellPosY);
+
             joLand := TJsonObject.Create;
             joLandAlteration := TJsonObject.Create;
             try
                 joLandAlteration.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsAltered\' + landFile);
-
-                //Check if cell is in one of the slLandscapeCells, or neighbors.
-                if not (bCreateLandscapeSnowMeshes or bCreateLandscapeHeights) then
-                    if not IsCellInRange(wrldEdid, cellXHere, cellYHere, True) then continue;
-
-                //AddMessage(#9 + #9 + #9 + 'Position ' + FloatToStr(posXHere) + ',' + FloatToStr(posYHere) + ' is in cell ' + IntToStr(cellXHere) + ',' + IntToStr(cellYHere));
-
-                cellPosX := (posXHere - (cellXHere * 4096))/128;
-                cellPosY := (posYHere - (cellYHere * 4096))/128;
-                column_closest := Round(cellPosX);
-                row_closest := Round(cellPosY);
+                bWasAltered := False;
 
                 //Find the closest vertex in this cell.
                 for k := 0 to 3 do begin
@@ -1888,29 +1891,29 @@ begin
                     else if alterationHere < 0 then begin
                         //-1 0
                         if (row > 0) and (GetLandAlteration(joLandAlteration, row - 1, column) > 0) then
-                            AddLandAlteration(joLandAlteration, row - 1, column, 0);
+                            bWasAltered := AddLandAlteration(joLandAlteration, row - 1, column, 0);
                         //+1 0
                         if (row < 32) and (GetLandAlteration(joLandAlteration, row + 1, column) > 0) then
-                            AddLandAlteration(joLandAlteration, row + 1, column, 0);
+                            bWasAltered := AddLandAlteration(joLandAlteration, row + 1, column, 0);
                         //0 -1
                         if (column > 0) and (GetLandAlteration(joLandAlteration, row, column - 1) > 0) then
-                            AddLandAlteration(joLandAlteration, row, column - 1, 0);
+                            bWasAltered := AddLandAlteration(joLandAlteration, row, column - 1, 0);
                         //0 +1
                         if (column < 32) and (GetLandAlteration(joLandAlteration, row, column + 1) > 0) then
-                            AddLandAlteration(joLandAlteration, row, column + 1, 0);
+                            bWasAltered := AddLandAlteration(joLandAlteration, row, column + 1, 0);
                         // Check diagonals
                         //-1 -1
                         if (row > 0) and (column > 0) and (GetLandAlteration(joLandAlteration, row - 1, column - 1) > 0) then
-                            AddLandAlteration(joLandAlteration, row - 1, column - 1, 0);
+                            bWasAltered := AddLandAlteration(joLandAlteration, row - 1, column - 1, 0);
                         //-1 +1
                         if (row > 0) and (column < 32) and (GetLandAlteration(joLandAlteration, row - 1, column + 1) > 0) then
-                            AddLandAlteration(joLandAlteration, row - 1, column + 1, 0);
+                            bWasAltered := AddLandAlteration(joLandAlteration, row - 1, column + 1, 0);
                         //+1 -1
                         if (row < 32) and (column > 0) and (GetLandAlteration(joLandAlteration, row + 1, column - 1) > 0) then
-                            AddLandAlteration(joLandAlteration, row + 1, column - 1, 0);
+                            bWasAltered := AddLandAlteration(joLandAlteration, row + 1, column - 1, 0);
                         //+1 +1
                         if (row < 32) and (column < 32) and (GetLandAlteration(joLandAlteration, row + 1, column + 1) > 0) then
-                            AddLandAlteration(joLandAlteration, row + 1, column + 1, 0);
+                            bWasAltered := AddLandAlteration(joLandAlteration, row + 1, column + 1, 0);
                     end;
 
                     joLand.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights\' + landFile);
@@ -1922,11 +1925,11 @@ begin
                         continue; //The object is completely below this vertex, so skip it.
                     end;
 
-                    AddLandAlteration(joLandAlteration, row, column, alterationHere);
+                    bWasAltered := AddLandAlteration(joLandAlteration, row, column, alterationHere);
                     AddMessage(#9 + #9 + #9 + 'Altering land height at ' + IntToStr(column) + ',' + IntToStr(row) + ' in ' + wrldEdid + ' ' + IntToStr(cellXHere) + ' ' + IntToStr(cellYHere) + ' from ' + IntToStr(vz * SCALE_FACTOR_TERRAIN) + ' to ' + FloatToStr(vz * SCALE_FACTOR_TERRAIN + alterationHere));
                 end;
             finally
-                joLandAlteration.SaveToFile(wbScriptsPath + 'Seasons\LandHeightsAltered\' + wrldEdid + '\x' + IntToStr(cellXHere) + 'y' + IntToStr(cellYHere) + '.json', False, TEncoding.UTF8, True);
+                if bWasAltered then joLandAlteration.SaveToFile(wbScriptsPath + 'Seasons\LandHeightsAltered\' + wrldEdid + '\x' + IntToStr(cellXHere) + 'y' + IntToStr(cellYHere) + '.json', False, TEncoding.UTF8, True);
                 joLandAlteration.Free;
                 joLand.Free;
             end;
@@ -1954,7 +1957,7 @@ begin
     end;
 end;
 
-procedure AddLandAlteration(joLandAlteration: TJsonObject; row, column, alteration: integer);
+function AddLandAlteration(joLandAlteration: TJsonObject; row, column, alteration: integer): boolean;
 {
     Adds an alteration value to the joLandAlteration.
 
@@ -1966,6 +1969,7 @@ procedure AddLandAlteration(joLandAlteration: TJsonObject; row, column, alterati
 var
     i: integer;
 begin
+    Result := False;
     try
         joLandAlteration.A[row].S[column] := alteration;
     except
@@ -1973,6 +1977,7 @@ begin
             joLandAlteration.A[row].Add('');
         joLandAlteration.A[row].S[column] := alteration;
     end;
+    Result := True;
 end;
 
 function IsCellInRange(wrldEdid: string; cellX, cellY: integer; bCheckNeighbors: boolean): boolean;
