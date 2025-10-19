@@ -136,9 +136,9 @@ begin
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
     CollectRecords;
     if not bLoadPreviousLandHeights then begin
-        AlterLandHeightsForTheseBases;
+        // AlterLandHeightsForTheseBases;
         ApplyAlterations;
-        // FixLandscapeSeams;
+        FixLandscapeSeams;
     end;
     // ProcessLandRecords;
     // ProcessStats;
@@ -2453,8 +2453,9 @@ procedure ApplyAlterations;
     Merges all alterations from joLandscapeHeightsAltered into joLandscapeHeights, modifying the latter in-place.
 }
 var
-    count, cell, c, r, w, x, y, cellX, cellY, row, column, alteration, landValue: integer;
-    landFile, wrldEdid: string;
+    count, cell, r, w, cellX, cellY, row, column, landValue: integer;
+    landFile, wrldEdid, fileName: string;
+    alteration: variant;
 
     joLandAlteration, joLand: TJsonObject;
 
@@ -2464,18 +2465,23 @@ begin
     slWrldsAltered := TStringList.Create;
     try
         ListDirectoriesInPath(wbScriptsPath + 'Seasons\LandHeightsAltered\', slWrldsAltered);
+
         for w := 0 to Pred(slWrldsAltered.Count) do begin
             wrldEdid := slWrldsAltered[w];
             slFiles := TStringList.Create;
             try
                 ListFilesInPath(wbScriptsPath + 'Seasons\LandHeightsAltered\' + wrldEdid + '\', slFiles);
+
                 for cell := 0 to Pred(slFiles.Count) do begin
                     // Extract cellX and cellY from filename
-                    cellX := StrToIntDef(Copy(slFiles[cell], Pos('x', slFiles[cell]) + 1, Pos('y', slFiles[cell]) - Pos('x', slFiles[cell]) - 1), 0);
-                    cellY := StrToIntDef(Copy(slFiles[cell], Pos('y', slFiles[cell]) + 1, Length(slFiles[cell]) - Pos('y', slFiles[cell]) - 4), 0); // -4 to remove '.json'
+                    fileName := slFiles[cell];
+                    if not FileExists(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\' + fileName) then continue;
+                    //AddMessage(fileName);
+                    cellX := StrToIntDef(Copy(fileName, 2, Pos('y', fileName) - 2), 0);
+                    cellY := StrToIntDef(Copy(fileName, Pos('y', fileName) + 1, Pos('.json', fileName) - Pos('y', fileName) - 1), 0);
 
-                    if not bCreateLandscapeSnowMeshes then
-                        if not IsCellInRange(wrldEdid, cellX, cellY, False) then continue;
+                    // if not bCreateLandscapeSnowMeshes then
+                    //     if not IsCellInRange(wrldEdid, cellX, cellY, False) then continue;
 
                     Inc(count);
                     AddMessage(IntToStr(count) + #9 + 'Merging alterations into land heights: ' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
@@ -2489,9 +2495,10 @@ begin
                         joLandAlteration.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsAltered\' + landFile);
                         for r := 0 to Pred(joLandAlteration.Count) do begin
                             row := joLandAlteration.Names[r];
-                            for c := 0 to Pred(joLandAlteration.A[row].Count) do begin
-                                column := joLandAlteration.A[row].Names[c];
+                            for column := 0 to Pred(joLandAlteration.A[row].Count) do begin
                                 alteration := joLandAlteration.A[row].S[column];
+                                //skip empty alterations
+                                if alteration = '' then continue;
                                 // Skip if alteration is zero to avoid unnecessary changes and maintain original land height
                                 if alteration = 0 then continue;
                                 landValue := joLand.A[row].S[column];
@@ -2515,28 +2522,42 @@ end;
 
 procedure FixLandscapeSeams;
 var
-    w, x, y, cellX, cellY, count: integer;
-    fileProvidingLand, wrldEdid: string;
+    w, cell, cellX, cellY, count: integer;
+    wrldEdid, fileName: string;
+
+    slWrlds, slFiles: TStringList;
 begin
     count := 0;
-    for w := 0 to Pred(joLandFiles.Count) do begin
-        wrldEdid := joLandFiles.Names[w];
-        for x := 0 to Pred(joLandFiles.O[wrldEdid].Count) do begin
-            cellX := joLandFiles.O[wrldEdid].Names[x];
-            for y := 0 to Pred(joLandFiles.O[wrldEdid].O[cellX].Count) do begin
-                cellY := joLandFiles.O[wrldEdid].O[cellX].Names[y];
-                // if not bCreateLandscapeSnowMeshes then
-                //     if not IsCellInRange(wrldEdid, cellX, cellY, False) then continue;
-                fileProvidingLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
-                if joLandscapeHeights.O[fileProvidingLand].O[wrldEdid].O[cellX].O[cellY].S['flags'] > 4 then continue; //skipping completely underwater cells for speed.
-                //For every landscape record we will check the edges for seams against the neighboring cell.
-                Inc(count);
-                AddMessage(IntToStr(count) + #9 + ' Checking landscape seams at' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
-                FixLandscapeSeamsAgainstNeighbors(wrldEdid, cellX, cellY);
+    slWrlds := TStringList.Create;
+    try
+        ListDirectoriesInPath(wbScriptsPath + 'Seasons\LandHeights\', slWrlds);
+        for w := 0 to Pred(slWrlds.Count) do begin
+            wrldEdid := slWrlds[w];
+            slFiles := TStringList.Create;
+            ListFilesInPath(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\', slFiles);
+            try
+                for cell := 0 to Pred(slFiles.Count) do begin
+                    // Extract cellX and cellY from filename
+                    fileName := slFiles[cell];
+                    AddMessage(fileName);
+                    cellX := StrToIntDef(Copy(fileName, 2, Pos('y', fileName) - 2), 0);
+                    cellY := StrToIntDef(Copy(fileName, Pos('y', fileName) + 1, Pos('.json', fileName) - Pos('y', fileName) - 1), 0);
+
+                    // if not bCreateLandscapeSnowMeshes then
+                    //     if not IsCellInRange(wrldEdid, cellX, cellY, False) then continue;
+
+                    //For every landscape record we will check the edges for seams against the neighboring cell.
+                    Inc(count);
+                    AddMessage(IntToStr(count) + #9 + ' Checking landscape seams at' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+                    FixLandscapeSeamsAgainstNeighbors(wrldEdid, cellX, cellY);
+                end;
+            finally
+                slFiles.Free;
             end;
         end;
+    finally
+        slWrlds.Free;
     end;
-    joLandscapeHeights.SaveToFile(wbScriptsPath + 'Seasons\LandHeights.json', False, TEncoding.UTF8, True);
 end;
 
 procedure FixLandscapeSeamsAgainstNeighbors(wrldEdid: string; cellX, cellY: integer);
@@ -2550,206 +2571,210 @@ procedure FixLandscapeSeamsAgainstNeighbors(wrldEdid: string; cellX, cellY: inte
        Adds messages for each seam fix performed for traceability.
 }
 var
+    bNeedsSaved: boolean;
     row, rowHere, column, columnHere, currentVz, neighborVz: integer;
+
+    joLand: TJsonObject;
 begin
-    // #####################################
-    // Bottom-left corner r0 c0
-    // #####################################
-    currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, 0, 0);
-    if not Assigned(currentVz) then Exit; //This should never happen
+    bNeedsSaved := False;
+    joLand := TJsonObject.Create;
+    try
+        joLand.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json');
+        // #####################################
+        // Bottom-left corner r0 c0
+        // #####################################
+        currentVz := GetCurrentLandHeightWithOffset(joLand, 0, 0);
 
-    // cell to the left x-1 y r0 c32
-    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY, 0, 32);
-    if Assigned(neighborVz) and (neighborVz < currentVz) then begin
-        currentVz := neighborVz;
-        AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX - 1) + ' ' + IntToStr(cellY));
-    end;
-
-    // cell below x y-1 r32 c0
-    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY - 1, 32, 0);
-    if Assigned(neighborVz) and (neighborVz < currentVz) then begin
-        currentVz := neighborVz;
-        AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX) + ' ' + IntToStr(cellY - 1));
-    end;
-
-    // cell diagonal (bottom-left) x-1 y-1 r32 c32
-    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY - 1, 32, 32);
-    if Assigned(neighborVz) and (neighborVz < currentVz) then begin
-        currentVz := neighborVz;
-        AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX - 1) + ' ' + IntToStr(cellY - 1));
-    end;
-    SetLandHeightWithOffset(wrldEdid, cellX, cellY, 0, 0, currentVz);
-
-    // #####################################
-    // Bottom-right corner r0 c32
-    // #####################################
-    currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, 0, 32);
-    if not Assigned(currentVz) then Exit; //This should never happen
-
-    // cell to the right x+1 y r0 c0
-    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY, 0, 0);
-    if Assigned(neighborVz) and (neighborVz < currentVz) then begin
-        currentVz := neighborVz;
-        AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX + 1) + ' ' + IntToStr(cellY));
-    end;
-
-    // cell below x y-1 r32 c32
-    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY - 1, 32, 32);
-    if Assigned(neighborVz) and (neighborVz < currentVz) then begin
-        currentVz := neighborVz;
-        AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX) + ' ' + IntToStr(cellY - 1));
-    end;
-
-    // cell diagonal (bottom-right) x+1 y-1 r32 c0
-    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY - 1, 32, 0);
-    if Assigned(neighborVz) and (neighborVz < currentVz) then begin
-        currentVz := neighborVz;
-        AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX + 1) + ' ' + IntToStr(cellY - 1));
-    end;
-    SetLandHeightWithOffset(wrldEdid, cellX, cellY, 0, 32, currentVz);
-
-    // #####################################
-    // Top-left corner r32 c0
-    // #####################################
-    currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, 32, 0);
-    if not Assigned(currentVz) then Exit; //This should never happen
-
-    // cell to the left x-1 y r32 c32
-    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY, 32, 32);
-    if Assigned(neighborVz) and (neighborVz < currentVz) then begin
-        currentVz := neighborVz;
-        AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX - 1) + ' ' + IntToStr(cellY));
-    end;
-
-    // cell above x y+1 r0 c0
-    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY + 1, 0, 0);
-    if Assigned(neighborVz) and (neighborVz < currentVz) then begin
-        currentVz := neighborVz;
-        AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX) + ' ' + IntToStr(cellY + 1));
-    end;
-
-    // cell diagonal (top-left) x-1 y+1 r0 c32
-    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY + 1, 0, 32);
-    if Assigned(neighborVz) and (neighborVz < currentVz) then begin
-        currentVz := neighborVz;
-        AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX - 1) + ' ' + IntToStr(cellY + 1));
-    end;
-    SetLandHeightWithOffset(wrldEdid, cellX, cellY, 32, 0, currentVz);
-
-    // #####################################
-    // Top-right corner r32 c32
-    // #####################################
-    currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, 32, 32);
-    if not Assigned(currentVz) then Exit; //This should never happen
-
-    // cell to the right x+1 y r32 c0
-    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY, 32, 0);
-    if Assigned(neighborVz) and (neighborVz < currentVz) then begin
-        currentVz := neighborVz;
-        AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX + 1) + ' ' + IntToStr(cellY));
-    end;
-
-    // cell above x y+1 r0 c32
-    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY + 1, 0, 32);
-    if Assigned(neighborVz) and (neighborVz < currentVz) then begin
-        currentVz := neighborVz;
-        AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX) + ' ' + IntToStr(cellY + 1));
-    end;
-
-    // cell diagonal (top-right) x+1 y+1 r0 c0
-    neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY + 1, 0, 0);
-    if Assigned(neighborVz) and (neighborVz < currentVz) then begin
-        currentVz := neighborVz;
-        AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX + 1) + ' ' + IntToStr(cellY + 1));
-    end;
-    SetLandHeightWithOffset(wrldEdid, cellX, cellY, 32, 32, currentVz);
-
-    // #####################################
-    // Bottom Row r0 c1 through c31
-    // #####################################
-
-    row := 0;
-    for column := 1 to 31 do begin
-        currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column);
-        if not Assigned(currentVz) then Exit; //This should never happen
-
-        //neighbor cell is below, so y - 1 and r32
-        rowHere := 32;
-        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY - 1, rowHere, column);
-        if Assigned(neighborVz) and (neighborVz < currentVz) then begin
-            currentVz := neighborVz;
-            AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX) + ' ' + IntToStr(cellY - 1));
-        end;
-        SetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column, currentVz);
-    end;
-
-    // #####################################
-    // Top Row r32 c1 through c31
-    // #####################################
-
-    row := 32;
-    for column := 1 to 31 do begin
-        currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column);
-        if not Assigned(currentVz) then Exit; //This should never happen
-
-        //neighbor cell is above, so y + 1 and r0
-        rowHere := 0;
-        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY + 1, rowHere, column);
-        if Assigned(neighborVz) and (neighborVz < currentVz) then begin
-            currentVz := neighborVz;
-            AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX) + ' ' + IntToStr(cellY + 1));
-        end;
-        SetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column, currentVz);
-    end;
-
-    // #####################################
-    // Left Column c0 r1 through r31
-    // #####################################
-
-    column := 0;
-    for row := 1 to 31 do begin
-        currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column);
-        if not Assigned(currentVz) then Exit; //This should never happen
-
-        //neighbor cell is to the left, so x - 1 and c32
-        columnHere := 32;
-        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY, row, columnHere);
+        // cell to the left x-1 y r0 c32
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY, 0, 32);
         if Assigned(neighborVz) and (neighborVz < currentVz) then begin
             currentVz := neighborVz;
             AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX - 1) + ' ' + IntToStr(cellY));
         end;
-        SetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column, currentVz);
-    end;
 
-    // #####################################
-    // Right Column c32 r1 through r31
-    // #####################################
+        // cell below x y-1 r32 c0
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY - 1, 32, 0);
+        if Assigned(neighborVz) and (neighborVz < currentVz) then begin
+            currentVz := neighborVz;
+            AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX) + ' ' + IntToStr(cellY - 1));
+        end;
 
-    column := 32;
-    for row := 1 to 31 do begin
-        currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column);
-        if not Assigned(currentVz) then Exit; //This should never happen
+        // cell diagonal (bottom-left) x-1 y-1 r32 c32
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY - 1, 32, 32);
+        if Assigned(neighborVz) and (neighborVz < currentVz) then begin
+            currentVz := neighborVz;
+            AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX - 1) + ' ' + IntToStr(cellY - 1));
+        end;
+        SetLandHeightWithOffset(joLand, bNeedsSaved, wrldEdid, cellX, cellY, 0, 0, currentVz);
 
-        //neighbor cell is to the right, so x + 1 and 0
-        columnHere := 0;
-        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY, row, columnHere);
+        // #####################################
+        // Bottom-right corner r0 c32
+        // #####################################
+        currentVz := GetCurrentLandHeightWithOffset(joLand, 0, 32);
+
+        // cell to the right x+1 y r0 c0
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY, 0, 0);
         if Assigned(neighborVz) and (neighborVz < currentVz) then begin
             currentVz := neighborVz;
             AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX + 1) + ' ' + IntToStr(cellY));
         end;
-        SetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column, currentVz);
-    end;
 
-    // #####################################
-    // Rows r1 through r31 Columns c1 through c31
-    // #####################################
-    // for row := 1 to 31 do begin
-    //     for column := 1 to 31 do begin
-    //         currentVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column);
-    //         if not Assigned(currentVz) then Exit; //This should never happen
-    //         SetLandHeightWithOffset(wrldEdid, cellX, cellY, row, column, currentVz);
-    //     end;
-    // end;
+        // cell below x y-1 r32 c32
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY - 1, 32, 32);
+        if Assigned(neighborVz) and (neighborVz < currentVz) then begin
+            currentVz := neighborVz;
+            AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX) + ' ' + IntToStr(cellY - 1));
+        end;
+
+        // cell diagonal (bottom-right) x+1 y-1 r32 c0
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY - 1, 32, 0);
+        if Assigned(neighborVz) and (neighborVz < currentVz) then begin
+            currentVz := neighborVz;
+            AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX + 1) + ' ' + IntToStr(cellY - 1));
+        end;
+        SetLandHeightWithOffset(joLand, bNeedsSaved, wrldEdid, cellX, cellY, 0, 32, currentVz);
+
+        // #####################################
+        // Top-left corner r32 c0
+        // #####################################
+        currentVz := GetCurrentLandHeightWithOffset(joLand, 32, 0);
+
+        // cell to the left x-1 y r32 c32
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY, 32, 32);
+        if Assigned(neighborVz) and (neighborVz < currentVz) then begin
+            currentVz := neighborVz;
+            AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX - 1) + ' ' + IntToStr(cellY));
+        end;
+
+        // cell above x y+1 r0 c0
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY + 1, 0, 0);
+        if Assigned(neighborVz) and (neighborVz < currentVz) then begin
+            currentVz := neighborVz;
+            AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX) + ' ' + IntToStr(cellY + 1));
+        end;
+
+        // cell diagonal (top-left) x-1 y+1 r0 c32
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY + 1, 0, 32);
+        if Assigned(neighborVz) and (neighborVz < currentVz) then begin
+            currentVz := neighborVz;
+            AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX - 1) + ' ' + IntToStr(cellY + 1));
+        end;
+        SetLandHeightWithOffset(joLand, bNeedsSaved, wrldEdid, cellX, cellY, 32, 0, currentVz);
+
+        // #####################################
+        // Top-right corner r32 c32
+        // #####################################
+        currentVz := GetCurrentLandHeightWithOffset(joLand, 32, 32);
+
+        // cell to the right x+1 y r32 c0
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY, 32, 0);
+        if Assigned(neighborVz) and (neighborVz < currentVz) then begin
+            currentVz := neighborVz;
+            AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX + 1) + ' ' + IntToStr(cellY));
+        end;
+
+        // cell above x y+1 r0 c32
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY + 1, 0, 32);
+        if Assigned(neighborVz) and (neighborVz < currentVz) then begin
+            currentVz := neighborVz;
+            AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX) + ' ' + IntToStr(cellY + 1));
+        end;
+
+        // cell diagonal (top-right) x+1 y+1 r0 c0
+        neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY + 1, 0, 0);
+        if Assigned(neighborVz) and (neighborVz < currentVz) then begin
+            currentVz := neighborVz;
+            AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX + 1) + ' ' + IntToStr(cellY + 1));
+        end;
+        SetLandHeightWithOffset(joLand, bNeedsSaved, wrldEdid, cellX, cellY, 32, 32, currentVz);
+
+        // #####################################
+        // Bottom Row r0 c1 through c31
+        // #####################################
+
+        row := 0;
+        for column := 1 to 31 do begin
+            currentVz := GetCurrentLandHeightWithOffset(joLand, row, column);
+
+            //neighbor cell is below, so y - 1 and r32
+            rowHere := 32;
+            neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY - 1, rowHere, column);
+            if Assigned(neighborVz) and (neighborVz < currentVz) then begin
+                currentVz := neighborVz;
+                AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX) + ' ' + IntToStr(cellY - 1));
+            end;
+            SetLandHeightWithOffset(joLand, bNeedsSaved, wrldEdid, cellX, cellY, row, column, currentVz);
+        end;
+
+        // #####################################
+        // Top Row r32 c1 through c31
+        // #####################################
+
+        row := 32;
+        for column := 1 to 31 do begin
+            currentVz := GetCurrentLandHeightWithOffset(joLand, row, column);
+
+            //neighbor cell is above, so y + 1 and r0
+            rowHere := 0;
+            neighborVz := GetLandHeightWithOffset(wrldEdid, cellX, cellY + 1, rowHere, column);
+            if Assigned(neighborVz) and (neighborVz < currentVz) then begin
+                currentVz := neighborVz;
+                AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX) + ' ' + IntToStr(cellY + 1));
+            end;
+            SetLandHeightWithOffset(joLand, bNeedsSaved, wrldEdid, cellX, cellY, row, column, currentVz);
+        end;
+
+        // #####################################
+        // Left Column c0 r1 through r31
+        // #####################################
+
+        column := 0;
+        for row := 1 to 31 do begin
+            currentVz := GetCurrentLandHeightWithOffset(joLand, row, column);
+
+            //neighbor cell is to the left, so x - 1 and c32
+            columnHere := 32;
+            neighborVz := GetLandHeightWithOffset(wrldEdid, cellX - 1, cellY, row, columnHere);
+            if Assigned(neighborVz) and (neighborVz < currentVz) then begin
+                currentVz := neighborVz;
+                AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX - 1) + ' ' + IntToStr(cellY));
+            end;
+            SetLandHeightWithOffset(joLand, bNeedsSaved, wrldEdid, cellX, cellY, row, column, currentVz);
+        end;
+
+        // #####################################
+        // Right Column c32 r1 through r31
+        // #####################################
+
+        column := 32;
+        for row := 1 to 31 do begin
+            currentVz := GetCurrentLandHeightWithOffset(joLand, row, column);
+
+            //neighbor cell is to the right, so x + 1 and 0
+            columnHere := 0;
+            neighborVz := GetLandHeightWithOffset(wrldEdid, cellX + 1, cellY, row, columnHere);
+            if Assigned(neighborVz) and (neighborVz < currentVz) then begin
+                currentVz := neighborVz;
+                AddMessage('Seam fixed between ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'and' + #9 + IntToStr(cellX + 1) + ' ' + IntToStr(cellY));
+            end;
+            SetLandHeightWithOffset(joLand, bNeedsSaved, wrldEdid, cellX, cellY, row, column, currentVz);
+        end;
+
+        // #####################################
+        // Rows r1 through r31 Columns c1 through c31
+        // #####################################
+        // for row := 1 to 31 do begin
+        //     for column := 1 to 31 do begin
+        //         currentVz := GetCurrentLandHeightWithOffset(joLand, row, column);
+        //         SetLandHeightWithOffset(joLand, bNeedsSaved, wrldEdid, cellX, cellY, row, column, currentVz);
+        //     end;
+        // end;
+    finally
+        if bNeedsSaved then begin
+            joLand.SaveToFile(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json', False, TEncoding.UTF8, True);
+        end;
+        joLand.Free;
+    end;
 end;
 
 function GetLandHeightWithOffset(wrldEdid: string; cellX, cellY, row, column: integer): integer;
@@ -2757,26 +2782,42 @@ function GetLandHeightWithOffset(wrldEdid: string; cellX, cellY, row, column: in
     Get Land Height at this location including offset.
 }
 var
-    fileNameLand: string;
     offset, landValue: integer;
+
+    joLand: TJsonObject;
 begin
     Result := nil;
-    fileNameLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
-    if fileNameLand = '' then Exit;
-    offset := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY].S['offset'];
-    landValue := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column];
+    if not LandHeightsExist(wrldEdid, cellX, cellY) then Exit;
+    joLand := TJsonObject.Create;
+    try
+        joLand.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json');
+        offset := joLand.S['offset'];
+        landValue := joLand.A[row].S[column];
+        Result := landValue + offset;
+    finally
+        joLand.Free;
+    end;
+end;
+
+function GetCurrentLandHeightWithOffset(joLand: TJsonObject; row, column: integer): integer;
+{
+    Get Land Height at this location including offset.
+}
+var
+    offset, landValue: integer;
+begin
+    offset := joLand.S['offset'];
+    landValue := joLand.A[row].S[column];
     Result := landValue + offset;
 end;
 
-procedure SetLandHeightWithOffset(wrldEdid: string; cellX, cellY, row, column, vz: integer);
+procedure SetLandHeightWithOffset(joLand: TJsonObject; var bNeedsSaved: boolean; wrldEdid: string; cellX, cellY, row, column, vz: integer);
 var
-    fileNameLand: string;
     offset: integer;
 begin
-    fileNameLand := joLandFiles.O[wrldEdid].O[cellX].S[cellY];
-    if fileNameLand = '' then Exit;
-    offset := joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY].S['offset'];
-    joLandscapeHeights.O[fileNameLand].O[wrldEdid].O[cellX].O[cellY].A[row].S[column] := vz - offset;
+    offset := joLand.S['offset'];
+    joLand.A[row].S[column] := vz - offset;
+    bNeedsSaved := True;
 end;
 
 procedure FetchRules;
