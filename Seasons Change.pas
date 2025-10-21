@@ -123,18 +123,20 @@ begin
     end;
     if bCreateTestPlugin then CreatePlugin;
 
-    // if bLoadPreviousLandHeights then begin
-    //     if FileExists(wbScriptsPath + 'Seasons\LandHeights.json') then
-    //         joLandscapeHeights.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights.json');
-    // end
-    // else if FileExists(wbScriptsPath + 'Seasons\LandHeightsPreAlteration.json') then
-    //     joLandscapeHeights.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsPreAlteration.json');
-
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
+    if not bCreateLandscapeHeights then begin
+        LoadLandJsons(joLandscapeHeights, 'LandHeightsPreAlteration');
+        LoadLandJsons(joLandscapeHeightsAltered, 'LandHeightsBaseAlterations');
+    end;
     CollectRecords;
+    if bCreateLandscapeHeights then begin
+        MakeLandJsons(joLandscapeHeights, 'LandHeightsPreAlteration');
+        MakeLandJsons(joLandscapeHeightsAltered, 'LandHeightsBaseAlterations');
+    end;
     if not bLoadPreviousLandHeights then begin
         AlterLandHeightsForTheseBases;
+        MakeLandJsons(joLandscapeHeightsAltered, 'LandHeightsAltered');
         ApplyAlterations;
         FixLandscapeSeams;
     end;
@@ -1716,7 +1718,6 @@ procedure AlterLandHeightsForThisPlacement(alterationRefr, x1n, y1n, z1n, x2n, y
 var
     bWasAltered: boolean;
     i, j, k, row, row_closest, column, column_closest, cellXHere, cellYHere, vz, oldZ, landOffsetZ, newZ, width, height, numX, numY, alterationHere: integer;
-    fileName, landFile: string;
     raw_x, raw_y, raw_z, xHere, yHere, zHere, posXHere, posYHere, posZHere, column_bias, row_bias, outskirts_bias, cellPosX, cellPosY: double;
     previousAlteration: variant;
 
@@ -1781,8 +1782,7 @@ begin
             cellXHere := Floor(posXHere/4096);
             cellYHere := Floor(posYHere/4096);
 
-            landFile := wrldEdid + '\x' + IntToStr(cellXHere) + 'y' + IntToStr(cellYHere) + '.json';
-            if not FileExists(wbScriptsPath + 'Seasons\LandHeights\' + landFile) then continue;
+            if not LandHeightsExist(wrldEdid, cellXHere, cellYHere) then continue;
 
             //AddMessage(#9 + #9 + #9 + 'Position ' + FloatToStr(posXHere) + ',' + FloatToStr(posYHere) + ' is in cell ' + IntToStr(cellXHere) + ',' + IntToStr(cellYHere));
 
@@ -1794,7 +1794,7 @@ begin
             joLand := TJsonObject.Create;
             joLandAlteration := TJsonObject.Create;
             try
-                joLandAlteration.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsAltered\' + landFile);
+                joLandAlteration.Assign(joLandscapeHeightsAltered.O[wrldEdid].O[cellXHere].O[cellYHere]);
                 bWasAltered := False;
 
                 //Find the closest vertex in this cell.
@@ -1901,7 +1901,7 @@ begin
                             bWasAltered := AddLandAlteration(joLandAlteration, row + 1, column + 1, 0);
                     end;
 
-                    joLand.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights\' + landFile);
+                    joLand.Assign(joLandscapeHeights.O[wrldEdid].O[cellXHere].O[cellYHere]);
                     landOffsetZ := joLand.S['offset'];
                     vz := joLand.A[row].S[column];
                     oldZ := (vz + landOffsetZ) * SCALE_FACTOR_TERRAIN;
@@ -1914,7 +1914,7 @@ begin
                     AddMessage(#9 + #9 + #9 + 'Altering land height at ' + IntToStr(column) + ',' + IntToStr(row) + ' in ' + wrldEdid + ' ' + IntToStr(cellXHere) + ' ' + IntToStr(cellYHere) + ' from ' + IntToStr(vz * SCALE_FACTOR_TERRAIN) + ' to ' + FloatToStr(vz * SCALE_FACTOR_TERRAIN + alterationHere));
                 end;
             finally
-                if bWasAltered then joLandAlteration.SaveToFile(wbScriptsPath + 'Seasons\LandHeightsAltered\' + wrldEdid + '\x' + IntToStr(cellXHere) + 'y' + IntToStr(cellYHere) + '.json', False, TEncoding.UTF8, True);
+                if bWasAltered then joLandscapeHeightsAltered.O[wrldEdid].O[cellXHere].O[cellYHere].Assign(joLandAlteration);
                 joLandAlteration.Free;
                 joLand.Free;
             end;
@@ -2295,7 +2295,6 @@ var
     landHeightData, eRow: IwbElement;
 begin
     Result := False;
-    if not bCreateLandscapeHeights then Exit;
     cellX := GetElementNativeValues(rCell, 'XCLC\X');
     cellY := GetElementNativeValues(rCell, 'XCLC\Y');
     fileProvidingLand := GetFileName(GetFile(land));
@@ -2360,10 +2359,8 @@ begin
         if iHeightAlwaysBelowWater = 8 then Result := False;
     finally
         if Result then begin
-            EnsureDirectoryExists(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\');
-            joLand.SaveToFile(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json', False, TEncoding.UTF8, True);
-            EnsureDirectoryExists(wbScriptsPath + 'Seasons\LandHeightsAltered\' + wrldEdid + '\');
-            joLandAlteration.SaveToFile(wbScriptsPath + 'Seasons\LandHeightsAltered\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json', False, TEncoding.UTF8, True);
+            joLandscapeHeights.O[wrldEdid].O[cellX].O[cellY].Assign(joLand);
+            joLandscapeHeightsAltered.O[wrldEdid].O[cellX].O[cellY].Assign(joLandAlteration);
         end;
         joLand.Free;
         joLandAlteration.Free;
@@ -2382,17 +2379,78 @@ function LandHeightsExist(wrldEdid: string; cellX, cellY: integer): boolean;
     Returns:
       True if the landscape height data file exists, False otherwise.
 }
-var
-    dir: string;
 begin
-    Result := False;
-    dir := wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\';
-    try
-        if FileExists(dir + 'x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json') then Result := True;
-    except
-        Result := False;
+    Result := joLandscapeHeights.O[wrldEdid].O[cellX].Contains(cellY);
+end;
+
+procedure MakeLandJsons(joLand: TJsonObject; dir: string);
+{
+    Extracts the joLand data into individual JSON files for each worldspace and cell.
+}
+var
+    count, w, cellX, cellY: integer;
+    wrldEdid: string;
+
+    joLandAlteration: TJsonObject;
+begin
+    count := 0;
+    for w := 0 to Pred(joLand.Count) do begin
+        wrldEdid := joLand.Names[w];
+        EnsureDirectoryExists(wbScriptsPath + 'Seasons\'+ dir + '\' + wrldEdid + '\');
+        for cellX := 0 to Pred(joLand.O[wrldEdid].Count) do begin
+            for cellY := 0 to Pred(joLand.O[wrldEdid].O[cellX].Count) do begin
+                joLandAlteration := TJsonObject.Create;
+                try
+                    Inc(count);
+                    AddMessage(IntToStr(count) + #9 + 'Saving land heights to JSON: ' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+                    joLandAlteration.Assign(joLand.O[wrldEdid].O[cellX].O[cellY]);
+                    joLandAlteration.SaveToFile(wbScriptsPath + 'Seasons\'+ dir + '\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json', False, TEncoding.UTF8, True);
+                finally
+                    joLandAlteration.Free;
+                end;
+            end;
+        end;
     end;
 end;
+
+procedure LoadLandJsons(joLand: TJsonObject; dir: string);
+{
+    Loads landscape height data from individual JSON files for each worldspace and cell into the joLand object.
+}
+var
+    w, cell, cellX, cellY, count: integer;
+    wrldEdid, fileName: string;
+
+    slWrlds, slFiles: TStringList;
+begin
+    count := 0;
+    slWrlds := TStringList.Create;
+    try
+        ListDirectoriesInPath(wbScriptsPath + 'Seasons\' + dir + '\', slWrlds);
+        for w := 0 to Pred(slWrlds.Count) do begin
+            wrldEdid := slWrlds[w];
+            slFiles := TStringList.Create;
+            ListFilesInPath(wbScriptsPath + 'Seasons\' + dir + '\' + wrldEdid + '\', slFiles);
+            try
+                for cell := 0 to Pred(slFiles.Count) do begin
+                    // Extract cellX and cellY from filename
+                    fileName := slFiles[cell];
+                    cellX := StrToIntDef(Copy(fileName, 2, Pos('y', fileName) - 2), 0);
+                    cellY := StrToIntDef(Copy(fileName, Pos('y', fileName) + 1, Pos('.json', fileName) - Pos('y', fileName) - 1), 0);
+
+                    Inc(count);
+                    AddMessage(IntToStr(count) + #9 + 'Loading land heights from JSON: ' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+                    joLand.O[wrldEdid].O[cellX].O[cellY].LoadFromFile(wbScriptsPath + 'Seasons\' + dir + '\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json');
+                end;
+            finally
+                slFiles.Free;
+            end;
+        end;
+    finally
+        slWrlds.Free;
+    end;
+end;
+
 
 procedure ApplyAlterations;
 {
@@ -2421,10 +2479,11 @@ begin
                 for cell := 0 to Pred(slFiles.Count) do begin
                     // Extract cellX and cellY from filename
                     fileName := slFiles[cell];
-                    if not FileExists(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\' + fileName) then continue;
+
                     //AddMessage(fileName);
                     cellX := StrToIntDef(Copy(fileName, 2, Pos('y', fileName) - 2), 0);
                     cellY := StrToIntDef(Copy(fileName, Pos('y', fileName) + 1, Pos('.json', fileName) - Pos('y', fileName) - 1), 0);
+                    if not LandHeightsExist(wrldEdid, cellX, cellY) then continue;
 
                     Inc(count);
                     AddMessage(IntToStr(count) + #9 + 'Merging alterations into land heights: ' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
@@ -2434,7 +2493,7 @@ begin
                     joLand := TJsonObject.Create;
                     joLandAlteration := TJsonObject.Create;
                     try
-                        joLand.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights\' + landFile);
+                        joLand.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsPreAlteration\' + landFile);
                         joLandAlteration.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsAltered\' + landFile);
                         for r := 0 to Pred(joLandAlteration.Count) do begin
                             row := joLandAlteration.Names[r];
