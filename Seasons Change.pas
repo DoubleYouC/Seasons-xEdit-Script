@@ -17,7 +17,7 @@ var
     statGroup, scolGroup: IwbGroupRecord;
     flatSnowStatic: IwbElement;
 
-    slPluginFiles, slLandHeightsExist: TStringList;
+    slPluginFiles: TStringList;
     tlLandRecords, tlBasesThatAlterLand, tlStats, tlWinterDecals: TList;
     joWinningCells, joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules, joLoadOrderFormIDFileID: TJsonObject;
 
@@ -42,7 +42,6 @@ procedure CreateObjects;
     Creates objects.
 }
 begin
-
     joSeasons := TJsonObject.Create;
     joLandscapeHeights := TJsonObject.Create;
     joLandscapeHeightsAltered := TJsonObject.Create;
@@ -58,7 +57,6 @@ begin
     tlWinterDecals := TList.Create;
 
     slPluginFiles := TStringList.Create;
-    slLandHeightsExist := TStringList.Create;
 end;
 
 function Finalize: integer;
@@ -81,7 +79,6 @@ begin
     tlWinterDecals.Free;
 
     slPluginFiles.Free;
-    slLandHeightsExist.Free;
 
     if bSaveUserRules and bUserAlterLandRulesChanged then begin
         AddMessage('Saving ' + IntToStr(joUserAlterLandRules.Count) + ' object snow alteration user rule(s) to ' + wbDataPath + 'Seasons\AlterLandUserRules.json');
@@ -128,17 +125,17 @@ begin
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
     if not bCreateLandscapeHeights then begin
-        LoadLandJsons(joLandscapeHeights, 'LandHeightsPreAlteration', true);
-        LoadLandJsons(joLandscapeHeightsAltered, 'LandHeightsBaseAlterations', false);
+        LoadLandJsons(joLandscapeHeights, 'LandHeightsPreAlteration');
+        LoadLandJsons(joLandscapeHeightsAltered, 'LandHeightsBaseAlterations');
     end;
     CollectRecords;
     if bCreateLandscapeHeights then begin
-        MakeLandJsons(joLandscapeHeights, 'LandHeightsPreAlteration', true);
-        MakeLandJsons(joLandscapeHeightsAltered, 'LandHeightsBaseAlterations', false);
+        MakeLandJsons(joLandscapeHeights, 'LandHeightsPreAlteration');
+        MakeLandJsons(joLandscapeHeightsAltered, 'LandHeightsBaseAlterations');
     end;
     if not bLoadPreviousLandHeights then begin
         AlterLandHeightsForTheseBases;
-        MakeLandJsons(joLandscapeHeightsAltered, 'LandHeightsAltered', false);
+        MakeLandJsons(joLandscapeHeightsAltered, 'LandHeightsAltered');
         ApplyAlterations;
         FixLandscapeSeams;
     end;
@@ -1332,10 +1329,6 @@ begin
         slHideQuads.Free;
     end;
     AddMessage('New LAND Records: ' + IntToStr(count));
-    // if bCreateLandscapeHeights then begin
-    //     joLandscapeHeights.SaveToFile(wbScriptsPath + 'Seasons\LandHeightsPreAlteration.json', False, TEncoding.UTF8, True);
-    //     joLandscapeHeightsAltered.SaveToFile(wbScriptsPath + 'Seasons\LandHeightsAlteredPreAlteration.json', False, TEncoding.UTF8, True);
-    // end;
 end;
 
 procedure ProcessStats;
@@ -1539,9 +1532,6 @@ begin
         AddMessage('Processing base ' + #9 + Name(base) + #9 + IntToStr(alteration));
         ProcessBasesThatAlterLand(base, base, alteration, x1, y1, z1, x2, y2, z2, False, baseRecordId);
     end;
-    // if bCreateLandscapeHeights then begin
-    //     joLandscapeHeightsAltered.SaveToFile(wbScriptsPath + 'Seasons\LandHeightsAltered.json', False, TEncoding.UTF8, True);
-    // end;
 end;
 
 function ProcessBasesThatAlterLand(base, fromBase: IwbElement; alteration, x1, y1, z1, x2, y2, z2: integer; bSCOL: boolean; baseRecordId: string): boolean;
@@ -1935,10 +1925,14 @@ function GetLandAlteration(joLandAlteration: TJsonObject; row, column, defaultVa
     Returns:
       The alteration value at the specified row and column, or 0 if none exists.
 }
+var
+    value: variant;
 begin
     Result := defaultValue;
     try
-        Result := joLandAlteration.A[row].S[column];
+        value := joLandAlteration.A[row].S[column];
+        if value = '' then Result := defaultValue
+        else Result := value;
     except
         Result := defaultValue;
     end;
@@ -2377,10 +2371,10 @@ function LandHeightsExist(wrldEdid: string; cellX, cellY: integer): boolean;
       True if the landscape height data file exists, False otherwise.
 }
 begin
-    Result := slLandHeightsExist.IndexOf(wrldEdid + IntToStr(cellX) + IntToStr(cellY)) <> -1;
+    Result := joLandscapeHeights.O[wrldEdid].O[cellX].Contains(cellY);
 end;
 
-procedure MakeLandJsons(joLand: TJsonObject; dir: string; bMakeExist: boolean);
+procedure MakeLandJsons(joLand: TJsonObject; dir: string);
 {
     Extracts the joLand data into individual JSON files for each worldspace and cell.
 }
@@ -2396,7 +2390,6 @@ begin
         EnsureDirectoryExists(wbScriptsPath + 'Seasons\'+ dir + '\' + wrldEdid + '\');
         for cellX := 0 to Pred(joLand.O[wrldEdid].Count) do begin
             for cellY := 0 to Pred(joLand.O[wrldEdid].O[cellX].Count) do begin
-                if bMakeExist then slLandHeightsExist.Add(wrldEdid + IntToStr(cellX) + IntToStr(cellY));
                 joLandFile := TJsonObject.Create;
                 try
                     Inc(count);
@@ -2411,7 +2404,7 @@ begin
     end;
 end;
 
-procedure LoadLandJsons(joLand: TJsonObject; dir: string; bMakeExist: boolean);
+procedure LoadLandJsons(joLand: TJsonObject; dir: string);
 {
     Loads landscape height data from individual JSON files for each worldspace and cell into the joLand object.
 }
@@ -2435,7 +2428,6 @@ begin
                     fileName := slFiles[cell];
                     cellX := StrToIntDef(Copy(fileName, 2, Pos('y', fileName) - 2), 0);
                     cellY := StrToIntDef(Copy(fileName, Pos('y', fileName) + 1, Pos('.json', fileName) - Pos('y', fileName) - 1), 0);
-                    if bMakeExist then slLandHeightsExist.Add(wrldEdid + IntToStr(cellX) + IntToStr(cellY));
 
                     Inc(count);
                     AddMessage(IntToStr(count) + #9 + 'Loading land heights from JSON: ' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
