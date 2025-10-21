@@ -17,7 +17,7 @@ var
     statGroup, scolGroup: IwbGroupRecord;
     flatSnowStatic: IwbElement;
 
-    slPluginFiles, slLandscapeCells: TStringList;
+    slPluginFiles: TStringList;
     tlLandRecords, tlBasesThatAlterLand, tlStats, tlWinterDecals: TList;
     joWinningCells, joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules, joLoadOrderFormIDFileID: TJsonObject;
 
@@ -58,7 +58,6 @@ begin
     tlWinterDecals := TList.Create;
 
     slPluginFiles := TStringList.Create;
-    slLandscapeCells := TStringList.Create;
 end;
 
 function Finalize: integer;
@@ -81,7 +80,6 @@ begin
     tlWinterDecals.Free;
 
     slPluginFiles.Free;
-    slLandscapeCells.Free;
 
     if bSaveUserRules and bUserAlterLandRulesChanged then begin
         AddMessage('Saving ' + IntToStr(joUserAlterLandRules.Count) + ' object snow alteration user rule(s) to ' + wbDataPath + 'Seasons\AlterLandUserRules.json');
@@ -1240,15 +1238,9 @@ begin
 
                             AddMessage(IntToStr(count) + #9 + ShortName(land) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
                             bLandHasChanged := CreateLandscapeHeights(land, wCell, wWrld, wrldEdid);
-                            if bLandHasChanged then begin
-                                slLandscapeCells.Add(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
-                                Inc(count);
-                            end;
                             if bCreateLandscapeSnowMeshes or bPlaceLandscapeSnow or bLandHasChanged then begin
                                 tlLandRecords.Add(land);
                             end;
-                            if (bCreateLandscapeSnowMeshes and not bLandHasChanged) then
-                                slLandscapeCells.Add(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
                             //if count > 10 then break;
                         end;
                         //if count > 10 then break;
@@ -1791,10 +1783,6 @@ begin
             landFile := wrldEdid + '\x' + IntToStr(cellXHere) + 'y' + IntToStr(cellYHere) + '.json';
             if not FileExists(wbScriptsPath + 'Seasons\LandHeights\' + landFile) then continue;
 
-            //Check if cell is in one of the slLandscapeCells, or neighbors.
-            // if not (bCreateLandscapeSnowMeshes or bCreateLandscapeHeights) then
-            //     if not IsCellInRange(wrldEdid, cellXHere, cellYHere, True) then continue;
-
             //AddMessage(#9 + #9 + #9 + 'Position ' + FloatToStr(posXHere) + ',' + FloatToStr(posYHere) + ' is in cell ' + IntToStr(cellXHere) + ',' + IntToStr(cellYHere));
 
             cellPosX := (posXHere - (cellXHere * 4096))/128;
@@ -1980,57 +1968,6 @@ begin
     Result := True;
 end;
 
-function IsCellInRange(wrldEdid: string; cellX, cellY: integer; bCheckNeighbors: boolean): boolean;
-var
-    idx: integer;
-begin
-    Result := False;
-    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
-    if idx <> -1 then Result := True;
-    if Result then Exit;
-    if not bCheckNeighbors then Exit;
-
-    //right x-1
-    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX - 1) + ' ' + IntToStr(cellY));
-    if idx <> -1 then Result := True;
-    if Result then Exit;
-
-    //left x+1
-    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX + 1) + ' ' + IntToStr(cellY));
-    if idx <> -1 then Result := True;
-    if Result then Exit;
-
-    //top y+1
-    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY + 1));
-    if idx <> -1 then Result := True;
-    if Result then Exit;
-
-    //bottom y -1
-    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY - 1));
-    if idx <> -1 then Result := True;
-    if Result then Exit;
-
-    //top right diagonal x-1 y+1
-    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX - 1) + ' ' + IntToStr(cellY + 1));
-    if idx <> -1 then Result := True;
-    if Result then Exit;
-
-    //top left diagonal x+1 y+1
-    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX + 1) + ' ' + IntToStr(cellY + 1));
-    if idx <> -1 then Result := True;
-    if Result then Exit;
-
-    //bottom right diagonal x+1 y-1
-    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX + 1) + ' ' + IntToStr(cellY - 1));
-    if idx <> -1 then Result := True;
-    if Result then Exit;
-
-    //bottom left diagonal x-1 y-1
-    idx := slLandscapeCells.IndexOf(wrldEdid + ' ' + IntToStr(cellX - 1) + ' ' + IntToStr(cellY - 1));
-    if idx <> -1 then Result := True;
-    if Result then Exit;
-end;
-
 procedure ProcessLandRecords;
 {
     Process land records to place snow.
@@ -2049,9 +1986,6 @@ begin
         cellY := GetElementNativeValues(rCell, 'XCLC\Y');
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
-        if not bCreateLandscapeSnowMeshes then begin
-            if not IsCellInRange(wrldEdid, cellX, cellY, False) then continue;
-        end;
 
         if not LandHeightsExist(wrldEdid, cellX, cellY) then continue;
         AddMessage(IntToStr(i + 1) + ' of ' + IntToStr(count) + #9 + ShortName(rLand) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
@@ -2498,9 +2432,6 @@ begin
                     cellX := StrToIntDef(Copy(fileName, 2, Pos('y', fileName) - 2), 0);
                     cellY := StrToIntDef(Copy(fileName, Pos('y', fileName) + 1, Pos('.json', fileName) - Pos('y', fileName) - 1), 0);
 
-                    // if not bCreateLandscapeSnowMeshes then
-                    //     if not IsCellInRange(wrldEdid, cellX, cellY, False) then continue;
-
                     Inc(count);
                     AddMessage(IntToStr(count) + #9 + 'Merging alterations into land heights: ' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
 
@@ -2560,9 +2491,6 @@ begin
                     AddMessage(fileName);
                     cellX := StrToIntDef(Copy(fileName, 2, Pos('y', fileName) - 2), 0);
                     cellY := StrToIntDef(Copy(fileName, Pos('y', fileName) + 1, Pos('.json', fileName) - Pos('y', fileName) - 1), 0);
-
-                    // if not bCreateLandscapeSnowMeshes then
-                    //     if not IsCellInRange(wrldEdid, cellX, cellY, False) then continue;
 
                     //For every landscape record we will check the edges for seams against the neighboring cell.
                     Inc(count);
