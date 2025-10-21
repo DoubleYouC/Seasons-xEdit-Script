@@ -1820,11 +1820,7 @@ begin
                     column_bias := (1 - (Max(column, cellPosX) - Min(column, cellPosX))) * 2;
                     outskirts_bias := 1;
 
-                    try
-                        previousAlteration := joLandAlteration.A[row].S[column];
-                    except
-                        previousAlteration := '';
-                    end;
+                    previousAlteration := GetLandAlteration(joLandAlteration, row - 1, column, nil);
 
                     if ((i = 0) or (i = numX) or (j = 0) or (j = numY)) then begin
                         //We are on the outer limits of this alteration.
@@ -1843,7 +1839,7 @@ begin
                     alterationHere := Round((outskirts_bias * row_bias * column_bias * alterationRefr)/SCALE_FACTOR_TERRAIN) * SCALE_FACTOR_TERRAIN;
                     if alterationHere = 0 then continue;
 
-                    if previousAlteration <> '' then begin
+                    if Assigned(previousAlteration) then begin
                         if previousAlteration > 0 then begin
                             //AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
                             if  ((alterationHere > 0) and (alterationHere <= previousAlteration)) then continue;
@@ -1860,48 +1856,48 @@ begin
 
                     if alterationHere > 0 then begin
                         //-1 0
-                        if (row > 0) and (GetLandAlteration(joLandAlteration, row - 1, column) < 0) then continue;
+                        if (row > 0) and (GetLandAlteration(joLandAlteration, row - 1, column, 0) < 0) then continue;
                         //+1 0
-                        if (row < 32) and (GetLandAlteration(joLandAlteration, row + 1, column) < 0) then continue;
+                        if (row < 32) and (GetLandAlteration(joLandAlteration, row + 1, column, 0) < 0) then continue;
                         //0 -1
-                        if (column > 0) and (GetLandAlteration(joLandAlteration, row, column - 1) < 0) then continue;
+                        if (column > 0) and (GetLandAlteration(joLandAlteration, row, column - 1, 0) < 0) then continue;
                         //0 +1
-                        if (column < 32) and (GetLandAlteration(joLandAlteration, row, column + 1) < 0) then continue;
+                        if (column < 32) and (GetLandAlteration(joLandAlteration, row, column + 1, 0) < 0) then continue;
                         // Check diagonals
                         //-1 -1
-                        if (row > 0) and (column > 0) and (GetLandAlteration(joLandAlteration, row - 1, column - 1) < 0) then continue;
+                        if (row > 0) and (column > 0) and (GetLandAlteration(joLandAlteration, row - 1, column - 1, 0) < 0) then continue;
                         //-1 +1
-                        if (row > 0) and (column < 32) and (GetLandAlteration(joLandAlteration, row - 1, column + 1) < 0) then continue;
+                        if (row > 0) and (column < 32) and (GetLandAlteration(joLandAlteration, row - 1, column + 1, 0) < 0) then continue;
                         //+1 -1
-                        if (row < 32) and (column > 0) and (GetLandAlteration(joLandAlteration, row + 1, column - 1) < 0) then continue;
+                        if (row < 32) and (column > 0) and (GetLandAlteration(joLandAlteration, row + 1, column - 1, 0) < 0) then continue;
                         //+1 +1
-                        if (row < 32) and (column < 32) and (GetLandAlteration(joLandAlteration, row + 1, column + 1) < 0) then continue;
+                        if (row < 32) and (column < 32) and (GetLandAlteration(joLandAlteration, row + 1, column + 1, 0) < 0) then continue;
                     end
                     else if alterationHere < 0 then begin
                         //-1 0
-                        if (row > 0) and (GetLandAlteration(joLandAlteration, row - 1, column) > 0) then
+                        if (row > 0) and (GetLandAlteration(joLandAlteration, row - 1, column, 0) > 0) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row - 1, column, 0);
                         //+1 0
-                        if (row < 32) and (GetLandAlteration(joLandAlteration, row + 1, column) > 0) then
+                        if (row < 32) and (GetLandAlteration(joLandAlteration, row + 1, column, 0) > 0) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row + 1, column, 0);
                         //0 -1
-                        if (column > 0) and (GetLandAlteration(joLandAlteration, row, column - 1) > 0) then
+                        if (column > 0) and (GetLandAlteration(joLandAlteration, row, column - 1, 0) > 0) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row, column - 1, 0);
                         //0 +1
-                        if (column < 32) and (GetLandAlteration(joLandAlteration, row, column + 1) > 0) then
+                        if (column < 32) and (GetLandAlteration(joLandAlteration, row, column + 1, 0) > 0) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row, column + 1, 0);
                         // Check diagonals
                         //-1 -1
-                        if (row > 0) and (column > 0) and (GetLandAlteration(joLandAlteration, row - 1, column - 1) > 0) then
+                        if (row > 0) and (column > 0) and (GetLandAlteration(joLandAlteration, row - 1, column - 1, 0) > 0) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row - 1, column - 1, 0);
                         //-1 +1
-                        if (row > 0) and (column < 32) and (GetLandAlteration(joLandAlteration, row - 1, column + 1) > 0) then
+                        if (row > 0) and (column < 32) and (GetLandAlteration(joLandAlteration, row - 1, column + 1, 0) > 0) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row - 1, column + 1, 0);
                         //+1 -1
-                        if (row < 32) and (column > 0) and (GetLandAlteration(joLandAlteration, row + 1, column - 1) > 0) then
+                        if (row < 32) and (column > 0) and (GetLandAlteration(joLandAlteration, row + 1, column - 1, 0) > 0) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row + 1, column - 1, 0);
                         //+1 +1
-                        if (row < 32) and (column < 32) and (GetLandAlteration(joLandAlteration, row + 1, column + 1) > 0) then
+                        if (row < 32) and (column < 32) and (GetLandAlteration(joLandAlteration, row + 1, column + 1, 0) > 0) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row + 1, column + 1, 0);
                     end;
 
@@ -1926,7 +1922,7 @@ begin
     end;
 end;
 
-function GetLandAlteration(joLandAlteration: TJsonObject; row, column: integer): integer;
+function GetLandAlteration(joLandAlteration: TJsonObject; row, column, defaultValue: integer): integer;
 {
     Gets an alteration value from the joLandAlteration.
 
@@ -1938,11 +1934,11 @@ function GetLandAlteration(joLandAlteration: TJsonObject; row, column: integer):
       The alteration value at the specified row and column, or 0 if none exists.
 }
 begin
-    Result := 0;
+    Result := defaultValue;
     try
         Result := joLandAlteration.A[row].S[column];
     except
-        Result := 0;
+        Result := defaultValue;
     end;
 end;
 
@@ -1992,11 +1988,11 @@ begin
         AddMessage(IntToStr(i + 1) + ' of ' + IntToStr(count) + #9 + ShortName(rLand) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
 
         CreateLandscapeSnow(wrldEdid, cellX, cellY);
-        if bPlaceLandscapeSnow then PlaceLandscapeSnow(rLand, rCell, rWrld, wrldEdid, cellX, cellY);
+        if bPlaceLandscapeSnow then PlaceLandscapeSnow(rCell, rWrld, wrldEdid, cellX, cellY);
     end;
 end;
 
-function PlaceLandscapeSnow(land, rCell, rWrld: IwbElement; wrldEdid: string; cellX, cellY: integer): integer;
+function PlaceLandscapeSnow(rCell, rWrld: IwbElement; wrldEdid: string; cellX, cellY: integer): integer;
 var
     unitsX, unitsY, landOffsetZ: integer;
     editorIdSnowNif, snowModel, snowLodModel0, snowLodModel1, snowLodModel2, snowStaticFormid: string;
