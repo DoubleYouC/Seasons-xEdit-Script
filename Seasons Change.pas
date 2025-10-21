@@ -1240,6 +1240,7 @@ begin
                             bLandHasChanged := CreateLandscapeHeights(land, wCell, wWrld, wrldEdid);
                             if bCreateLandscapeSnowMeshes or bPlaceLandscapeSnow or bLandHasChanged then begin
                                 tlLandRecords.Add(land);
+                                Inc(count);
                             end;
                             //if count > 10 then break;
                         end;
@@ -1990,7 +1991,7 @@ begin
         if not LandHeightsExist(wrldEdid, cellX, cellY) then continue;
         AddMessage(IntToStr(i + 1) + ' of ' + IntToStr(count) + #9 + ShortName(rLand) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
 
-        CreateLandscapeSnow(rLand, rCell, rWrld, wrldEdid, cellX, cellY);
+        CreateLandscapeSnow(wrldEdid, cellX, cellY);
         if bPlaceLandscapeSnow then PlaceLandscapeSnow(rLand, rCell, rWrld, wrldEdid, cellX, cellY);
     end;
 end;
@@ -2063,14 +2064,11 @@ begin
 end;
 
 
-function CreateLandscapeSnow(land, rCell, rWrld: IwbElement; wrldEdid: string; cellX, cellY: integer): integer;
+function CreateLandscapeSnow(wrldEdid: string; cellX, cellY: integer): integer;
 {
     Creates snow mesh for a landscape cell.
 
     Parameters:
-      land              - The LAND record element for the cell.
-      rCell             - The CELL record element for the cell.
-      rWrld             - The WRLD record element for the worldspace.
       wrldEdid          - EditorID of the worldspace.
       fileProvidingLand - Filename providing the LAND record.
       cellX, cellY      - Cell coordinates.
