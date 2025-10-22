@@ -9,7 +9,7 @@ unit Seasons;
 
 var
     bSaveLandHeights, bCreateLandscapeHeights, bCreateLandscapeSnowMeshes, bPlaceLandscapeSnow, bCreateTestPlugin, bUserAlterLandRulesChanged,
-    bLoadPreviousLandHeights, bSaveUserRules: boolean;
+    bLoadPreviousLandHeights, bSaveUserRules, bCreateWinterDecals: boolean;
     uiScale: integer;
     sIgnoredWorldspaces: string;
 
@@ -103,6 +103,7 @@ begin
     bPlaceLandscapeSnow := False;
     bCreateTestPlugin := False;
     bLoadPreviousLandHeights := False;
+    bCreateWinterDecals := True;
 
     //Rules
     bSaveUserRules := False;
@@ -140,8 +141,8 @@ begin
         FixLandscapeSeams;
     end;
     ProcessLandRecords;
-    // ProcessStats;
-    // CreateWinterDecals;
+    ProcessStats;
+    if bCreateWinterDecals then CreateWinterDecals;
 end;
 
 // ----------------------------------------------------
@@ -153,17 +154,26 @@ function MainMenuForm: Boolean;
   Main menu form.
 }
 var
-    btnStart, btnCancel, btnRuleEditor: TButton;
+    btnStart, btnCancel, btnAlterationRuleEditor, btnGenerateSnowMesh: TButton;
+    chkCreateTestPlugin, chkCreateLandscapeHeights, chkCreateLandscapeSnowMeshes, chkPlaceLandscapeSnow, chkLoadLastLandHeights,
+    chkCreateWinterDecals: TCheckBox;
+    cbWrld: TComboBox;
+    edX, edY: TEdit;
     frm: TForm;
-    gbOptions: TGroupBox;
+    gbSnowOptions: TGroupBox;
     fImage: TImage;
+    lblWrld, lblX, lblY: TLabel;
     pnl: TPanel;
     picSeasons: TPicture;
-    chkCreateTestPlugin, chkCreateLandscapeHeights, chkCreateLandscapeSnowMeshes, chkPlaceLandscapeSnow, chkLoadLastLandHeights: TCheckBox;
+
+    slWrlds: TStringList;
 begin
     Result := False;
     frm := TForm.Create(nil);
+    slWrlds := TStringList.Create;
     try
+        ListDirectoriesInPath(wbScriptsPath + 'Seasons\LandHeights\', slWrlds);
+
         frm.Caption := 'Seasons Change';
         frm.Width := 600;
         frm.Height := 480;
@@ -184,43 +194,51 @@ begin
         fImage.Top := 12;
         fImage.Stretch := True;
 
-        gbOptions := TGroupBox.Create(frm);
-        gbOptions.Parent := frm;
-        gbOptions.Left := 10;
-        gbOptions.Top := fImage.Top + fImage.Height + 24;
-        gbOptions.Width := frm.Width - 30;
-        gbOptions.Caption := 'Seasons Change';
-        gbOptions.Height := 94;
-
-        chkCreateTestPlugin := TCheckBox.Create(gbOptions);
-        chkCreateTestPlugin.Parent := gbOptions;
-        chkCreateTestPlugin.Left := 16;
-        chkCreateTestPlugin.Top := 16;
+        chkCreateTestPlugin := TCheckBox.Create(frm);
+        chkCreateTestPlugin.Parent := frm;
+        chkCreateTestPlugin.Left := 24;
+        chkCreateTestPlugin.Top := fImage.Top + fImage.Height + 16;
         chkCreateTestPlugin.Width := 120;
         chkCreateTestPlugin.Caption := 'Create Test Plugin';
         chkCreateTestPlugin.Hint := 'Creates a test plugin.';
         chkCreateTestPlugin.ShowHint := True;
 
-        chkCreateLandscapeHeights := TCheckBox.Create(gbOptions);
-        chkCreateLandscapeHeights.Parent := gbOptions;
-        chkCreateLandscapeHeights.Left := chkCreateTestPlugin.Left + chkCreateTestPlugin.Width + 16;
-        chkCreateLandscapeHeights.Top := chkCreateTestPlugin.Top;
+        gbSnowOptions := TGroupBox.Create(frm);
+        gbSnowOptions.Parent := frm;
+        gbSnowOptions.Left := 10;
+        gbSnowOptions.Top := chkCreateTestPlugin.Top + 24;
+        gbSnowOptions.Width := frm.Width - 30;
+        gbSnowOptions.Caption := 'Snow Controls';
+        gbSnowOptions.Height := 100;
+
+        chkCreateLandscapeHeights := TCheckBox.Create(gbSnowOptions);
+        chkCreateLandscapeHeights.Parent := gbSnowOptions;
+        chkCreateLandscapeHeights.Left := 16;
+        chkCreateLandscapeHeights.Top := 16;
         chkCreateLandscapeHeights.Width := 170;
         chkCreateLandscapeHeights.Caption := 'Force Recreate Land Heights';
         chkCreateLandscapeHeights.Hint := 'Forces all land height values to be recalculated.';
         chkCreateLandscapeHeights.ShowHint := True;
 
-        chkLoadLastLandHeights := TCheckBox.Create(gbOptions);
-        chkLoadLastLandHeights.Parent := gbOptions;
+        chkLoadLastLandHeights := TCheckBox.Create(gbSnowOptions);
+        chkLoadLastLandHeights.Parent := gbSnowOptions;
         chkLoadLastLandHeights.Left := chkCreateLandscapeHeights.Left + chkCreateLandscapeHeights.Width + 16;
         chkLoadLastLandHeights.Top := chkCreateLandscapeHeights.Top;
         chkLoadLastLandHeights.Width := 170;
         chkLoadLastLandHeights.Caption := 'Load Last Land Heights';
-        chkLoadLastLandHeights.Hint := 'Skips generating alterations to land heights, using last Land Heights json.';
+        chkLoadLastLandHeights.Hint := 'Use previously generated snow landscape height data.';
         chkLoadLastLandHeights.ShowHint := True;
 
-        chkCreateLandscapeSnowMeshes := TCheckBox.Create(gbOptions);
-        chkCreateLandscapeSnowMeshes.Parent := gbOptions;
+        btnAlterationRuleEditor := TButton.Create(gbSnowOptions);
+        btnAlterationRuleEditor.Parent := gbSnowOptions;
+        btnAlterationRuleEditor.Caption := 'Alteration Rules';
+        btnAlterationRuleEditor.OnClick := AlterLandRuleEditor;
+        btnAlterationRuleEditor.Width := 100;
+        btnAlterationRuleEditor.Left := chkLoadLastLandHeights.Left + chkLoadLastLandHeights.Width + 72;
+        btnAlterationRuleEditor.Top := chkCreateLandscapeHeights.Top + 8;
+
+        chkCreateLandscapeSnowMeshes := TCheckBox.Create(gbSnowOptions);
+        chkCreateLandscapeSnowMeshes.Parent := gbSnowOptions;
         chkCreateLandscapeSnowMeshes.Left := 16;
         chkCreateLandscapeSnowMeshes.Top := chkLoadLastLandHeights.Top + 24;
         chkCreateLandscapeSnowMeshes.Width := 170;
@@ -228,28 +246,81 @@ begin
         chkCreateLandscapeSnowMeshes.Hint := 'Forces recreation of all snow models.';
         chkCreateLandscapeSnowMeshes.ShowHint := True;
 
-        chkPlaceLandscapeSnow := TCheckBox.Create(gbOptions);
-        chkPlaceLandscapeSnow.Parent := gbOptions;
+        chkPlaceLandscapeSnow := TCheckBox.Create(gbSnowOptions);
+        chkPlaceLandscapeSnow.Parent := gbSnowOptions;
         chkPlaceLandscapeSnow.Left := chkCreateLandscapeSnowMeshes.Left + chkCreateLandscapeSnowMeshes.Width + 16;
         chkPlaceLandscapeSnow.Top := chkCreateLandscapeSnowMeshes.Top;
         chkPlaceLandscapeSnow.Width := 100;
         chkPlaceLandscapeSnow.Caption := 'Place Snow';
-        chkPlaceLandscapeSnow.Hint := 'Place snow.';
+        chkPlaceLandscapeSnow.Hint := 'Adds landscape snow references to cells.';
         chkPlaceLandscapeSnow.ShowHint := True;
 
-        btnRuleEditor := TButton.Create(frm);
-        btnRuleEditor.Parent := frm;
-        btnRuleEditor.Caption := 'Rules';
-        btnRuleEditor.OnClick := AlterLandRuleEditor;
-        btnRuleEditor.Width := 100;
-        btnRuleEditor.Left := 16;
-        btnRuleEditor.Top := gbOptions.Top + gbOptions.Height + 24;
+        chkCreateWinterDecals := TCheckBox.Create(gbSnowOptions);
+        chkCreateWinterDecals.Parent := gbSnowOptions;
+        chkCreateWinterDecals.Left := chkPlaceLandscapeSnow.Left + chkPlaceLandscapeSnow.Width + 16;
+        chkCreateWinterDecals.Top := chkPlaceLandscapeSnow.Top;
+        chkCreateWinterDecals.Width := 100;
+        chkCreateWinterDecals.Caption := 'Winter Decals';
+        chkCreateWinterDecals.Hint := 'Winter Decals are used to cover static objects with snow by placing specially designed snowy versions over them, typically using a decal shader.';
+        chkCreateWinterDecals.ShowHint := True;
+
+        lblWrld := TLabel.Create(gbSnowOptions);
+        lblWrld.Parent := gbSnowOptions;
+        lblWrld.Left := 16;
+        lblWrld.Top := chkPlaceLandscapeSnow.Top + 30;
+        lblWrld.Caption := 'Worldspace';
+
+        cbWrld := TComboBox.Create(gbSnowOptions);
+        cbWrld.Parent := gbSnowOptions;
+        cbWrld.Name := 'cbWrld';
+        cbWrld.Left := lblWrld.Left + lblWrld.Width + 8;
+        cbWrld.Top := lblWrld.Top - 3;
+        cbWrld.Width := 140;
+        cbWrld.Style := csDropDown;
+        cbWrld.Items.AddStrings(slWrlds);
+        cbWrld.ItemIndex := 0;
+
+        lblX := TLabel.Create(gbSnowOptions);
+        lblX.Parent := gbSnowOptions;
+        lblX.Left := cbWrld.Left + cbWrld.Width + 16;
+        lblX.Top := lblWrld.Top;
+        lblX.Caption := 'X';
+
+        edX := TEdit.Create(gbSnowOptions);
+        edX.Parent := gbSnowOptions;
+        edX.Name := 'edX';
+        edX.Left := lblX.Left + lblX.Width + 8;
+        edX.Top := cbWrld.Top;
+        edX.Width := 32;
+        edX.Text := '0';
+
+        lblY := TLabel.Create(gbSnowOptions);
+        lblY.Parent := gbSnowOptions;
+        lblY.Left := edX.Left + edX.Width + 16;
+        lblY.Top := lblWrld.Top;
+        lblY.Caption := 'Y';
+
+        edY := TEdit.Create(gbSnowOptions);
+        edY.Parent := gbSnowOptions;
+        edY.Name := 'edY';
+        edY.Left := lblY.Left + lblY.Width + 8;
+        edY.Top := cbWrld.Top;
+        edY.Width := 32;
+        edY.Text := '0';
+
+        btnGenerateSnowMesh := TButton.Create(gbSnowOptions);
+        btnGenerateSnowMesh.Parent := gbSnowOptions;
+        btnGenerateSnowMesh.Caption := 'Generate Snow Mesh for Cell';
+        btnGenerateSnowMesh.OnClick := GenerateSnowMesh;
+        btnGenerateSnowMesh.Width := 176;
+        btnGenerateSnowMesh.Left := edY.Left + edY.Width + 16;
+        btnGenerateSnowMesh.Top := cbWrld.Top - 2;
 
         btnStart := TButton.Create(frm);
         btnStart.Parent := frm;
         btnStart.Caption := 'Start';
         btnStart.ModalResult := mrOk;
-        btnStart.Top := gbOptions.Top + gbOptions.Height + 24;
+        btnStart.Top := gbSnowOptions.Top + gbSnowOptions.Height + 24;
 
         btnCancel := TButton.Create(frm);
         btnCancel.Parent := frm;
@@ -257,14 +328,14 @@ begin
         btnCancel.ModalResult := mrCancel;
         btnCancel.Top := btnStart.Top;
 
-        btnStart.Left := gbOptions.Width - btnStart.Width - btnCancel.Width - 16;
+        btnStart.Left := gbSnowOptions.Width - btnStart.Width - btnCancel.Width - 16;
         btnCancel.Left := btnStart.Left + btnStart.Width + 8;
 
         pnl := TPanel.Create(frm);
         pnl.Parent := frm;
-        pnl.Left := gbOptions.Left;
+        pnl.Left := gbSnowOptions.Left;
         pnl.Top := btnStart.Top - 12;
-        pnl.Width := gbOptions.Width;
+        pnl.Width := gbSnowOptions.Width;
         pnl.Height := 2;
 
         frm.ActiveControl := btnStart;
@@ -277,6 +348,7 @@ begin
         chkCreateLandscapeSnowMeshes.Checked := bCreateLandscapeSnowMeshes;
         chkPlaceLandscapeSnow.Checked := bPlaceLandscapeSnow;
         chkLoadLastLandHeights.Checked := bLoadPreviousLandHeights;
+        chkCreateWinterDecals.Checked := bCreateWinterDecals;
 
         if frm.ShowModal <> mrOk then Exit;
 
@@ -285,10 +357,37 @@ begin
         bCreateLandscapeSnowMeshes := chkCreateLandscapeSnowMeshes.Checked;
         bPlaceLandscapeSnow := chkPlaceLandscapeSnow.Checked;
         bLoadPreviousLandHeights := chkLoadLastLandHeights.Checked;
+        bCreateWinterDecals := chkCreateWinterDecals.Checked;
         Result := True;
     finally
         frm.Free;
+        slWrlds.Free;
     end;
+end;
+
+procedure GenerateSnowMesh(Sender: TObject);
+var
+    cellX, cellY: integer;
+    btnGenerateSnowMesh: TButton;
+    cbWrld: TComboBox;
+    edX, edY: TEdit;
+    gbSnowOptions: TGroupBox;
+    wrldEdid: string;
+begin
+    btnGenerateSnowMesh := TButton(Sender);
+    gbSnowOptions := TGroupBox(btnGenerateSnowMesh.Owner);
+    cbWrld := TComboBox(gbSnowOptions.FindComponent('cbWrld'));
+    edX := TEdit(gbSnowOptions.FindComponent('edX'));
+    edY := TEdit(gbSnowOptions.FindComponent('edY'));
+    wrldEdid := cbWrld.Text;
+    cellX := StrToIntDef(edX.Text, 0);
+    cellY := StrToIntDef(edY.Text, 0);
+    if not FileExists(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json') then begin
+        MessageDlg('No land height data exists for this cell.', mtInformation, [mbOk], 0);
+        Exit;
+    end;
+    CreateLandscapeSnow(wrldEdid, cellX, cellY);
+    AddMessage('Generated snow mesh for cell: ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
 end;
 
 procedure FormKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
