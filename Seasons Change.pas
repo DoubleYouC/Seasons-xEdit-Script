@@ -1427,7 +1427,7 @@ begin
         ListStringsInStringList(slHideQuads);
         slHideQuads.Free;
     end;
-    AddMessage('New LAND Records: ' + IntToStr(count));
+    AddMessage('LAND Records: ' + IntToStr(count));
 end;
 
 procedure ProcessStats;
@@ -1688,13 +1688,13 @@ begin
     //     z2 := 64;
     //     Exit;
     // end;
-    if joAlterLandRules.O[baseRecordId].Contains(bounds) then begin
-        x1 := joAlterLandRules.O[baseRecordId].O[bounds].S['x1'];
-        y1 := joAlterLandRules.O[baseRecordId].O[bounds].S['y1'];
-        z1 := joAlterLandRules.O[baseRecordId].O[bounds].S['z1'];
-        x2 := joAlterLandRules.O[baseRecordId].O[bounds].S['x2'];
-        y2 := joAlterLandRules.O[baseRecordId].O[bounds].S['y2'];
-        z2 := joAlterLandRules.O[baseRecordId].O[bounds].S['z2'];
+    if joAlterLandRules.O[baseRecordId].Contains('bounds') then begin
+        x1 := joAlterLandRules.O[baseRecordId].O['bounds'].S['x1'];
+        y1 := joAlterLandRules.O[baseRecordId].O['bounds'].S['y1'];
+        z1 := joAlterLandRules.O[baseRecordId].O['bounds'].S['z1'];
+        x2 := joAlterLandRules.O[baseRecordId].O['bounds'].S['x2'];
+        y2 := joAlterLandRules.O[baseRecordId].O['bounds'].S['y2'];
+        z2 := joAlterLandRules.O[baseRecordId].O['bounds'].S['z2'];
         Exit;
     end;
     x1 := GetElementNativeValues(base, 'OBND\X1');
