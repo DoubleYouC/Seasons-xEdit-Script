@@ -1625,9 +1625,9 @@ var
 begin
     for i:= 0 to Pred(tlBasesThatAlterLand.Count) do begin
         base := ObjectToElement(tlBasesThatAlterLand[i]);
-        GetBounds(x1, y1, z1, x2, y2, z2, base);
         baseRecordId := RecordFormIdFileId(base);
         alteration := joAlterLandRules.O[baseRecordId].S['alteration'];
+        GetBounds(x1, y1, z1, x2, y2, z2, base, baseRecordId);
         AddMessage('Processing base ' + #9 + Name(base) + #9 + IntToStr(alteration));
         ProcessBasesThatAlterLand(base, base, alteration, x1, y1, z1, x2, y2, z2, False, baseRecordId);
     end;
@@ -1674,7 +1674,7 @@ begin
     end;
 end;
 
-procedure GetBounds(var x1, y1, z1, x2, y2, z2: integer; base: IwbElement);
+procedure GetBounds(var x1, y1, z1, x2, y2, z2: integer; base: IwbElement; baseRecordId: string);
 var
     radius: integer;
 begin
@@ -1688,6 +1688,15 @@ begin
     //     z2 := 64;
     //     Exit;
     // end;
+    if joAlterLandRules.O[baseRecordId].Contains(bounds) then begin
+        x1 := joAlterLandRules.O[baseRecordId].O[bounds].S['x1'];
+        y1 := joAlterLandRules.O[baseRecordId].O[bounds].S['y1'];
+        z1 := joAlterLandRules.O[baseRecordId].O[bounds].S['z1'];
+        x2 := joAlterLandRules.O[baseRecordId].O[bounds].S['x2'];
+        y2 := joAlterLandRules.O[baseRecordId].O[bounds].S['y2'];
+        z2 := joAlterLandRules.O[baseRecordId].O[bounds].S['z2'];
+        Exit;
+    end;
     x1 := GetElementNativeValues(base, 'OBND\X1');
     y1 := GetElementNativeValues(base, 'OBND\Y1');
     z1 := GetElementNativeValues(base, 'OBND\Z1');
@@ -1947,48 +1956,48 @@ begin
 
                     if alterationHere > 0 then begin
                         //-1 0
-                        if (row > 0) and (GetLandAlteration(joLandAlteration, row - 1, column, 0) < 0) then continue;
+                        if ((row > 0) and (GetLandAlteration(joLandAlteration, row - 1, column, 0) < 0)) then continue;
                         //+1 0
-                        if (row < 32) and (GetLandAlteration(joLandAlteration, row + 1, column, 0) < 0) then continue;
+                        if ((row < 32) and (GetLandAlteration(joLandAlteration, row + 1, column, 0) < 0)) then continue;
                         //0 -1
-                        if (column > 0) and (GetLandAlteration(joLandAlteration, row, column - 1, 0) < 0) then continue;
+                        if ((column > 0) and (GetLandAlteration(joLandAlteration, row, column - 1, 0) < 0)) then continue;
                         //0 +1
-                        if (column < 32) and (GetLandAlteration(joLandAlteration, row, column + 1, 0) < 0) then continue;
+                        if ((column < 32) and (GetLandAlteration(joLandAlteration, row, column + 1, 0) < 0)) then continue;
                         // Check diagonals
                         //-1 -1
-                        if (row > 0) and (column > 0) and (GetLandAlteration(joLandAlteration, row - 1, column - 1, 0) < 0) then continue;
+                        if ((row > 0) and (column > 0) and (GetLandAlteration(joLandAlteration, row - 1, column - 1, 0) < 0)) then continue;
                         //-1 +1
-                        if (row > 0) and (column < 32) and (GetLandAlteration(joLandAlteration, row - 1, column + 1, 0) < 0) then continue;
+                        if ((row > 0) and (column < 32) and (GetLandAlteration(joLandAlteration, row - 1, column + 1, 0) < 0)) then continue;
                         //+1 -1
-                        if (row < 32) and (column > 0) and (GetLandAlteration(joLandAlteration, row + 1, column - 1, 0) < 0) then continue;
+                        if ((row < 32) and (column > 0) and (GetLandAlteration(joLandAlteration, row + 1, column - 1, 0) < 0)) then continue;
                         //+1 +1
-                        if (row < 32) and (column < 32) and (GetLandAlteration(joLandAlteration, row + 1, column + 1, 0) < 0) then continue;
+                        if ((row < 32) and (column < 32) and (GetLandAlteration(joLandAlteration, row + 1, column + 1, 0) < 0)) then continue;
                     end
                     else if alterationHere < 0 then begin
                         //-1 0
-                        if (row > 0) and (GetLandAlteration(joLandAlteration, row - 1, column, 0) > 0) then
+                        if ((row > 0) and (GetLandAlteration(joLandAlteration, row - 1, column, 0) > 0)) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row - 1, column, 0);
                         //+1 0
-                        if (row < 32) and (GetLandAlteration(joLandAlteration, row + 1, column, 0) > 0) then
+                        if ((row < 32) and (GetLandAlteration(joLandAlteration, row + 1, column, 0) > 0)) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row + 1, column, 0);
                         //0 -1
-                        if (column > 0) and (GetLandAlteration(joLandAlteration, row, column - 1, 0) > 0) then
+                        if ((column > 0) and (GetLandAlteration(joLandAlteration, row, column - 1, 0) > 0)) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row, column - 1, 0);
                         //0 +1
-                        if (column < 32) and (GetLandAlteration(joLandAlteration, row, column + 1, 0) > 0) then
+                        if ((column < 32) and (GetLandAlteration(joLandAlteration, row, column + 1, 0) > 0)) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row, column + 1, 0);
                         // Check diagonals
                         //-1 -1
-                        if (row > 0) and (column > 0) and (GetLandAlteration(joLandAlteration, row - 1, column - 1, 0) > 0) then
+                        if ((row > 0) and (column > 0) and (GetLandAlteration(joLandAlteration, row - 1, column - 1, 0) > 0)) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row - 1, column - 1, 0);
                         //-1 +1
-                        if (row > 0) and (column < 32) and (GetLandAlteration(joLandAlteration, row - 1, column + 1, 0) > 0) then
+                        if ((row > 0) and (column < 32) and (GetLandAlteration(joLandAlteration, row - 1, column + 1, 0) > 0)) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row - 1, column + 1, 0);
                         //+1 -1
-                        if (row < 32) and (column > 0) and (GetLandAlteration(joLandAlteration, row + 1, column - 1, 0) > 0) then
+                        if ((row < 32) and (column > 0) and (GetLandAlteration(joLandAlteration, row + 1, column - 1, 0) > 0)) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row + 1, column - 1, 0);
                         //+1 +1
-                        if (row < 32) and (column < 32) and (GetLandAlteration(joLandAlteration, row + 1, column + 1, 0) > 0) then
+                        if ((row < 32) and (column < 32) and (GetLandAlteration(joLandAlteration, row + 1, column + 1, 0) > 0)) then
                             bWasAltered := AddLandAlteration(joLandAlteration, row + 1, column + 1, 0);
                     end;
 
@@ -2053,6 +2062,8 @@ begin
     try
         joLandAlteration.A[row].S[column] := alteration;
     except
+        if row < 0 then Exit;
+        if row > 32 then Exit;
         for i := 0 to 32 do
             joLandAlteration.A[row].Add('');
         joLandAlteration.A[row].S[column] := alteration;
@@ -2915,8 +2926,8 @@ procedure FetchRules;
     Loads the Rule JSON files.
 }
 var
-    a, c, i: integer;
-    fileName, j, key, refKey, fileLoadOrderHexPrefix: string;
+    a, b, c, i: integer;
+    fileName, j, key, refKey, boundKey, fileLoadOrderHexPrefix: string;
 
     f: IwbFile;
 begin
@@ -2945,6 +2956,10 @@ begin
             key := joUserAlterLandRules.Names[c];
             joAlterLandRules.O[key].S['editorid'] := joUserAlterLandRules.O[key].S['editorid'];
             joAlterLandRules.O[key].S['alteration'] := joUserAlterLandRules.O[key].S['alteration'];
+            for b := 0 to Pred(joUserAlterLandRules.O[key].O['bounds'].Count) do begin
+                boundKey := joUserAlterLandRules.O[key].O['bounds'].Names[b];
+                joAlterLandRules.O[key].O['bounds'].S[boundKey] := joUserAlterLandRules.O[key].O['bounds'].S[boundKey];
+            end;
             for a := 0 to Pred(joUserAlterLandRules.O[key].O['references'].Count) do begin
                 refKey := joUserAlterLandRules.O[key].O['references'].Names[a];
                 joAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := joUserAlterLandRules.O[key].O['references'].O[refKey].S['alteration'];
@@ -2958,8 +2973,8 @@ procedure LoadRules(f: string);
     Load Rules
 }
 var
-    c, a: integer;
-    j, key, refKey: string;
+    c, a, b: integer;
+    j, key, refKey, boundKey: string;
 
     sub: TJsonObject;
 begin
@@ -2994,6 +3009,10 @@ begin
                 key := sub.Names[c];
                 joAlterLandRules.O[key].S['editorid'] := sub.O[key].S['editorid'];
                 joAlterLandRules.O[key].S['alteration'] := sub.O[key].S['alteration'];
+                for b := 0 to Pred(joUserAlterLandRules.O[key].O['bounds'].Count) do begin
+                    boundKey := joUserAlterLandRules.O[key].O['bounds'].Names[b];
+                    joAlterLandRules.O[key].O['bounds'].S[boundKey] := joUserAlterLandRules.O[key].O['bounds'].S[boundKey];
+                end;
                 for a := 0 to Pred(sub.O[key].O['references'].Count) do begin
                     refKey := sub.O[key].O['references'].Names[a];
                     joAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := sub.O[key].O['references'].O[refKey].S['alteration'];
