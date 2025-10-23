@@ -495,12 +495,12 @@ begin
     end;
 end;
 
-function EditAlterLandRuleForm(var key, edid: string; var alteration: integer; keyReadOnly: boolean): boolean;
+function EditAlterLandRuleForm(var key, edid: string; var alteration, x1, y1, z1, x2, y2, z2: integer; keyReadOnly: boolean): boolean;
 var
     frmRule: TForm;
     pnl: TPanel;
     btnOk, btnCancel, btnReferences: TButton;
-    edAlteration: TEdit;
+    edAlteration, edX1, edY1, edZ1, edX2, edY2, edZ2: TEdit;
     cbEditorID, cbKey: TComboBox;
 begin
     Result := False;
@@ -508,7 +508,7 @@ begin
     try
         frmRule.Caption := 'Object Landscape Snow Alteration Rule';
         frmRule.Width := 600;
-        frmRule.Height := 180;
+        frmRule.Height := 480;
         frmRule.Position := poMainFormCenter;
         frmRule.BorderStyle := bsDialog;
         frmRule.KeyPreview := True;
@@ -544,12 +544,69 @@ begin
         edAlteration.OnKeyPress := alterationValidation;
         CreateLabel(frmRule, 16, edAlteration.Top + 4, 'Alteration');
 
+        CreateLabel(frmRule, 16, edAlteration.Top + edAlteration.Height * 2, 'Object');
+        CreateLabel(frmRule, 16, edAlteration.Top + edAlteration.Height * 3, 'Bounds');
+
+        edX1 := TEdit.Create(frmRule);
+        edX1.Parent := frmRule;
+        edX1.Name := 'edX1';
+        edX1.Left := 144;
+        edX1.Top := edAlteration.Top + 28;
+        edX1.Width := 50;
+        edX1.OnKeyPress := alterationValidation;
+        CreateLabel(frmRule, 120, edX1.Top + 4, 'X1');
+
+        edX2 := TEdit.Create(frmRule);
+        edX2.Parent := frmRule;
+        edX2.Name := 'edX2';
+        edX2.Left := edX1.Left + edX1.Width + 40;
+        edX2.Top := edX1.Top;
+        edX2.Width := 50;
+        edX2.OnKeyPress := alterationValidation;
+        CreateLabel(frmRule, edX1.Left + edX1.Width + 16, edX2.Top + 4, 'X2');
+
+        edY1 := TEdit.Create(frmRule);
+        edY1.Parent := frmRule;
+        edY1.Name := 'edY1';
+        edY1.Left := 144;
+        edY1.Top := edX1.Top + 28;
+        edY1.Width := 50;
+        edY1.OnKeyPress := alterationValidation;
+        CreateLabel(frmRule, 120, edY1.Top + 4, 'Y1');
+
+        edY2 := TEdit.Create(frmRule);
+        edY2.Parent := frmRule;
+        edY2.Name := 'edY2';
+        edY2.Left := edY1.Left + edY1.Width + 40;
+        edY2.Top := edY1.Top;
+        edY2.Width := 50;
+        edY2.OnKeyPress := alterationValidation;
+        CreateLabel(frmRule, edY1.Left + edY1.Width + 16, edY2.Top + 4, 'Y2');
+
+        edZ1 := TEdit.Create(frmRule);
+        edZ1.Parent := frmRule;
+        edZ1.Name := 'edZ1';
+        edZ1.Left := 144;
+        edZ1.Top := edY1.Top + 28;
+        edZ1.Width := 50;
+        edZ1.OnKeyPress := alterationValidation;
+        CreateLabel(frmRule, 120, edZ1.Top + 4, 'Z1');
+
+        edZ2 := TEdit.Create(frmRule);
+        edZ2.Parent := frmRule;
+        edZ2.Name := 'edZ2';
+        edZ2.Left := edZ1.Left + edZ1.Width + 40;
+        edZ2.Top := edZ1.Top;
+        edZ2.Width := 50;
+        edZ2.OnKeyPress := alterationValidation;
+        CreateLabel(frmRule, edZ1.Left + edZ1.Width + 16, edZ2.Top + 4, 'Z2');
+
         btnOk := TButton.Create(frmRule);
         btnOk.Parent := frmRule;
         btnOk.Name := 'OK';
         btnOk.Caption := 'OK';
         btnOk.ModalResult := mrOk;
-        btnOk.Top := edAlteration.Top + (2 * edAlteration.Height);
+        btnOk.Top := edZ2.Top + (2 * edZ2.Height);
 
         btnCancel := TButton.Create(frmRule);
         btnCancel.Parent := frmRule;
@@ -591,6 +648,12 @@ begin
         if SameText(cbKey.Text, '') then btnReferences.Enabled := False;
 
         edAlteration.Text := IntToStr(alteration);
+        edX1.Text := IntToStr(x1);
+        edY1.Text := IntToStr(y1);
+        edZ1.Text := IntToStr(z1);
+        edX2.Text := IntToStr(x2);
+        edY2.Text := IntToStr(y2);
+        edZ2.Text := IntToStr(z2);
 
         /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
         if frmRule.ShowModal <> mrOk then Exit;
@@ -599,6 +662,12 @@ begin
         key := cbKey.Text;
         edid := cbEditorID.Text;
         alteration := StrToInt(edAlteration.Text);
+        if edX1.Text <> '' then x1 := StrToInt(edX1.Text) else x1 := nil;
+        if edY1.Text <> '' then y1 := StrToInt(edY1.Text) else y1 := nil;
+        if edZ1.Text <> '' then z1 := StrToInt(edZ1.Text) else z1 := nil;
+        if edX2.Text <> '' then x2 := StrToInt(edX2.Text) else x2 := nil;
+        if edY2.Text <> '' then y2 := StrToInt(edY2.Text) else y2 := nil;
+        if edZ2.Text <> '' then z2 := StrToInt(edZ2.Text) else z2 := nil;
         Result := True;
     finally
         frmRule.Free;
@@ -639,12 +708,13 @@ var
     bSuccess: boolean;
     key, edid, fileName, fileFormId, recordId, baseRecordId: string;
     formid: cardinal;
+    x1, y1, z1, x2, y2, z2: integer;
 
     f: IwbFile;
     r, base: IwbElement;
 
     cbKey, cbEditorID: TComboBox;
-    edAlteration: TEdit;
+    edAlteration, edX1, edY1, edZ1, edX2, edY2, edZ2: TEdit;
     frm: TForm;
     btnReferences: TButton;
 begin
@@ -653,10 +723,17 @@ begin
     frm := GetParentForm(cbKey);
     cbEditorID := TComboBox(frm.FindComponent('cbEditorID'));
     edAlteration := TEdit(frm.FindComponent('edAlteration'));
+    edX1 := TEdit(frm.FindComponent('edX1'));
+    edY1 := TEdit(frm.FindComponent('edY1'));
+    edZ1 := TEdit(frm.FindComponent('edZ1'));
+    edX2 := TEdit(frm.FindComponent('edX2'));
+    edY2 := TEdit(frm.FindComponent('edY2'));
+    edZ2 := TEdit(frm.FindComponent('edZ2'));
     key := cbKey.Text;
     if ContainsText(key, ':') then begin
         try
             edid := EditorID(GetRecordFromFormIdFileId(key));
+            baseRecordId := key;
             bSuccess := True;
         except
             bSuccess := False;
@@ -683,6 +760,7 @@ begin
                         end else ShowMessage('Changed the formid to reference the base object.' + #13#10 + 'If you only want to modify this reference, set the alteration for this base object to 0,' + #13#10 + 'and then add your alteration via the References button.');
                     end else begin
                         cbKey.Text := recordId;
+                        baseRecordId := recordId;
                         edid := EditorID(r);
                         bSuccess := True;
                     end;
@@ -693,6 +771,13 @@ begin
 
     if bSuccess then begin
         cbEditorID.Text := edid;
+        GetBounds(x1, y1, z1, x2, y2, z2, GetRecordFromFormIdFileId(baseRecordId), baseRecordId);
+        edX1.Text := IntToStr(x1);
+        edY1.Text := IntToStr(y1);
+        edZ1.Text := IntToStr(z1);
+        edX2.Text := IntToStr(x2);
+        edY2.Text := IntToStr(y2);
+        edZ2.Text := IntToStr(z2);
         btnReferences := TButton(frm.FindComponent('btnReferences'));
         btnReferences.Enabled := true;
     end;
@@ -711,20 +796,42 @@ procedure AlterLandRulesMenuAddClick(Sender: TObject);
     Add rule
 }
 var
-    idx, alteration: integer;
+    idx, alteration, x1, y1, z1, x2, y2, z2: integer;
     key, edid: string;
 begin
     key := '';
     edid := '';
     alteration := 16;
+    x1 := nil;
+    y1 := nil;
+    z1 := nil;
+    x2 := nil;
+    y2 := nil;
+    z2 := nil;
 
-    if not EditAlterLandRuleForm(key, edid, alteration, True) then Exit;
+    if not EditAlterLandRuleForm(key, edid, alteration, x1, y1, z1, x2, y2, z2, True) then Exit;
 
     joAlterLandRules.O[key].S['editorid'] := edid;
     joAlterLandRules.O[key].S['alteration'] := alteration;
+    if Assigned(x1) then begin
+        joAlterLandRules.O[key].O['bounds'].S['x1'] := x1;
+        joAlterLandRules.O[key].O['bounds'].S['y1'] := y1;
+        joAlterLandRules.O[key].O['bounds'].S['z1'] := z1;
+        joAlterLandRules.O[key].O['bounds'].S['x2'] := x2;
+        joAlterLandRules.O[key].O['bounds'].S['y2'] := y2;
+        joAlterLandRules.O[key].O['bounds'].S['z2'] := z2;
+    end;
 
     joUserAlterLandRules.O[key].S['editorid'] := edid;
     joUserAlterLandRules.O[key].S['alteration'] := alteration;
+    if Assigned(x1) then begin
+        joUserAlterLandRules.O[key].O['bounds'].S['x1'] := x1;
+        joUserAlterLandRules.O[key].O['bounds'].S['y1'] := y1;
+        joUserAlterLandRules.O[key].O['bounds'].S['z1'] := z1;
+        joUserAlterLandRules.O[key].O['bounds'].S['x2'] := x2;
+        joUserAlterLandRules.O[key].O['bounds'].S['y2'] := y2;
+        joUserAlterLandRules.O[key].O['bounds'].S['z2'] := z2;
+    end;
     bUserAlterLandRulesChanged := True;
 
     lvAlterLandRules.Items.Count := joAlterLandRules.Count;
@@ -736,7 +843,7 @@ procedure AlterLandRulesMenuEditClick(Sender: TObject);
     Edit rule
 }
 var
-    idx, alteration: integer;
+    idx, alteration, x1, y1, z1, x2, y2, z2: integer;
     key, edid: string;
 begin
     if not Assigned(lvAlterLandRules.Selected) then Exit;
@@ -745,14 +852,27 @@ begin
     key := joAlterLandRules.Names[idx];
     edid := joAlterLandRules.O[key].S['editorid'];
     alteration := joAlterLandRules.O[key].S['alteration'];
+    GetBounds(x1, y1, z1, x2, y2, z2, GetRecordFromFormIdFileId(key), key);
 
-    if not EditAlterLandRuleForm(key, edid, alteration, False) then Exit;
+    if not EditAlterLandRuleForm(key, edid, alteration, x1, y1, z1, x2, y2, z2, False) then Exit;
 
     joAlterLandRules.O[key].S['editorid'] := edid;
     joAlterLandRules.O[key].S['alteration'] := alteration;
+    joAlterLandRules.O[key].O['bounds'].S['x1'] := x1;
+    joAlterLandRules.O[key].O['bounds'].S['y1'] := y1;
+    joAlterLandRules.O[key].O['bounds'].S['z1'] := z1;
+    joAlterLandRules.O[key].O['bounds'].S['x2'] := x2;
+    joAlterLandRules.O[key].O['bounds'].S['y2'] := y2;
+    joAlterLandRules.O[key].O['bounds'].S['z2'] := z2;
 
     joUserAlterLandRules.O[key].S['editorid'] := edid;
     joUserAlterLandRules.O[key].S['alteration'] := alteration;
+    joUserAlterLandRules.O[key].O['bounds'].S['x1'] := x1;
+    joUserAlterLandRules.O[key].O['bounds'].S['y1'] := y1;
+    joUserAlterLandRules.O[key].O['bounds'].S['z1'] := z1;
+    joUserAlterLandRules.O[key].O['bounds'].S['x2'] := x2;
+    joUserAlterLandRules.O[key].O['bounds'].S['y2'] := y2;
+    joUserAlterLandRules.O[key].O['bounds'].S['z2'] := z2;
     bUserAlterLandRulesChanged := True;
 
     lvAlterLandRules.Items.Count := joAlterLandRules.Count;
@@ -3522,7 +3642,11 @@ begin
         eslIdx := (mask and formid) shr 12;
         Result := FileByName(joLoadOrderFormIDFileID.S[IntToHex(eslIdx, 5)]);
     end else begin
-        Result := FileByLoadOrderFileID(loadOrderIdx);
+        try
+            Result := FileByLoadOrderFileID(loadOrderIdx);
+        except
+            Result := FileByLoadOrderFileID(IntToHex(loadOrderIdx, 2));
+        end;
     end;
 end;
 
