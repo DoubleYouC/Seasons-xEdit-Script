@@ -1276,6 +1276,7 @@ begin
     joAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := alteration;
     joUserAlterLandRules.O[key].S['editorid'] := joAlterLandRules.O[key].S['editorid'];
     joUserAlterLandRules.O[key].S['alteration'] := joAlterLandRules.O[key].S['alteration'];
+    joUserAlterLandRules.O[key].O['bounds'].Assign(joAlterLandRules.O[key].O['bounds']);
     joUserAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := alteration;
     bUserAlterLandRulesChanged := True;
 
@@ -1310,8 +1311,10 @@ begin
     cbBase.Text := key;
 
     joAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := alteration;
+
     joUserAlterLandRules.O[key].S['editorid'] := joAlterLandRules.O[key].S['editorid'];
     joUserAlterLandRules.O[key].S['alteration'] := joAlterLandRules.O[key].S['alteration'];
+    joUserAlterLandRules.O[key].O['bounds'].Assign(joAlterLandRules.O[key].O['bounds']);
     joUserAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := alteration;
     bUserAlterLandRulesChanged := True;
 
