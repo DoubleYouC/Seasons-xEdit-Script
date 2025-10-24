@@ -2160,13 +2160,10 @@ var
     value: variant;
 begin
     Result := defaultValue;
-    try
-        value := joLandAlteration.A[row].S[column];
-        if value = '' then Result := defaultValue
-        else Result := value;
-    except
-        Result := defaultValue;
-    end;
+    //if not joLandAlteration.Contains(IntToStr(row)) then Exit;
+    value := joLandAlteration.A[row].S[column];
+    if value = '' then Result := defaultValue
+    else Result := value;
 end;
 
 function AddLandAlteration(joLandAlteration: TJsonObject; row, column, alteration: integer): boolean;
@@ -2182,15 +2179,10 @@ var
     i: integer;
 begin
     Result := False;
-    try
-        joLandAlteration.A[row].S[column] := alteration;
-    except
-        if row < 0 then Exit;
-        if row > 32 then Exit;
+    if not joLandAlteration.Contains(IntToStr(row)) then
         for i := 0 to 32 do
             joLandAlteration.A[row].Add('');
-        joLandAlteration.A[row].S[column] := alteration;
-    end;
+    joLandAlteration.A[row].S[column] := alteration;
     Result := True;
 end;
 
@@ -2253,7 +2245,7 @@ begin
     try
         joLand.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json');
         landOffsetZ := joLand.S['offset'] * SCALE_FACTOR_TERRAIN;
-    except
+    finally
         joLand.Free;
     end;
 
