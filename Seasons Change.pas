@@ -2161,7 +2161,12 @@ var
     value: variant;
 begin
     Result := defaultValue;
+    if row < 0 then Exit;
+    if row > 32 then Exit;
+    if column < 0 then Exit;
+    if column > 32 then Exit;
     if not joLandAlteration.Contains(IntToStr(row)) then Exit;
+
     value := joLandAlteration.A[row].S[column];
     if value = '' then Result := defaultValue
     else Result := value;
