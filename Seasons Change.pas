@@ -925,23 +925,23 @@ var
     btnOK, btnCancel: TButton;
     lv: TListView;
 begin
-    try
-        frm := TForm(Sender);
-        btnOK := TButton(frm.FindComponent('OK'));
-        btnCancel := TButton(frm.FindComponent('Cancel'));
-        lv := TListView(frm.FindComponent('ListView'));
+    frm := TForm(Sender);
+    if not Assigned(frm) then Exit;
+    btnOK := TButton(frm.FindComponent('OK'));
+    btnCancel := TButton(frm.FindComponent('Cancel'));
+    lv := TListView(frm.FindComponent('ListView'));
+    if not Assigned(lv) then Exit;
+    if not Assigned(btnOK) then Exit;
+    if not Assigned(btnCancel) then Exit;
 
-        lv.Width := frm.Width - 36;
-        lv.Left := (frm.Width - lv.Width)/2;
-        lv.Height := frm.Height - btnOK.Height - btnOK.Height - btnOK.Height - btnOK.Height;
+    lv.Width := frm.Width - 36;
+    lv.Left := (frm.Width - lv.Width)/2;
+    lv.Height := frm.Height - btnOK.Height - btnOK.Height - btnOK.Height - btnOK.Height;
 
-        btnOK.Top := lv.Height + lv.Top + 8;
-        btnCancel.Top := btnOK.Top;
-        btnOK.Left := (frm.Width - btnOK.Width - btnCancel.Width - 8)/2;
-        btnCancel.Left := btnOK.Left + btnOK.Width + 8;
-    except
-        frm := TForm(Sender);
-    end;
+    btnOK.Top := lv.Height + lv.Top + 8;
+    btnCancel.Top := btnOK.Top;
+    btnOK.Left := (frm.Width - btnOK.Width - btnCancel.Width - 8)/2;
+    btnCancel.Left := btnOK.Left + btnOK.Width + 8;
 end;
 
 function ReferenceRules(Sender: TObject): Boolean;
@@ -1363,27 +1363,28 @@ var
     lv: TListView;
     cbBase: TComboBox;
 begin
-    try
-        frm := TForm(Sender);
-        btnOK := TButton(frm.FindComponent('OK'));
-        btnCancel := TButton(frm.FindComponent('Cancel'));
-        lv := TListView(frm.FindComponent('ListView'));
-        cbBase := TComboBox(frm.FindComponent('cbBase'));
+    frm := TForm(Sender);
+    if not Assigned(frm) then Exit;
+    btnOK := TButton(frm.FindComponent('OK'));
+    btnCancel := TButton(frm.FindComponent('Cancel'));
+    lv := TListView(frm.FindComponent('ListView'));
+    cbBase := TComboBox(frm.FindComponent('cbBase'));
+    if not Assigned(btnOK) then Exit;
+    if not Assigned(btnCancel) then Exit;
+    if not Assigned(lv) then Exit;
+    if not Assigned(cbBase) then Exit;
 
-        lv.Width := frm.Width - 36;
-        lv.Left := (frm.Width - lv.Width)/2;
-        lv.Height := frm.Height - btnOK.Height - btnOK.Height - btnOK.Height - btnOK.Height;
+    lv.Width := frm.Width - 36;
+    lv.Left := (frm.Width - lv.Width)/2;
+    lv.Height := frm.Height - btnOK.Height - btnOK.Height - btnOK.Height - btnOK.Height;
 
-        cbBase.Left := frm.Width/2 - cbBase.Width/2;
+    cbBase.Left := frm.Width/2 - cbBase.Width/2;
 
 
-        btnOK.Top := lv.Height + lv.Top + 8;
-        btnCancel.Top := btnOK.Top;
-        btnOK.Left := (frm.Width - btnOK.Width - btnCancel.Width - 8)/2;
-        btnCancel.Left := btnOK.Left + btnOK.Width + 8;
-    except
-        frm := TForm(Sender);
-    end;
+    btnOK.Top := lv.Height + lv.Top + 8;
+    btnCancel.Top := btnOK.Top;
+    btnOK.Left := (frm.Width - btnOK.Width - btnCancel.Width - 8)/2;
+    btnCancel.Left := btnOK.Left + btnOK.Width + 8;
 end;
 
 
@@ -2160,7 +2161,7 @@ var
     value: variant;
 begin
     Result := defaultValue;
-    //if not joLandAlteration.Contains(IntToStr(row)) then Exit;
+    if not joLandAlteration.Contains(IntToStr(row)) then Exit;
     value := joLandAlteration.A[row].S[column];
     if value = '' then Result := defaultValue
     else Result := value;
