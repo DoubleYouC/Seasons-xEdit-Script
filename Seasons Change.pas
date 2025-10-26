@@ -2658,12 +2658,11 @@ begin
                 for cell := 0 to Pred(slFiles.Count) do begin
                     // Extract cellX and cellY from filename
                     fileName := slFiles[cell];
-                    AddMessage(fileName);
                     cellX := StrToIntDef(Copy(fileName, 2, Pos('y', fileName) - 2), 0);
                     cellY := StrToIntDef(Copy(fileName, Pos('y', fileName) + 1, Pos('.json', fileName) - Pos('y', fileName) - 1), 0);
 
                     Inc(count);
-                    AddMessage(IntToStr(count) + #9 + 'Loading land heights from JSON: ' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+                    AddMessage(IntToStr(count) + #9 + fileName + #9 + 'Loading land heights from JSON: ' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
                     joLand.O[wrldEdid].O[cellX].O[cellY].LoadFromFile(wbScriptsPath + 'Seasons\' + dir + '\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json');
                 end;
             finally
@@ -2704,13 +2703,12 @@ begin
                     // Extract cellX and cellY from filename
                     fileName := slFiles[cell];
 
-                    AddMessage(fileName);
                     cellX := StrToIntDef(Copy(fileName, 2, Pos('y', fileName) - 2), 0);
                     cellY := StrToIntDef(Copy(fileName, Pos('y', fileName) + 1, Pos('.json', fileName) - Pos('y', fileName) - 1), 0);
                     if not LandHeightsExist(wrldEdid, cellX, cellY) then continue;
 
                     Inc(count);
-                    AddMessage(IntToStr(count) + #9 + 'Merging alterations into land heights: ' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
+                    AddMessage(IntToStr(count) + #9 + fileName + #9 + 'Merging alterations into land heights: ' + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
 
                     landFile := wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json';
 
