@@ -136,6 +136,7 @@ begin
     end;
     if not bLoadPreviousLandHeights then begin
         AlterLandHeightsForTheseBases;
+        MakeLandJsons(joLandscapeHeights, 'LandHeights');
         MakeLandJsons(joLandscapeHeightsAltered, 'LandHeightsAltered');
         ApplyAlterations;
         FixLandscapeSeams;
@@ -2279,6 +2280,7 @@ begin
     SetEditorID(newStatic, editorid);
     newStaticModel := Add(Add(newStatic, 'Model', True), 'MODL', True);
     SetEditValue(newStaticModel, model);
+    //SetElementNativeValues(newStatic, 'Record Header\Record Flags\Has Distant LOD', 1);
     newStaticMNAM := Add(newStatic, 'MNAM', True);
     SetElementEditValues(newStaticMNAM, 'LOD #0 (Level 0)\Mesh', lod0);
     SetElementEditValues(newStaticMNAM, 'LOD #1 (Level 1)\Mesh', lod1);
@@ -2610,7 +2612,7 @@ procedure MakeLandJsons(joLand: TJsonObject; dir: string);
     Extracts the joLand data into individual JSON files for each worldspace and cell.
 }
 var
-    count, w, cellX, cellY: integer;
+    count, w, x, y, cellX, cellY: integer;
     wrldEdid: string;
 
     joLandFile: TJsonObject;
@@ -2619,8 +2621,10 @@ begin
     for w := 0 to Pred(joLand.Count) do begin
         wrldEdid := joLand.Names[w];
         EnsureDirectoryExists(wbScriptsPath + 'Seasons\'+ dir + '\' + wrldEdid + '\');
-        for cellX := 0 to Pred(joLand.O[wrldEdid].Count) do begin
-            for cellY := 0 to Pred(joLand.O[wrldEdid].O[cellX].Count) do begin
+        for x := 0 to Pred(joLand.O[wrldEdid].Count) do begin
+            cellX := StrToInt(joLand.O[wrldEdid].Names[x]);
+            for y := 0 to Pred(joLand.O[wrldEdid].O[cellX].Count) do begin
+                cellY := StrToInt(joLand.O[wrldEdid].O[cellX].Names[y]);
                 joLandFile := TJsonObject.Create;
                 try
                     Inc(count);
@@ -2657,6 +2661,7 @@ begin
                 for cell := 0 to Pred(slFiles.Count) do begin
                     // Extract cellX and cellY from filename
                     fileName := slFiles[cell];
+                    AddMessage(fileName);
                     cellX := StrToIntDef(Copy(fileName, 2, Pos('y', fileName) - 2), 0);
                     cellY := StrToIntDef(Copy(fileName, Pos('y', fileName) + 1, Pos('.json', fileName) - Pos('y', fileName) - 1), 0);
 
@@ -2702,7 +2707,7 @@ begin
                     // Extract cellX and cellY from filename
                     fileName := slFiles[cell];
 
-                    //AddMessage(fileName);
+                    AddMessage(fileName);
                     cellX := StrToIntDef(Copy(fileName, 2, Pos('y', fileName) - 2), 0);
                     cellY := StrToIntDef(Copy(fileName, Pos('y', fileName) + 1, Pos('.json', fileName) - Pos('y', fileName) - 1), 0);
                     if not LandHeightsExist(wrldEdid, cellX, cellY) then continue;
