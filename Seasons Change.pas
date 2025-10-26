@@ -2045,7 +2045,7 @@ begin
                     column_bias := (1 - (Max(column, cellPosX) - Min(column, cellPosX))) * 2;
                     outskirts_bias := 1;
 
-                    previousAlteration := GetLandAlteration(joLandAlteration, row - 1, column, nil);
+                    previousAlteration := GetLandAlteration(joLandAlteration, row - 1, column, '');
 
                     if ((i = 0) or (i = numX) or (j = 0) or (j = numY)) then begin
                         //We are on the outer limits of this alteration.
@@ -2064,7 +2064,7 @@ begin
                     alterationHere := Round((outskirts_bias * row_bias * column_bias * alterationRefr)/SCALE_FACTOR_TERRAIN) * SCALE_FACTOR_TERRAIN;
                     if alterationHere = 0 then continue;
 
-                    if Assigned(previousAlteration) then begin
+                    if (vartype(previousAlteration) = varInteger) then begin
                         if previousAlteration > 0 then begin
                             //AddMessage(#9 + #9 + #9 + 'This vertex has already been altered.');
                             if  ((alterationHere > 0) and (alterationHere <= previousAlteration)) then continue;
@@ -2147,7 +2147,7 @@ begin
     end;
 end;
 
-function GetLandAlteration(joLandAlteration: TJsonObject; row, column, defaultValue: integer): integer;
+function GetLandAlteration(joLandAlteration: TJsonObject; row, column: integer; defaultValue: variant): variant;
 {
     Gets an alteration value from the joLandAlteration.
 
@@ -2170,7 +2170,7 @@ begin
 
     value := joLandAlteration.A[row].S[column];
     if value = '' then Result := defaultValue
-    else Result := value;
+    else Result := StrToInt(value);
 end;
 
 function AddLandAlteration(joLandAlteration: TJsonObject; row, column, alteration: integer): boolean;
