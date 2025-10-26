@@ -1981,7 +1981,6 @@ begin
         //xHere := x1 + (i * 128);
         for j := 0 to numY do begin
             yHere := y1n + (j * height/numY);
-            //yHere := y1 + (j * 128);
             //AddMessage(#9 + #9 + #9 + 'Processing point ' + FloatToStr(xHere) + ',' + FloatToStr(yHere));
             if xHere > x2n then xHere := x2n;
             if yHere > y2n then yHere := y2n;
@@ -1991,7 +1990,6 @@ begin
                 raw_z := zHere;
             end
             else begin
-                //continue; //Skipping rotated objects for now.
                 rotate_position(
                     xHere, yHere, zHere,            // initial position
                     rotX, rotY, rotZ,              // rotation to apply - x y z
@@ -2008,7 +2006,6 @@ begin
             cellYHere := Floor(posYHere/4096);
 
             if not LandHeightsExist(wrldEdid, cellXHere, cellYHere) then continue;
-
             //AddMessage(#9 + #9 + #9 + 'Position ' + FloatToStr(posXHere) + ',' + FloatToStr(posYHere) + ' is in cell ' + IntToStr(cellXHere) + ',' + IntToStr(cellYHere));
 
             cellPosX := (posXHere - (cellXHere * 4096))/128;
@@ -2045,7 +2042,7 @@ begin
                     column_bias := (1 - (Max(column, cellPosX) - Min(column, cellPosX))) * 2;
                     outskirts_bias := 1;
 
-                    previousAlteration := GetLandAlteration(joLandAlteration, row - 1, column, '');
+                    previousAlteration := GetLandAlteration(joLandAlteration, row, column, '');
 
                     if ((i = 0) or (i = numX) or (j = 0) or (j = numY)) then begin
                         //We are on the outer limits of this alteration.
