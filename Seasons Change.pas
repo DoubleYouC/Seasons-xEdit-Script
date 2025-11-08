@@ -102,7 +102,7 @@ begin
     bCreateLandscapeSnowMeshes := False;
     bPlaceLandscapeSnow := False;
     bCreateTestPlugin := False;
-    bLoadPreviousLandHeights := False;
+    bLoadPreviousLandHeights := True;
     bCreateWinterDecals := True;
 
     //Rules
@@ -1651,9 +1651,9 @@ begin
             for j := 0 to Pred(ElementCount(placements)) do begin
                 placement := ElementByIndex(placements, j);
 
-                pmPosX := GetElementNativeValues(placement, 'Position\X') * scale;
-                pmPosY := GetElementNativeValues(placement, 'Position\Y') * scale;
-                pmPosZ := GetElementNativeValues(placement, 'Position\Z') * scale;
+                pmPosX := GetElementNativeValues(placement, 'Position\X');
+                pmPosY := GetElementNativeValues(placement, 'Position\Y');
+                pmPosZ := GetElementNativeValues(placement, 'Position\Z');
                 pmRotX := GetElementNativeValues(placement, 'Rotation\X');
                 pmRotY := GetElementNativeValues(placement, 'Rotation\Y');
                 pmRotZ := GetElementNativeValues(placement, 'Rotation\Z');
@@ -1671,14 +1671,18 @@ begin
                     );
                 end;
 
+                raw_x := raw_x * scale;
+                raw_y := raw_y * scale;
+                raw_z := raw_z * scale;
+
                 if ((pmRotX = 0) and (pmRotY = 0) and (pmRotZ = 0)) then begin
                     rawr_x := rotX;
                     rawr_Y := rotY;
                     rawr_Z := rotZ;
                 end else begin
                     rotate_rotation(
-                        rotX, rotY, rotZ,                  // initial rotation
-                        pmRotX, pmRotY, pmRotZ,           // rotation to apply - x y z
+                        pmRotX, pmRotY, pmRotZ,                  // initial rotation
+                        rotX, rotY, rotZ,           // rotation to apply - x y z
                         rawr_x, rawr_y, rawr_z           // (output) raw rotation
                     );
                 end;
@@ -1686,10 +1690,12 @@ begin
                 posXHere := posX + raw_x;
                 posYHere := posY + raw_y;
                 posZHere := posZ + raw_z;
+
                 PlaceWinterDecal(r, rWinterDecal, rWrld, wrldEdid, posXHere, posYHere, posZHere, rawr_x, rawr_y, rawr_z, pmScale);
             end;
-        end;
-        PlaceWinterDecal(r, rWinterDecal, rWrld, wrldEdid, posX, posY, posZ, rotX, rotY, rotZ, scale);
+        end
+        else
+            PlaceWinterDecal(r, rWinterDecal, rWrld, wrldEdid, posX, posY, posZ, rotX, rotY, rotZ, scale);
     end;
 end;
 
@@ -1702,12 +1708,13 @@ var
 
     rCell, nCell, winterDecalRef, base, eScale: IwbElement;
 begin
-    AddMessage(#9 + ShortName(r) + #9 + IntToStr(Round(posX)) + ', ' + IntToStr(Round(posY)) + ', ' + IntToStr(Round(posZ)));
+
     position.x := posX;
     position.y := posY;
     position.z := posZ;
     c := wbPositionToGridCell(position);
     cellRecordId := joWinningCells.O[wrldEdid].O[c.X].S[c.Y];
+    AddMessage(#9 + ShortName(r) + #9 + IntToStr(Round(posX)) + ', ' + IntToStr(Round(posY)) + ', ' + IntToStr(Round(posZ)));
     if cellRecordId = '' then Exit;
 
     rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
@@ -1907,8 +1914,8 @@ begin
                 rawr_Z := rotZ;
             end else begin
                 rotate_rotation(
-                    rotX, rotY, rotZ,                  // initial rotation
-                    pmRotX, pmRotY, pmRotZ,           // rotation to apply - x y z
+                    pmRotX, pmRotY, pmRotZ,            // initial rotation
+                    rotX, rotY, rotZ,                 // rotation to apply - x y z
                     rawr_x, rawr_y, rawr_z           // (output) raw rotation
                 );
             end;
