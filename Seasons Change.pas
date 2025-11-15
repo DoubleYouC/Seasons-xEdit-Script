@@ -31,7 +31,7 @@ const
     // epsilon to use for CompareValue calls
     // between positions and rotations, positions have more significant decimals (6), so this is set
     // to compliment that
-    EPSILON = 0.000001;
+    EPSILON = 0.0000000001;
 
 // ----------------------------------------------------
 // Main functions and procedures go immediately below.
@@ -1620,6 +1620,7 @@ begin
         if Signature(r) <> 'REFR' then continue;
         if not IsWinningOverride(r) then continue;
         if GetIsDeleted(r) then continue;
+        if ElementExists(r, 'XATR') then continue; //skip references attached to objects
         if ElementExists(r, 'XESP') then continue; //skip enable parented objects for now. TODO make a way to have "double XESP"
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
         if Signature(rCell) <> 'CELL' then continue;
