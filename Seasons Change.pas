@@ -1621,7 +1621,7 @@ begin
         if not IsWinningOverride(r) then continue;
         if GetIsDeleted(r) then continue;
         if ElementExists(r, 'XATR') then continue; //skip references attached to objects
-        if ElementExists(r, 'XESP') then continue; //skip enable parented objects for now. TODO make a way to have "double XESP"
+        //if ElementExists(r, 'XESP') then continue; //skip enable parented objects for now. TODO make a way to have "double XESP"
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
         if Signature(rCell) <> 'CELL' then continue;
         if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
@@ -1707,7 +1707,7 @@ var
     position: TwbVector;
     c: TwbGridCell;
 
-    rCell, nCell, winterDecalRef, base, eScale: IwbElement;
+    rCell, nCell, winterDecalRef, base, eScale, xesp: IwbElement;
 begin
 
     position.x := posX;
@@ -1735,6 +1735,12 @@ begin
     SetElementEditValues(winterDecalRef, 'DATA\Rotation\X', rotX);
     SetElementEditValues(winterDecalRef, 'DATA\Rotation\Y', rotY);
     SetElementEditValues(winterDecalRef, 'DATA\Rotation\Z', rotZ);
+    if ElementExists(r, 'XESP') then begin
+        xesp := Add(winterDecalRef, 'XESP', True);
+        ElementAssign(xesp, 0, nil, False);
+        SetElementEditValues(xesp, 'Reference', IntToHex(GetLoadOrderFormID(r), 8));
+        //SetElementNativeValues(xesp, 'Flags', GetElementNativeValues(r, 'XESP\Flags'));
+    end;
 
     if scale <> 1 then begin
         eScale := Add(winterDecalRef, 'XSCL', True);
