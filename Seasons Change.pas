@@ -11,7 +11,7 @@ var
     bSaveLandHeights, bCreateLandscapeHeights, bCreateLandscapeSnowMeshes, bPlaceLandscapeSnow, bCreateTestPlugin, bUserAlterLandRulesChanged,
     bLoadPreviousLandHeights, bSaveUserRules, bCreateWinterDecals: boolean;
     uiScale: integer;
-    sIgnoredWorldspaces: string;
+    sIgnoredWorldspacesLandscapeSnow, sIgnoredWorldspacesWinterDecals: string;
 
     SeasonsMainFile: IwbFile;
     statGroup, scolGroup: IwbGroupRecord;
@@ -1430,7 +1430,7 @@ begin
             for j := 0 to Pred(ElementCount(g)) do begin
                 rWrld := ElementByIndex(g, j);
                 recordid := RecordFormIdFileId(rWrld);
-                if Pos(recordid, sIgnoredWorldspaces) <> 0 then continue;
+                if Pos(recordid, sIgnoredWorldspacesLandscapeSnow) <> 0 then continue;
                 wrldEdid := GetElementEditValues(rWrld, 'EDID');
                 wWrld := WinningOverride(rWrld);
                 if GetElementNativeValues(wWrld, 'DATA\No Landscape') = 1 then continue;
@@ -1627,7 +1627,7 @@ begin
         if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         if Signature(rWrld) <> 'WRLD' then continue;
-        if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) <> 0 then continue;
+        if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspacesWinterDecals) <> 0 then continue;
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
         if ElementExists(r, 'XSCL') then scale := GetElementNativeValues(r, 'XSCL') else scale := 1;
@@ -1795,7 +1795,7 @@ begin
         if (Signature(rCell) <> 'CELL') then continue;
         if (GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1) then continue;
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
-        if (Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspaces) > 0) then continue;
+        if (Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspacesLandscapeSnow) > 0) then continue;
 
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
@@ -3107,23 +3107,43 @@ var
 
     sub: TJsonObject;
 begin
-    //Ignore Worldspaces
-    j := 'Seasons\' + TrimLeftChars(f, 4) + ' - Ignore Worldspaces.json';
+    //Ignore Worldspaces Landscape Snow
+    j := 'Seasons\' + TrimLeftChars(f, 4) + ' - Ignore Worldspaces Landscape Snow.json';
     if ResourceExists(j) then begin
-        AddMessage('Loaded Ignore Worldspaces File: ' + j);
+        AddMessage('Loaded Ignore Worldspaces Landscape Snow File: ' + j);
         sub := TJsonObject.Create;
         try
             sub.LoadFromResource(j);
             key := 'Ignore Worldspaces';
             for a := 0 to Pred(sub.A[key].Count) do begin
-                if sIgnoredWorldspaces = '' then
-                    sIgnoredWorldspaces := sub.A[key].S[a]
+                if sIgnoredWorldspacesLandscapeSnow = '' then
+                    sIgnoredWorldspacesLandscapeSnow := sub.A[key].S[a]
                 else
-                    sIgnoredWorldspaces := sIgnoredWorldspaces + ',' + sub.A[key].S[a];
+                    sIgnoredWorldspacesLandscapeSnow := sIgnoredWorldspacesLandscapeSnow + ',' + sub.A[key].S[a];
             end;
         finally
             sub.Free;
-            AddMessage('Ignored Worldspaces: ' + sIgnoredWorldspaces);
+            AddMessage('Ignored Worldspaces for Landscape Snow: ' + sIgnoredWorldspacesLandscapeSnow);
+        end;
+    end;
+
+    //Ignore Worldspaces Winter Decals
+    j := 'Seasons\' + TrimLeftChars(f, 4) + ' - Ignore Worldspaces Winter Decals.json';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded Ignore Worldspaces Winter Decals File: ' + j);
+        sub := TJsonObject.Create;
+        try
+            sub.LoadFromResource(j);
+            key := 'Ignore Worldspaces';
+            for a := 0 to Pred(sub.A[key].Count) do begin
+                if sIgnoredWorldspacesWinterDecals = '' then
+                    sIgnoredWorldspacesWinterDecals := sub.A[key].S[a]
+                else
+                    sIgnoredWorldspacesWinterDecals := sIgnoredWorldspacesWinterDecals + ',' + sub.A[key].S[a];
+            end;
+        finally
+            sub.Free;
+            AddMessage('Ignored Worldspaces for Winter Decals: ' + sIgnoredWorldspacesWinterDecals);
         end;
     end;
 
