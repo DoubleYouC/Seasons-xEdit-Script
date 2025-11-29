@@ -18,7 +18,7 @@ var
     flatSnowStatic: IwbElement;
 
     slPluginFiles: TStringList;
-    tlLandRecords, tlBasesThatAlterLand, tlStats, tlFurnActiMstt, tlWinterDecals, tlWinterReplacements, tlTxst: TList;
+    tlLandRecords, tlBasesThatAlterLand, tlStats, tlFurnActiMstt, tlWinterDecals, tlWinterReplacements, tlTxsts: TList;
     joWinningCells, joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules, joWinterDecalRules,
     joUserWinterDecalRules, joLoadOrderFormIDFileID: TJsonObject;
 
@@ -60,7 +60,7 @@ begin
     tlWinterDecals := TList.Create;
     tlFurnActiMstt := TList.Create;
     tlWinterReplacements := TList.Create;
-    tlTxst := TList.Create;
+    tlTxsts := TList.Create;
 
     slPluginFiles := TStringList.Create;
 end;
@@ -85,7 +85,7 @@ begin
     tlWinterDecals.Free;
     tlFurnActiMstt.Free;
     tlWinterReplacements.Free;
-    tlTxst.Free;
+    tlTxsts.Free;
 
     slPluginFiles.Free;
 
@@ -689,8 +689,8 @@ begin
     if refKey = '' then Exit;
     if ContainsText(refKey, ':') then begin
         r := GetRecordFromFormIdFileId(refKey);
-        if (Assigned(r) and (Pos(Signature(r),'REFR') <> 0))
-            then bReferenceFound := True;
+        if (Assigned(r) and (Pos(Signature(r),'REFR,TXST,STAT,SCOL,FURN,ACTI') <> 0))
+            then bReferenceFound := True
     end
     else if IsValidHex(refKey) then begin
         formid := StrToInt('$' + refKey);
@@ -700,14 +700,16 @@ begin
             fileFormId := IntToHex(LoadOrderFormIDtoFileFormID(f, refKey), 8);
             refKey := fileFormId + ':' + fileName;
             r := GetRecordFromFormIdFileId(refKey);
-            if (Assigned(r) and (Pos(Signature(r),'REFR') <> 0))
+            if (Assigned(r) and (Pos(Signature(r),'REFR,TXST,STAT,SCOL,FURN,ACTI') <> 0))
                 then bReferenceFound := True;
         end;
     end;
 
     if bReferenceFound then begin
-        base := LinksTo(ElementByPath(r, 'NAME'));
-        baseRecordId := RecordFormIdFileId(base);
+        if Signature(r) = 'REFR' then begin
+            base := LinksTo(ElementByPath(r, 'NAME'));
+            baseRecordId := RecordFormIdFileId(base);
+        end else baseRecordId := refKey;
         cbRefKey.Text := refKey;
         cbBase.Text := baseRecordId;
         btnOk.Enabled := True;
@@ -2057,12 +2059,51 @@ procedure ProcessTxst;
     Process TXST records.
 }
 var
-    i: integer;
-    r: IwbElement;
+    i, j: integer;
+    baseTxst, r: IwbElement;
 begin
     for i := 0 to Pred(tlTxsts.Count) do begin
-        r := ObjectToElement(tlTxsts[i]);
+        baseTxst := ObjectToElement(tlTxsts[i]);
+        if not joWinterDecalRules.Contains(RecordFormIdFileId(baseTxst)) then continue;
+        for j := Pred(ReferencedByCount(baseTxst)) downto 0 do begin
+            r := ReferencedByIndex(baseTxst, j);
+            if Signature(r) <> 'REFR' then continue;
+            if not IsWinningOverride(r) then continue;
+            if GetIsDeleted(r) then continue;
+            if GetIsCleanDeleted(r) then continue;
+            rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+            if Signature(rCell) <> 'CELL' then continue;
+            if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+            rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+            if Signature(rWrld) <> 'WRLD' then continue;
+            if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspacesWinterDecals) <> 0 then continue;
+            OverrideDecalForREFR(r, rCell, rWrld);
+        end;
     end;
+end;
+
+procedure OverrideDecalForREFR(rOriginal, rCell, rWrld: IwbElement);
+{
+    Overrides decal for a REFR based on an original REFR.
+}
+var
+    rOverride, nCell, baseTxst, rTxst, xesp: IwbElement;
+begin
+    AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
+    AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
+  	SortMasters(SeasonsMainFile);
+    wbCopyElementToFile(rWrld, SeasonsMainFile, False, True);
+    nCell := wbCopyElementToFile(rCell, SeasonsMainFile, False, True);
+
+    rOverride := wbCopyElementToFile(rOriginal, SeasonsMainFile, False, True);
+
+    if ElementExists(rOverride, 'XESP') then xesp := ElementByPath(rOverride, 'XESP')
+    else begin
+        xesp := Add(rOverride, 'XESP', True);
+        ElementAssign(xesp, 0, nil, False);
+    end;
+    SetElementEditValues(xesp, 'Reference', '14'); //playerref
+    SetElementEditValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 1);
 end;
 
 procedure CreateWinterReplacements;
@@ -2073,7 +2114,7 @@ var
     i: integer;
     model, winterReplacement, baseEdid: string;
 
-    base: IwbElement;
+    base, rWinterReplacement: IwbElement;
 begin
     if not Assigned(SeasonsMainFile) then Exit;
     for i := 0 to Pred(tlWinterReplacements.Count) do begin
@@ -2098,7 +2139,7 @@ begin
     SetEditorID(newBaseRecord, editorid);
     newModel := ElementByPath(newBaseRecord, 'Model\MODL');
     SetEditValue(newModel, model);
-    Result := newStatic;
+    Result := newBaseRecord;
 end;
 
 procedure CreateWinterDecals;
@@ -2137,7 +2178,7 @@ begin
         if Signature(r) <> 'REFR' then continue;
         if not IsWinningOverride(r) then continue;
         if GetIsDeleted(r) then continue;
-        if ElementExists(r, 'XATR') then continue; //skip references attached to objects
+        if GetIsCleanDeleted(r) then continue;
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
         if Signature(rCell) <> 'CELL' then continue;
         if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
@@ -2159,7 +2200,7 @@ procedure AddWinterReplacementREFR(rOriginal, rCell, rWrld, rWinterReplacement: 
 var
     winterReplacementFormid: string;
 
-    rOverride, nCell := IwbElement;
+    rOverride, nCell: IwbElement;
 begin
     AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
     AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
