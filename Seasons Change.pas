@@ -2060,6 +2060,7 @@ begin
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         if Signature(rWrld) <> 'WRLD' then continue;
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspacesWinterDecals) <> 0 then continue;
+        if joWinterDecalRules.Contains(RecordFormIdFileId(r)) then continue; //currently just skipping winter decal rule refs. Eventually break this out to allow alternative models to be used.
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
         if ElementExists(r, 'XSCL') then scale := GetElementNativeValues(r, 'XSCL') else scale := 1;
