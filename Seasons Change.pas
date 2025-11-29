@@ -14,7 +14,7 @@ var
     sIgnoredWorldspacesLandscapeSnow, sIgnoredWorldspacesWinterDecals: string;
 
     SeasonsMainFile: IwbFile;
-    statGroup, scolGroup: IwbGroupRecord;
+    statGroup, scolGroup, actiGroup, furnGroup, msttGroup: IwbGroupRecord;
     flatSnowStatic: IwbElement;
 
     slPluginFiles: TStringList;
@@ -160,6 +160,7 @@ begin
     ProcessFurnActiMstt;
     ProcessTxst;
     if bCreateWinterDecals then begin
+        CreateWinterReplacements;
         CreateWinterDecals;
     end;
 end;
@@ -1841,6 +1842,9 @@ begin
     AddMasterIfMissing(SeasonsMainFile, GetFileName(FileByIndex(0)));
     statGroup := Add(SeasonsMainFile, 'STAT', True);
     scolGroup := Add(SeasonsMainFile, 'SCOL', True);
+    actiGroup := Add(SeasonsMainFile, 'ACTI', True);
+    furnGroup := Add(SeasonsMainFile, 'FURN', True);
+    msttGroup := Add(SeasonsMainFile, 'MSTT', True);
     slPluginFiles.Add(GetFileName(SeasonsMainFile));
 end;
 
@@ -2061,6 +2065,42 @@ begin
     end;
 end;
 
+procedure CreateWinterReplacements;
+{
+    Creates winter replacements.
+}
+var
+    i: integer;
+    model, winterReplacement, baseEdid: string;
+
+    base: IwbElement;
+begin
+    if not Assigned(SeasonsMainFile) then Exit;
+    for i := 0 to Pred(tlWinterReplacements.Count) do begin
+        base := ObjectToElement(tlWinterReplacements[i]);
+        model := wbNormalizeResourceName(GetElementEditValues(base, 'Model\MODL'), resMesh);
+        winterReplacement := StringReplace(model, 'meshes', 'meshes\WinterReplacements', [rfIgnoreCase]);
+        baseEdid := GetElementEditValues(base, 'EDID');
+        rWinterReplacement := CreateWinterReplacementBase(base, winterReplacement, 'winterReplacement_' + baseEdid);
+        AddMessage('Processing Winter Replacements: ' + #9 + baseEdid);
+        ProcessWinterReplacementREFRs(base, rWinterReplacement);
+    end;
+end;
+
+function CreateWinterReplacementBase(base: IwbElement; model, editorid: string): IwbElement;
+{
+    Creates a winter replacement base object.
+}
+var
+    newBaseRecord, newModel: IwbElement;
+begin
+    newBaseRecord := wbCopyElementToFile(base, SeasonsMainFile, True, True);
+    SetEditorID(newBaseRecord, editorid);
+    newModel := ElementByPath(newBaseRecord, 'Model\MODL');
+    SetEditValue(newModel, model);
+    Result := newStatic;
+end;
+
 procedure CreateWinterDecals;
 {
     Creates winter decals.
@@ -2081,6 +2121,55 @@ begin
         AddMessage('Processing Winter Decals: ' + #9 + statEdid);
         ProcessWinterDecalREFRs(base, base, rWinterDecal, False);
     end;
+end;
+
+procedure ProcessWinterReplacementREFRs(base, rWinterReplacement: IwbElement);
+{
+    Places winter replacements.
+}
+var
+    i: integer;
+
+    r, rCell, rWrld: IwbElement;
+begin
+    for i := Pred(ReferencedByCount(base)) downto 0 do begin
+        r := ReferencedByIndex(base, i);
+        if Signature(r) <> 'REFR' then continue;
+        if not IsWinningOverride(r) then continue;
+        if GetIsDeleted(r) then continue;
+        if ElementExists(r, 'XATR') then continue; //skip references attached to objects
+        rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
+        if Signature(rCell) <> 'CELL' then continue;
+        if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
+        rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+        if Signature(rWrld) <> 'WRLD' then continue;
+        if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspacesWinterDecals) <> 0 then continue;
+        if joWinterDecalRules.Contains(RecordFormIdFileId(r)) then continue; //currently just skipping winter decal rule refs. Eventually break this out to allow alternative models to be used.
+
+        AddWinterReplacementREFR(r, rCell, rWrld, rWinterReplacement);
+    end;
+end;
+
+procedure AddWinterReplacementREFR(rOriginal, rCell, rWrld, rWinterReplacement: IwbElement);
+{
+    Adds a winter replacement REFR based on an original REFR.
+
+    This currently is not seasonal and simply replaces the base NAME with the winter replacement.
+}
+var
+    winterReplacementFormid: string;
+
+    rOverride, nCell := IwbElement;
+begin
+    AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
+    AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
+  	SortMasters(SeasonsMainFile);
+    wbCopyElementToFile(rWrld, SeasonsMainFile, False, True);
+    nCell := wbCopyElementToFile(rCell, SeasonsMainFile, False, True);
+
+    rOverride := wbCopyElementToFile(rOriginal, SeasonsMainFile, False, True);
+    winterReplacementFormid := IntToHex(GetLoadOrderFormID(rWinterReplacement), 8);
+    SetElementEditValues(rOverride, 'NAME', winterReplacementFormid);
 end;
 
 procedure ProcessWinterDecalREFRs(base, fromBase, rWinterDecal: IwbElement; bSCOL: boolean);
@@ -2107,7 +2196,6 @@ begin
         if not IsWinningOverride(r) then continue;
         if GetIsDeleted(r) then continue;
         if ElementExists(r, 'XATR') then continue; //skip references attached to objects
-        //if ElementExists(r, 'XESP') then continue; //skip enable parented objects for now. TODO make a way to have "double XESP"
         rCell := WinningOverride(LinksTo(ElementByIndex(r, 0)));
         if Signature(rCell) <> 'CELL' then continue;
         if GetElementEditValues(rCell, 'DATA - Flags\Is Interior Cell') = 1 then continue;
