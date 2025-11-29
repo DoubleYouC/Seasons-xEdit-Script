@@ -9,7 +9,7 @@ unit Seasons;
 
 var
     bSaveLandHeights, bCreateLandscapeHeights, bCreateLandscapeSnowMeshes, bPlaceLandscapeSnow, bCreateTestPlugin, bUserAlterLandRulesChanged,
-    bLoadPreviousLandHeights, bSaveUserRules, bCreateWinterDecals: boolean;
+    bLoadPreviousLandHeights, bSaveUserRules, bCreateWinterDecals, bUserWinterDecalRulesChanged: boolean;
     uiScale: integer;
     sIgnoredWorldspacesLandscapeSnow, sIgnoredWorldspacesWinterDecals: string;
 
@@ -19,7 +19,8 @@ var
 
     slPluginFiles: TStringList;
     tlLandRecords, tlBasesThatAlterLand, tlStats, tlWinterDecals: TList;
-    joWinningCells, joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules, joLoadOrderFormIDFileID: TJsonObject;
+    joWinningCells, joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules, joWinterDecalRules,
+    joUserWinterDecalRules, joLoadOrderFormIDFileID: TJsonObject;
 
     lvAlterLandRules: TListView;
     btnAlterLandRuleOk, btnAlterLandRuleCancel: TButton;
@@ -48,6 +49,8 @@ begin
     joLandFiles := TJsonObject.Create;
     joAlterLandRules := TJsonObject.Create;
     joUserAlterLandRules := TJsonObject.Create;
+    joWinterDecalRules := TJsonObject.Create;
+    joUserWinterDecalRules := TJsonObject.Create;
     joWinningCells := TJsonObject.Create;
     joLoadOrderFormIDFileID := TJsonObject.Create;
 
@@ -85,6 +88,11 @@ begin
         joUserAlterLandRules.SaveToFile(wbDataPath + 'Seasons\AlterLandUserRules.json', False, TEncoding.UTF8, True);
     end;
     joUserAlterLandRules.Free;
+    if bSaveUserRules and bUserWinterDecalRulesChanged then begin
+        AddMessage('Saving ' + IntToStr(joUserWinterDecalRules.Count) + ' winter decal user rule(s) to ' + wbDataPath + 'Seasons\WinterDecalUserRules.json');
+        joUserWinterDecalRules.SaveToFile(wbDataPath + 'Seasons\WinterDecalUserRules.json', False, TEncoding.UTF8, True);
+    end;
+    joUserWinterDecalRules.Free;
     Result := 0;
 end;
 
@@ -208,7 +216,6 @@ begin
 
         iWidgetHeight := chkCreateTestPlugin.Height * 2;
         iButtonHeightModifier := Round(chkCreateTestPlugin.Height * 0.1);
-        AddMessage('Widget height: ' + IntToStr(iWidgetHeight));
 
         gbSnowOptions := TGroupBox.Create(frm);
         gbSnowOptions.Parent := frm;
@@ -274,7 +281,7 @@ begin
         btnWinterDecalRuleEditor := TButton.Create(gbSnowOptions);
         btnWinterDecalRuleEditor.Parent := gbSnowOptions;
         btnWinterDecalRuleEditor.Caption := 'Winter Decal Rules';
-        btnWinterDecalRuleEditor.OnClick := AlterLandRuleEditor;
+        btnWinterDecalRuleEditor.OnClick := WinterDecalRuleEditor;
         btnWinterDecalRuleEditor.Width := 120;
         btnWinterDecalRuleEditor.Left := btnAlterationRuleEditor.Left;
         btnWinterDecalRuleEditor.Top := chkCreateWinterDecals.Top - iButtonHeightModifier;
@@ -426,6 +433,410 @@ begin
     else bSaveUserRules := True;
 end;
 
+function WinterDecalRuleEditor: Boolean;
+var
+    i: integer;
+    mnRules: TPopupMenu;
+    MenuItem: TMenuItem;
+    lbl: TLabel;
+    frm: TForm;
+    lvWinterDecalRules: TListView;
+    btnWinterDecalRuleOk, btnWinterDecalRuleCancel: TButton;
+begin
+    Result := False;
+    frm := TForm.Create(nil);
+    try
+        frm.Caption := 'Winter Decal Rule Editor';
+        frm.Width := 750;
+        frm.Height := 600;
+        frm.Position := poMainFormCenter;
+        frm.BorderStyle := bsSizeable;
+        frm.KeyPreview := True;
+        frm.OnClose := frmOptionsFormClose;
+        frm.OnKeyDown := FormKeyDown;
+        frm.OnResize := frmWinterDecalRuleResize;
+
+        lvWinterDecalRules := TListView.Create(frm);
+        lvWinterDecalRules.Parent := frm;
+        lvWinterDecalRules.Name := 'ListView';
+
+        lvWinterDecalRules.Top := 24;
+        lvWinterDecalRules.Width := frm.Width - 36;
+        lvWinterDecalRules.Left := (frm.Width - lvWinterDecalRules.Width)/2;
+        lvWinterDecalRules.Height := frm.Height - 110;
+        lvWinterDecalRules.ReadOnly := True;
+        lvWinterDecalRules.ViewStyle := vsReport;
+        lvWinterDecalRules.RowSelect := True;
+        lvWinterDecalRules.DoubleBuffered := True;
+        lvWinterDecalRules.Columns.Add.Caption := 'Base ID';
+        lvWinterDecalRules.Columns[0].Width := 200;
+        lvWinterDecalRules.Columns.Add.Caption := 'Reference ID';
+        lvWinterDecalRules.Columns[1].Width := 200;
+        lvWinterDecalRules.Columns.Add.Caption := 'Model';
+        lvWinterDecalRules.Columns[2].Width := 305;
+        lvWinterDecalRules.OwnerData := True;
+        lvWinterDecalRules.OnData := lvWinterDecalRulesData;
+        lvWinterDecalRules.Items.Count := joWinterDecalRules.Count;
+        CreateLabel(frm, 16, lvWinterDecalRules.Top - 20, 'Winter Decal Rules');
+
+        mnRules := TPopupMenu.Create(frm);
+        lvWinterDecalRules.PopupMenu := mnRules;
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Caption := 'Add';
+        MenuItem.OnClick := WinterDecalMenuAddClick;
+        mnRules.Items.Add(MenuItem);
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Caption := 'Delete';
+        MenuItem.OnClick := WinterDecalMenuDeleteClick;
+        mnRules.Items.Add(MenuItem);
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Caption := 'Edit';
+        MenuItem.OnClick := WinterDecalMenuEditClick;
+        mnRules.Items.Add(MenuItem);
+
+        btnWinterDecalRuleOk := TButton.Create(frm);
+        btnWinterDecalRuleOk.Parent := frm;
+        btnWinterDecalRuleOk.Name := 'OK';
+        btnWinterDecalRuleOk.Caption := 'OK';
+        btnWinterDecalRuleOk.ModalResult := mrOk;
+        btnWinterDecalRuleOk.Top := lvWinterDecalRules.Height + lvWinterDecalRules.Top + 8;
+
+        btnWinterDecalRuleCancel := TButton.Create(frm);
+        btnWinterDecalRuleCancel.Parent := frm;
+        btnWinterDecalRuleCancel.Name := 'Cancel';
+        btnWinterDecalRuleCancel.Caption := 'Cancel';
+        btnWinterDecalRuleCancel.ModalResult := mrCancel;
+        btnWinterDecalRuleCancel.Top := btnWinterDecalRuleOk.Top;
+
+        btnWinterDecalRuleOk.Left := (frm.Width - btnWinterDecalRuleOk.Width - btnWinterDecalRuleCancel.Width - 8)/2;
+        btnWinterDecalRuleCancel.Left := btnWinterDecalRuleOk.Left + btnWinterDecalRuleOk.Width + 8;
+
+        frm.ScaleBy(uiScale, 100);
+        frm.Font.Size := 8;
+
+        if frm.ShowModal <> mrOk then Exit;
+
+        Result := True;
+    finally
+        frm.Free;
+    end;
+end;
+
+procedure frmWinterDecalRuleResize(Sender: TObject);
+{
+    Handle resizing of elements in the winter decal rule menu.
+}
+var
+    frm: TForm;
+    btnOK, btnCancel: TButton;
+    lv: TListView;
+begin
+    frm := TForm(Sender);
+    if not Assigned(frm) then Exit;
+    btnOK := TButton(frm.FindComponent('OK'));
+    btnCancel := TButton(frm.FindComponent('Cancel'));
+    lv := TListView(frm.FindComponent('ListView'));
+    if not Assigned(lv) then Exit;
+    if not Assigned(btnOK) then Exit;
+    if not Assigned(btnCancel) then Exit;
+
+    lv.Width := frm.Width - 36;
+    lv.Left := (frm.Width - lv.Width)/2;
+    lv.Height := frm.Height - btnOK.Height - btnOK.Height - btnOK.Height - btnOK.Height;
+
+    btnOK.Top := lv.Height + lv.Top + 8;
+    btnCancel.Top := btnOK.Top;
+    btnOK.Left := (frm.Width - btnOK.Width - btnCancel.Width - 8)/2;
+    btnCancel.Left := btnOK.Left + btnOK.Width + 8;
+end;
+
+function EditWinterDecalRuleForm(var key, base, model: string): boolean;
+var
+    frmRule: TForm;
+    pnl: TPanel;
+    btnOk, btnCancel, btnReferences: TButton;
+    edModel: TEdit;
+    cbBase, cbRefKey: TComboBox;
+begin
+    Result := False;
+    frmRule := TForm.Create(nil);
+    try
+        frmRule.Caption := 'Winter Decal Rule';
+        frmRule.Width := 600;
+        frmRule.Height := 180;
+        frmRule.Position := poMainFormCenter;
+        frmRule.BorderStyle := bsDialog;
+        frmRule.KeyPreview := True;
+        frmRule.OnKeyDown := FormKeyDown;
+        frmRule.OnClose := frmEditWinterDecalRuleFormClose;
+
+        cbBase := TComboBox.Create(frmRule);
+        cbBase.Parent := frmRule;
+        cbBase.Name := 'cbBase';
+        cbBase.Left := 120;
+        cbBase.Top := 12;
+        cbBase.Width := frmRule.Width - 150;
+        cbBase.Style := csDropDown;
+        CreateLabel(frmRule, 16, cbBase.Top + 4, 'Base ID');
+
+        cbRefKey := TComboBox.Create(frmRule);
+        cbRefKey.Parent := frmRule;
+        cbRefKey.Name := 'cbRefKey';
+        cbRefKey.Left := 120;
+        cbRefKey.Top := cbBase.Top + 28;
+        cbRefKey.Width := frmRule.Width - 150;
+
+        cbRefKey.OnExit := WinterDecalRefKeyChange;
+        cbRefKey.Style := csDropDown;
+        CreateLabel(frmRule, 16, cbRefKey.Top + 4, 'Reference ID');
+
+        edModel := TEdit.Create(frmRule);
+        edModel.Parent := frmRule;
+        edModel.Name := 'edModel';
+        edModel.Left := 120;
+        edModel.Top := cbRefKey.Top + 28;
+        edModel.Width := frmRule.Width - 150;
+        CreateLabel(frmRule, 16, edModel.Top + 4, 'Model');
+
+        btnOk := TButton.Create(frmRule);
+        btnOk.Parent := frmRule;
+        btnOk.Name := 'OK';
+        btnOk.Caption := 'OK';
+        btnOk.ModalResult := mrOk;
+        btnOk.Top := edModel.Top + (2 * edModel.Height);
+
+        btnCancel := TButton.Create(frmRule);
+        btnCancel.Parent := frmRule;
+        btnCancel.Name := 'Cancel';
+        btnCancel.Caption := 'Cancel';
+        btnCancel.ModalResult := mrCancel;
+        btnCancel.Top := btnOk.Top;
+
+        btnOk.Left := frmRule.Width - btnOk.Width - btnCancel.Width - 32;
+        btnCancel.Left := btnOk.Left + btnOk.Width + 8;
+
+        pnl := TPanel.Create(frmRule);
+        pnl.Parent := frmRule;
+        pnl.Left := 10;
+        pnl.Top := btnOk.Top - 12;
+        pnl.Width := frmRule.Width - 32;
+        pnl.Height := 2;
+
+        frmRule.Height := btnOk.Top + (3 * btnOk.Height);
+        frmRule.ScaleBy(uiScale, 100);
+        frmRule.Font.Size := 8;
+
+        cbBase.Items.Add(base);
+        cbBase.ItemIndex := 0;
+        cbBase.Enabled := False;
+
+        cbRefKey.Items.Add(key);
+        cbRefKey.ItemIndex := 0;
+
+        edModel.Text := model;
+
+        if cbRefKey.Text = '' then begin
+            btnOk.Enabled := False;
+        end;
+
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+        if frmRule.ShowModal <> mrOk then Exit;
+        /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+        base := cbBase.Text;
+        key := cbRefKey.Text;
+        model := edModel.Text;
+        Result := True;
+    finally
+        frmRule.Free;
+    end;
+end;
+
+procedure WinterDecalRefKeyChange(Sender: TObject);
+var
+    bReferenceFound: boolean;
+    baseRecordId, fileFormId, fileName, refKey: string;
+    formid: cardinal;
+
+    r, base: IwbElement;
+    f: IwbFile;
+
+    cbBase, cbRefKey: TComboBox;
+    edModel: TEdit;
+    frm: TForm;
+    btnOk: TButton;
+begin
+    bReferenceFound := False;
+    cbRefKey := TComboBox(Sender);
+    frm := GetParentForm(cbRefKey);
+    cbBase := TComboBox(frm.FindComponent('cbBase'));
+    edModel := TEdit(frm.FindComponent('edModel'));
+    btnOk := TButton(frm.FindComponent('OK'));
+
+    refKey := cbRefKey.Text;
+    if refKey = '' then Exit;
+    if ContainsText(refKey, ':') then begin
+        r := GetRecordFromFormIdFileId(refKey);
+        if (Assigned(r) and (Pos(Signature(r),'REFR') <> 0))
+            then bReferenceFound := True;
+    end
+    else if IsValidHex(refKey) then begin
+        formid := StrToInt('$' + refKey);
+        f := GetFileFromLoadOrderFormID(formid);
+        if Assigned(f) then begin
+            fileName := GetFileName(f);
+            fileFormId := IntToHex(LoadOrderFormIDtoFileFormID(f, refKey), 8);
+            refKey := fileFormId + ':' + fileName;
+            r := GetRecordFromFormIdFileId(refKey);
+            if (Assigned(r) and (Pos(Signature(r),'REFR') <> 0))
+                then bReferenceFound := True;
+        end;
+    end;
+
+    if bReferenceFound then begin
+        base := LinksTo(ElementByPath(r, 'NAME'));
+        baseRecordId := RecordFormIdFileId(base);
+        cbRefKey.Text := refKey;
+        cbBase.Text := baseRecordId;
+        btnOk.Enabled := True;
+        if joWinterDecalRules.Contains(refKey) then begin
+            edModel.Text := joWinterDecalRules.O[refKey].S['Model'];
+        end;
+    end else begin
+        ShowMessage(refKey + ' is not a valid reference.');
+        btnOk.Enabled := False;
+    end;
+end;
+
+procedure frmEditWinterDecalRuleFormClose(Sender: TObject; var Action: TCloseAction);
+{
+    Close rule edit menu handler.
+}
+begin
+    if TForm(Sender).ModalResult <> mrOk then Exit;
+    if TComboBox(TForm(Sender).FindComponent('cbRefKey')).Text = '' then begin
+        MessageDlg('Reference ID must not be empty.', mtInformation, [mbOk], 0);
+        Action := caNone;
+    end;
+    if TEdit(TForm(Sender).FindComponent('edModel')).Text = '' then begin
+        MessageDlg('Model must not be empty.', mtInformation, [mbOk], 0);
+        Action := caNone;
+    end;
+end;
+
+procedure lvWinterDecalRulesData(Sender: TObject; Item: TListItem);
+{
+    Populate lvRules
+}
+var
+    i: integer;
+    key: string;
+begin
+    key := joWinterDecalRules.Names[Item.Index];
+    Item.Caption := joWinterDecalRules.O[key].S['Base ID'];
+    Item.SubItems.Add(key);
+    Item.SubItems.Add(joWinterDecalRules.O[key].S['Model']);
+end;
+
+procedure WinterDecalMenuEditClick(Sender: TObject);
+{
+    Edit rule
+}
+var
+    idx: integer;
+    key, base, model: string;
+
+    lvWinterDecalRules: TListView;
+    frm: TForm;
+    MenuItem: TMenuItem;
+begin
+    MenuItem := TMenuItem(Sender);
+    frm := TForm(MenuItem.Owner.Owner);
+    lvWinterDecalRules := TListView(frm.FindComponent('ListView'));
+
+    if not Assigned(lvWinterDecalRules.Selected) then Exit;
+    idx := lvWinterDecalRules.Selected.Index;
+
+    key := joWinterDecalRules.Names[idx];
+    base := joWinterDecalRules.O[key].S['Base ID'];
+    model := joWinterDecalRules.O[key].S['Model'];
+
+    if not EditWinterDecalRuleForm(key, base, model) then Exit;
+
+    joWinterDecalRules.O[key].S['Base ID'] := base;
+    joWinterDecalRules.O[key].S['Model'] := model;
+
+    joUserWinterDecalRules.O[key].S['Base ID'] := base;
+    joUserWinterDecalRules.O[key].S['Model'] := model;
+
+    bUserWinterDecalRulesChanged := True;
+
+    lvWinterDecalRules.Items.Count := joWinterDecalRules.Count;
+    lvWinterDecalRules.Refresh;
+end;
+
+procedure WinterDecalMenuAddClick(Sender: TObject);
+{
+    Add rule
+}
+var
+    key, base, model: string;
+
+    lvWinterDecalRules: TListView;
+    frm: TForm;
+    MenuItem: TMenuItem;
+begin
+    MenuItem := TMenuItem(Sender);
+    frm := TForm(MenuItem.Owner.Owner);
+    lvWinterDecalRules := TListView(frm.FindComponent('ListView'));
+
+    key := '';
+    base := '';
+    model := 'none';
+
+    if not EditWinterDecalRuleForm(key, base, model) then Exit;
+
+    joWinterDecalRules.O[key].S['Base ID'] := base;
+    joWinterDecalRules.O[key].S['Model'] := model;
+
+    joUserWinterDecalRules.O[key].S['Base ID'] := base;
+    joUserWinterDecalRules.O[key].S['Model'] := model;
+
+    bUserWinterDecalRulesChanged := True;
+
+    lvWinterDecalRules.Items.Count := joWinterDecalRules.Count;
+    lvWinterDecalRules.Refresh;
+end;
+
+procedure WinterDecalMenuDeleteClick(Sender: TObject);
+{
+    Delete rule
+}
+var
+    idx, uidx: integer;
+    key: string;
+
+    lvWinterDecalRules: TListView;
+    frm: TForm;
+    MenuItem: TMenuItem;
+begin
+    MenuItem := TMenuItem(Sender);
+    frm := TForm(MenuItem.Owner.Owner);
+    lvWinterDecalRules := TListView(frm.FindComponent('ListView'));
+
+    if not Assigned(lvWinterDecalRules.Selected) then Exit;
+    idx := lvWinterDecalRules.Selected.Index;
+    key := joWinterDecalRules.Names[idx];
+    uidx := joUserWinterDecalRules.IndexOf(key);
+    if uidx > -1 then begin
+        joWinterDecalRules.Delete(idx);
+        joUserWinterDecalRules.Delete(uidx);
+        bUserWinterDecalRulesChanged := True;
+        lvWinterDecalRules.Items.Count := joWinterDecalRules.Count;
+        lvWinterDecalRules.Refresh;
+    end else MessageDlg('This rule cannot be deleted.', mtInformation, [mbOk], 0);
+end;
+
 function AlterLandRuleEditor: Boolean;
 var
     i: integer;
@@ -437,7 +848,7 @@ begin
     Result := False;
     frm := TForm.Create(nil);
     try
-        frm.Caption := 'Rule Editor';
+        frm.Caption := 'Alter Land Rule Editor';
         frm.Width := 750;
         frm.Height := 600;
         frm.Position := poMainFormCenter;
@@ -3101,6 +3512,7 @@ begin
         joLoadOrderFormIDFileID.S[fileLoadOrderHexPrefix] := fileName;
     end;
 
+    //User Alter Land Rules
     j := 'Seasons\AlterLandUserRules.json';
     if ResourceExists(j) then begin
         AddMessage('Loaded Alter Land User Rule File: ' + j);
@@ -3117,6 +3529,18 @@ begin
                 refKey := joUserAlterLandRules.O[key].O['references'].Names[a];
                 joAlterLandRules.O[key].O['references'].O[refKey].S['alteration'] := joUserAlterLandRules.O[key].O['references'].O[refKey].S['alteration'];
             end;
+        end;
+    end;
+
+    //User Winter Decal Rules
+    j := 'Seasons\WinterDecalUserRules.json';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded Winter Decals User Rule File: ' + j);
+        joUserWinterDecalRules.LoadFromResource(j);
+        for c := 0 to Pred(joUserWinterDecalRules.Count) do begin
+            key := joUserWinterDecalRules.Names[c];
+            joWinterDecalRules.O[key].S['Base ID'] := joUserWinterDecalRules.O[key].S['Base ID'];
+            joWinterDecalRules.O[key].S['Model'] := joUserWinterDecalRules.O[key].S['Model'];
         end;
     end;
 end;
@@ -3195,6 +3619,24 @@ begin
             sub.Free;
         end;
     end;
+
+    //Winter Decals
+    j := 'Seasons\' + TrimLeftChars(f, 4) + ' - Winter Decals.json';
+    if ResourceExists(j) then begin
+        AddMessage('Loaded Winter Decals Rule File: ' + j);
+        sub := TJsonObject.Create;
+        try
+            sub.LoadFromResource(j);
+            for c := 0 to Pred(sub.Count) do begin
+                key := sub.Names[c];
+                joWinterDecalRules.O[key].S['Base ID'] := sub.O[key].S['Base ID'];
+                joWinterDecalRules.O[key].S['Model'] := sub.O[key].S['Model'];
+            end;
+        finally
+            sub.Free;
+        end;
+    end;
+
 end;
 
 // ----------------------------------------------------
