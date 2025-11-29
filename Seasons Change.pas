@@ -2034,7 +2034,7 @@ procedure ProcessFurnActiMstt;
 }
 var
     i: integer;
-    model: string;
+    model, winterReplacement: string;
 
     r, rModl: IwbElement;
 begin
