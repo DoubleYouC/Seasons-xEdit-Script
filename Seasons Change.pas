@@ -486,13 +486,14 @@ begin
         MenuItem.OnClick := WinterDecalMenuAddClick;
         mnRules.Items.Add(MenuItem);
         MenuItem := TMenuItem.Create(mnRules);
-        MenuItem.Caption := 'Delete';
-        MenuItem.OnClick := WinterDecalMenuDeleteClick;
-        mnRules.Items.Add(MenuItem);
-        MenuItem := TMenuItem.Create(mnRules);
         MenuItem.Caption := 'Edit';
         MenuItem.OnClick := WinterDecalMenuEditClick;
         mnRules.Items.Add(MenuItem);
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Caption := 'Delete';
+        MenuItem.OnClick := WinterDecalMenuDeleteClick;
+        mnRules.Items.Add(MenuItem);
+
 
         btnWinterDecalRuleOk := TButton.Create(frm);
         btnWinterDecalRuleOk.Parent := frm;
@@ -806,6 +807,7 @@ begin
 
     lvWinterDecalRules.Items.Count := joWinterDecalRules.Count;
     lvWinterDecalRules.Refresh;
+    WinterDecalMenuAddClick(Sender);
 end;
 
 procedure WinterDecalMenuDeleteClick(Sender: TObject);
