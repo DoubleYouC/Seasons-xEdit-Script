@@ -155,7 +155,9 @@ function MainMenuForm: Boolean;
   Main menu form.
 }
 var
-    btnStart, btnCancel, btnAlterationRuleEditor, btnGenerateSnowMesh: TButton;
+    iWidgetHeight, iButtonHeightModifier: integer;
+
+    btnStart, btnCancel, btnAlterationRuleEditor, btnGenerateSnowMesh, btnWinterDecalRuleEditor: TButton;
     chkCreateTestPlugin, chkCreateLandscapeHeights, chkCreateLandscapeSnowMeshes, chkPlaceLandscapeSnow, chkLoadLastLandHeights,
     chkCreateWinterDecals: TCheckBox;
     cbWrld: TComboBox;
@@ -204,10 +206,14 @@ begin
         chkCreateTestPlugin.Hint := 'Creates a test plugin.';
         chkCreateTestPlugin.ShowHint := True;
 
+        iWidgetHeight := chkCreateTestPlugin.Height * 2;
+        iButtonHeightModifier := Round(chkCreateTestPlugin.Height * 0.1);
+        AddMessage('Widget height: ' + IntToStr(iWidgetHeight));
+
         gbSnowOptions := TGroupBox.Create(frm);
         gbSnowOptions.Parent := frm;
         gbSnowOptions.Left := 10;
-        gbSnowOptions.Top := chkCreateTestPlugin.Top + 24;
+        gbSnowOptions.Top := chkCreateTestPlugin.Top + iWidgetHeight;
         gbSnowOptions.Width := frm.Width - 30;
         gbSnowOptions.Caption := 'Snow Controls';
         gbSnowOptions.Height := 100;
@@ -215,7 +221,7 @@ begin
         chkCreateLandscapeHeights := TCheckBox.Create(gbSnowOptions);
         chkCreateLandscapeHeights.Parent := gbSnowOptions;
         chkCreateLandscapeHeights.Left := 16;
-        chkCreateLandscapeHeights.Top := 16;
+        chkCreateLandscapeHeights.Top := iWidgetHeight;
         chkCreateLandscapeHeights.Width := 170;
         chkCreateLandscapeHeights.Caption := 'Force Recreate Land Heights';
         chkCreateLandscapeHeights.Hint := 'Forces all land height values to be recalculated.';
@@ -234,14 +240,14 @@ begin
         btnAlterationRuleEditor.Parent := gbSnowOptions;
         btnAlterationRuleEditor.Caption := 'Alteration Rules';
         btnAlterationRuleEditor.OnClick := AlterLandRuleEditor;
-        btnAlterationRuleEditor.Width := 100;
+        btnAlterationRuleEditor.Width := 120;
         btnAlterationRuleEditor.Left := chkLoadLastLandHeights.Left + chkLoadLastLandHeights.Width + 72;
-        btnAlterationRuleEditor.Top := chkCreateLandscapeHeights.Top + 8;
+        btnAlterationRuleEditor.Top := chkCreateLandscapeHeights.Top -iButtonHeightModifier;
 
         chkCreateLandscapeSnowMeshes := TCheckBox.Create(gbSnowOptions);
         chkCreateLandscapeSnowMeshes.Parent := gbSnowOptions;
         chkCreateLandscapeSnowMeshes.Left := 16;
-        chkCreateLandscapeSnowMeshes.Top := chkLoadLastLandHeights.Top + 24;
+        chkCreateLandscapeSnowMeshes.Top := chkLoadLastLandHeights.Top + iWidgetHeight;
         chkCreateLandscapeSnowMeshes.Width := 170;
         chkCreateLandscapeSnowMeshes.Caption := 'Force Recreate Snow Models';
         chkCreateLandscapeSnowMeshes.Hint := 'Forces recreation of all snow models.';
@@ -265,10 +271,18 @@ begin
         chkCreateWinterDecals.Hint := 'Winter Decals are used to cover static objects with snow by placing specially designed snowy versions over them, typically using a decal shader.';
         chkCreateWinterDecals.ShowHint := True;
 
+        btnWinterDecalRuleEditor := TButton.Create(gbSnowOptions);
+        btnWinterDecalRuleEditor.Parent := gbSnowOptions;
+        btnWinterDecalRuleEditor.Caption := 'Winter Decal Rules';
+        btnWinterDecalRuleEditor.OnClick := AlterLandRuleEditor;
+        btnWinterDecalRuleEditor.Width := 120;
+        btnWinterDecalRuleEditor.Left := btnAlterationRuleEditor.Left;
+        btnWinterDecalRuleEditor.Top := chkCreateWinterDecals.Top - iButtonHeightModifier;
+
         lblWrld := TLabel.Create(gbSnowOptions);
         lblWrld.Parent := gbSnowOptions;
         lblWrld.Left := 16;
-        lblWrld.Top := chkPlaceLandscapeSnow.Top + 30;
+        lblWrld.Top := chkPlaceLandscapeSnow.Top + iWidgetHeight;
         lblWrld.Caption := 'Worldspace';
 
         cbWrld := TComboBox.Create(gbSnowOptions);
@@ -313,15 +327,19 @@ begin
         btnGenerateSnowMesh.Parent := gbSnowOptions;
         btnGenerateSnowMesh.Caption := 'Generate Snow Mesh for Cell';
         btnGenerateSnowMesh.OnClick := GenerateSnowMesh;
-        btnGenerateSnowMesh.Width := 176;
+        btnGenerateSnowMesh.Width := 196;
         btnGenerateSnowMesh.Left := edY.Left + edY.Width + 16;
-        btnGenerateSnowMesh.Top := cbWrld.Top - 2;
+        btnGenerateSnowMesh.Top := cbWrld.Top - iButtonHeightModifier;
+
+        gbSnowOptions.Height := btnGenerateSnowMesh.Top + iWidgetHeight;
+        gbSnowOptions.Width := Round(btnGenerateSnowMesh.Left + btnGenerateSnowMesh.Width + iWidgetHeight div 2);
+        frm.Width := Round(btnGenerateSnowMesh.Left + btnGenerateSnowMesh.Width + 1.5 * iWidgetHeight);
 
         btnStart := TButton.Create(frm);
         btnStart.Parent := frm;
         btnStart.Caption := 'Start';
         btnStart.ModalResult := mrOk;
-        btnStart.Top := gbSnowOptions.Top + gbSnowOptions.Height + 24;
+        btnStart.Top := gbSnowOptions.Top + gbSnowOptions.Height + iWidgetHeight;
 
         btnCancel := TButton.Create(frm);
         btnCancel.Parent := frm;
@@ -329,20 +347,20 @@ begin
         btnCancel.ModalResult := mrCancel;
         btnCancel.Top := btnStart.Top;
 
-        btnStart.Left := gbSnowOptions.Width - btnStart.Width - btnCancel.Width - 16;
-        btnCancel.Left := btnStart.Left + btnStart.Width + 8;
+        btnStart.Left := Round(gbSnowOptions.Width - btnStart.Width - btnCancel.Width - iWidgetHeight div 2);
+        btnCancel.Left := Round(btnStart.Left + btnStart.Width + iWidgetHeight div 4);
 
         pnl := TPanel.Create(frm);
         pnl.Parent := frm;
         pnl.Left := gbSnowOptions.Left;
-        pnl.Top := btnStart.Top - 12;
+        pnl.Top := Round(btnStart.Top - iWidgetHeight div 2);
         pnl.Width := gbSnowOptions.Width;
         pnl.Height := 2;
 
         frm.ActiveControl := btnStart;
         frm.ScaleBy(uiScale, 100);
         frm.Font.Size := 8;
-        frm.Height := btnStart.Top + btnStart.Height + btnStart.Height + 30;
+        frm.Height := Round(btnStart.Top + btnStart.Height + 1.33 * iWidgetHeight);
 
         chkCreateTestPlugin.Checked := bCreateTestPlugin;
         chkCreateLandscapeHeights.Checked := bCreateLandscapeHeights;
