@@ -731,10 +731,11 @@ procedure lvWinterDecalRulesData(Sender: TObject; Item: TListItem);
 }
 var
     i: integer;
-    key: string;
+    key, edid, baseid: string;
 begin
     key := joWinterDecalRules.Names[Item.Index];
-    Item.Caption := joWinterDecalRules.O[key].S['Base ID'];
+    baseid := joWinterDecalRules.O[key].S['Base ID'];
+    Item.Caption := EditorID(GetRecordFromFormIdFileId(baseid));
     Item.SubItems.Add(key);
     Item.SubItems.Add(joWinterDecalRules.O[key].S['Model']);
 end;
@@ -3545,6 +3546,7 @@ begin
             joWinterDecalRules.O[key].S['Model'] := joUserWinterDecalRules.O[key].S['Model'];
         end;
     end;
+    SortWinterDecalJSONObjectKeys;
 end;
 
 procedure LoadRules(f: string);
@@ -4084,41 +4086,46 @@ begin
         end;
 end;
 
-procedure SortAlterLandJSONObjectKeys;
+procedure SortWinterDecalJSONObjectKeys;
 {
-    Sorts Alter Land JSON keys by Editor ID.
+    Sorts Winter Decal JSON keys by Base ID.
 }
 var
-    SortedEDIDs: TStringList;
-    Key, edid: string;
-    NewJSONObj, joEDIDKeyMap: TJsonObject;
-    i: integer;
+    SortedEditorIDs: TStringList;
+    Key, baseid, edid: string;
+    NewJSONObj, joEditorIDKeyMap: TJsonObject;
+    i, c: integer;
 begin
     // Create a sorted list of keys
-    SortedEDIDs := TStringList.Create;
-    joEDIDKeyMap := TJsonObject.Create;
+    SortedEditorIDs := TStringList.Create;
+    joEditorIDKeyMap := TJsonObject.Create;
     NewJSONObj := TJsonObject.Create;
     try
-        for i := 0 to Pred(joAlterLandRules.Count) do begin
-            Key := joAlterLandRules.Names[i];
-            edid := EditorID(GetRecordFromFormIdFileId(Key));
-            SortedEDIDs.Add(edid);
-            joEDIDKeyMap.S[edid] := Key;
+        for i := 0 to Pred(joWinterDecalRules.Count) do begin
+            Key := joWinterDecalRules.Names[i];
+            baseid := joWinterDecalRules.O[Key].S['Base ID'];
+            edid := EditorID(GetRecordFromFormIdFileId(baseid));
+            SortedEditorIDs.Add(edid);
+            joEditorIDKeyMap.A[edid].Add(Key);
         end;
-        SortedEDIDs.Sort; // Sort the keys alphabetically
+        SortedEditorIDs.Sort; // Sort the keys alphabetically
 
-        for i := 0 to Pred(SortedEDIDs.Count) do begin
-            Key := joEDIDKeyMap.S[SortedEDIDs[i]];
-            NewJSONObj.S[Key] := joAlterLandRules.S[Key];
+        for i := 0 to Pred(SortedEditorIDs.Count) do begin
+            baseid := SortedEditorIDs[i];
+            for c := 0 to Pred(joEditorIDKeyMap.A[baseid].Count) do begin
+                Key := joEditorIDKeyMap.A[baseid].S[c];
+                NewJSONObj.O[Key].Assign(joWinterDecalRules.O[Key]);
+            end;
         end;
 
-        // Replace the original joAlterLandRules with the sorted one
-        joAlterLandRules.Clear;
-        joAlterLandRules.Assign(NewJSONObj);
+        // Replace the original joWinterDecalRules with the sorted one
+        joWinterDecalRules.Clear;
+        joWinterDecalRules.Assign(NewJSONObj);
     finally
-        SortedEDIDs.Free;
-        joEDIDKeyMap.Free;
+        SortedEditorIDs.Free;
+        joEditorIDKeyMap.Free;
         NewJSONObj.Free;
+        AddMessage('Loaded ' + IntToStr(joWinterDecalRules.Count) + ' Winter Decal Rules.');
     end;
 end;
 
