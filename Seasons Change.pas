@@ -18,7 +18,7 @@ var
     flatSnowStatic: IwbElement;
 
     slPluginFiles: TStringList;
-    tlLandRecords, tlBasesThatAlterLand, tlStats, tlWinterDecals: TList;
+    tlLandRecords, tlBasesThatAlterLand, tlStats, tlFurnActiMstt, tlWinterDecals, tlWinterReplacements, tlTxst: TList;
     joWinningCells, joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules, joWinterDecalRules,
     joUserWinterDecalRules, joLoadOrderFormIDFileID: TJsonObject;
 
@@ -58,6 +58,9 @@ begin
     tlBasesThatAlterLand := TList.Create;
     tlStats := TList.Create;
     tlWinterDecals := TList.Create;
+    tlFurnActiMstt := TList.Create;
+    tlWinterReplacements := TList.Create;
+    tlTxst := TList.Create;
 
     slPluginFiles := TStringList.Create;
 end;
@@ -80,6 +83,9 @@ begin
     tlBasesThatAlterLand.Free;
     tlStats.Free;
     tlWinterDecals.Free;
+    tlFurnActiMstt.Free;
+    tlWinterReplacements.Free;
+    tlTxst.Free;
 
     slPluginFiles.Free;
 
@@ -151,7 +157,11 @@ begin
     end;
     ProcessLandRecords;
     ProcessStats;
-    if bCreateWinterDecals then CreateWinterDecals;
+    ProcessFurnActiMstt;
+    ProcessTxst;
+    if bCreateWinterDecals then begin
+        CreateWinterDecals;
+    end;
 end;
 
 // ----------------------------------------------------
@@ -1935,6 +1945,7 @@ begin
                 if not IsWinningOverride(r) then continue;
                 if ReferencedByCount(r) = 0 then continue;
                 recordid := RecordFormIdFileId(r);
+                tlFurnActiMstt.Add(r);
                 if not joAlterLandRules.Contains(recordid) then continue;
                 tlBasesThatAlterLand.Add(r);
             end;
@@ -1945,6 +1956,7 @@ begin
                 if not IsWinningOverride(r) then continue;
                 if ReferencedByCount(r) = 0 then continue;
                 recordid := RecordFormIdFileId(r);
+                tlFurnActiMstt.Add(r);
                 if not joAlterLandRules.Contains(recordid) then continue;
                 tlBasesThatAlterLand.Add(r);
             end;
@@ -1955,6 +1967,7 @@ begin
                 if not IsWinningOverride(r) then continue;
                 if ReferencedByCount(r) = 0 then continue;
                 recordid := RecordFormIdFileId(r);
+                tlFurnActiMstt.Add(r);
                 if not joAlterLandRules.Contains(recordid) then continue;
                 tlBasesThatAlterLand.Add(r);
             end;
@@ -1977,6 +1990,14 @@ begin
                 recordid := RecordFormIdFileId(r);
                 if not joAlterLandRules.Contains(recordid) then continue;
                 tlBasesThatAlterLand.Add(r);
+            end;
+
+            g := GroupBySignature(f, 'TXST');
+            for j := 0 to Pred(ElementCount(g)) do begin
+                r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
+                if ReferencedByCount(r) = 0 then continue;
+                tlTxsts.Add(r);
             end;
 
         end;
@@ -2004,6 +2025,39 @@ begin
         model := wbNormalizeResourceName(GetEditValue(rModl), resMesh);
         winterDecal := StringReplace(model, 'meshes', 'meshes\WinterDecals', [rfIgnoreCase]);
         if ResourceExists(winterDecal) then tlWinterDecals.Add(r);
+    end;
+end;
+
+procedure ProcessFurnActiMstt;
+{
+    Process FURN, ACTI, and MSTT records.
+}
+var
+    i: integer;
+    model: string;
+
+    r, rModl: IwbElement;
+begin
+    for i := 0 to Pred(tlFurnActiMstt.Count) do begin
+        r := ObjectToElement(tlFurnActiMstt[i]);
+        rModl := ElementByPath(r, 'Model\MODL');
+        if not Assigned(rModl) then continue;
+        model := wbNormalizeResourceName(GetEditValue(rModl), resMesh);
+        winterReplacement := StringReplace(model, 'meshes', 'meshes\WinterReplacements', [rfIgnoreCase]);
+        if ResourceExists(winterReplacement) then tlWinterReplacements.Add(r);
+    end;
+end;
+
+procedure ProcessTxst;
+{
+    Process TXST records.
+}
+var
+    i: integer;
+    r: IwbElement;
+begin
+    for i := 0 to Pred(tlTxsts.Count) do begin
+        r := ObjectToElement(tlTxsts[i]);
     end;
 end;
 
