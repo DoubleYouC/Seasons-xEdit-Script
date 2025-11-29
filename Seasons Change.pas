@@ -2060,7 +2060,7 @@ procedure ProcessTxst;
 }
 var
     i, j: integer;
-    baseTxst, r: IwbElement;
+    baseTxst, r, rCell, rWrld: IwbElement;
 begin
     for i := 0 to Pred(tlTxsts.Count) do begin
         baseTxst := ObjectToElement(tlTxsts[i]);
@@ -2089,8 +2089,10 @@ procedure OverrideDecalForREFR(rOriginal, rCell, rWrld: IwbElement);
 var
     rOverride, nCell, baseTxst, rTxst, xesp: IwbElement;
 begin
+    AddMessage('Overriding winter decal for REFR: ' + ShortName(rOriginal));
     AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
     AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
+    AddRequiredElementMasters(rOriginal, SeasonsMainFile, False, True);
   	SortMasters(SeasonsMainFile);
     wbCopyElementToFile(rWrld, SeasonsMainFile, False, True);
     nCell := wbCopyElementToFile(rCell, SeasonsMainFile, False, True);
@@ -2103,7 +2105,7 @@ begin
         ElementAssign(xesp, 0, nil, False);
     end;
     SetElementEditValues(xesp, 'Reference', '14'); //playerref
-    SetElementEditValues(n, 'XESP\Flags\Set Enable State to Opposite of Parent', 1);
+    SetElementEditValues(xesp, 'Flags\Set Enable State to Opposite of Parent', 1);
 end;
 
 procedure CreateWinterReplacements;
@@ -2204,6 +2206,7 @@ var
 begin
     AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
     AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
+    AddRequiredElementMasters(rOriginal, SeasonsMainFile, False, True);
   	SortMasters(SeasonsMainFile);
     wbCopyElementToFile(rWrld, SeasonsMainFile, False, True);
     nCell := wbCopyElementToFile(rCell, SeasonsMainFile, False, True);
