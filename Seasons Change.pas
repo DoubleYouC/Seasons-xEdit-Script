@@ -2342,6 +2342,7 @@ begin
 
     AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
     AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
+    AddRequiredElementMasters(r, SeasonsMainFile, False, True);
   	SortMasters(SeasonsMainFile);
     wbCopyElementToFile(rWrld, SeasonsMainFile, False, True);
     nCell := wbCopyElementToFile(rCell, SeasonsMainFile, False, True);
