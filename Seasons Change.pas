@@ -2028,9 +2028,7 @@ begin
         r := ObjectToElement(tlStats[i]);
         rModl := ElementByPath(r, 'Model\MODL');
         if not Assigned(rModl) then continue;
-        model := wbNormalizeResourceName(GetEditValue(rModl), resMesh);
-        winterDecal := StringReplace(model, 'meshes', 'meshes\WinterDecals', [rfIgnoreCase]);
-        if ResourceExists(winterDecal) then tlWinterDecals.Add(r);
+        tlWinterDecals.Add(r);
     end;
 end;
 
@@ -2048,9 +2046,7 @@ begin
         r := ObjectToElement(tlFurnActiMstt[i]);
         rModl := ElementByPath(r, 'Model\MODL');
         if not Assigned(rModl) then continue;
-        model := wbNormalizeResourceName(GetEditValue(rModl), resMesh);
-        winterReplacement := StringReplace(model, 'meshes', 'meshes\WinterReplacements', [rfIgnoreCase]);
-        if ResourceExists(winterReplacement) then tlWinterReplacements.Add(r);
+        tlWinterReplacements.Add(r);
     end;
 end;
 
@@ -2089,7 +2085,7 @@ procedure OverrideDecalForREFR(rOriginal, rCell, rWrld: IwbElement);
 var
     rOverride, nCell, baseTxst, rTxst, xesp: IwbElement;
 begin
-    AddMessage('Overriding winter decal for REFR: ' + ShortName(rOriginal));
+    AddMessage('Overriding winter decal for REFR: ' + Name(rOriginal));
     AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
     AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
     AddRequiredElementMasters(rOriginal, SeasonsMainFile, False, True);
@@ -2113,6 +2109,7 @@ procedure CreateWinterReplacements;
     Creates winter replacements.
 }
 var
+    bIgnoreLandAlterations, bIgnoreRotations: boolean;
     i: integer;
     model, winterReplacement, baseEdid: string;
 
@@ -2123,10 +2120,34 @@ begin
         base := ObjectToElement(tlWinterReplacements[i]);
         model := wbNormalizeResourceName(GetElementEditValues(base, 'Model\MODL'), resMesh);
         winterReplacement := StringReplace(model, 'meshes', 'meshes\WinterReplacements', [rfIgnoreCase]);
+        if ResourceExists(winterReplacement) then begin
+            bIgnoreLandAlterations := False;
+            bIgnoreRotations := False;
+        end else begin
+            winterReplacement := StringReplace(model, 'meshes', 'meshes\WinterReplacements\_IgnoreLandAlterations', [rfIgnoreCase]);
+            if ResourceExists(winterReplacement) then begin
+                bIgnoreLandAlterations := True;
+                bIgnoreRotations := False;
+            end else begin
+                winterReplacement := StringReplace(model, 'meshes', 'meshes\WinterReplacements\_IgnoreRotations', [rfIgnoreCase]);
+                if ResourceExists(winterReplacement) then begin
+                    bIgnoreLandAlterations := False;
+                    bIgnoreRotations := True;
+                end else begin
+                    winterReplacement := StringReplace(model, 'meshes', 'meshes\WinterReplacements\_IgnoreRotationsAndLandAlterations', [rfIgnoreCase]);
+                    if ResourceExists(winterReplacement) then begin
+                        bIgnoreLandAlterations := True;
+                        bIgnoreRotations := True;
+                    end else begin
+                        Continue; //no winter replacement found
+                    end;
+                end;
+            end;
+        end;
         baseEdid := GetElementEditValues(base, 'EDID');
         rWinterReplacement := CreateWinterReplacementBase(base, winterReplacement, 'winterReplacement_' + baseEdid);
         AddMessage('Processing Winter Replacements: ' + #9 + baseEdid);
-        ProcessWinterReplacementREFRs(base, rWinterReplacement);
+        ProcessWinterReplacementREFRs(base, rWinterReplacement, bIgnoreLandAlterations, bIgnoreRotations);
     end;
 end;
 
@@ -2149,6 +2170,7 @@ procedure CreateWinterDecals;
     Creates winter decals.
 }
 var
+    bIgnoreLandAlterations, bIgnoreRotations: boolean;
     i: integer;
     model, winterDecal, statEdid: string;
 
@@ -2159,19 +2181,45 @@ begin
         base := ObjectToElement(tlWinterDecals[i]);
         model := wbNormalizeResourceName(GetElementEditValues(base, 'Model\MODL'), resMesh);
         winterDecal := StringReplace(model, 'meshes', 'meshes\WinterDecals', [rfIgnoreCase]);
+        if ResourceExists(winterDecal) then begin
+            bIgnoreLandAlterations := False;
+            bIgnoreRotations := False;
+        end else begin
+            winterDecal := StringReplace(model, 'meshes', 'meshes\WinterDecals\_IgnoreLandAlterations', [rfIgnoreCase]);
+            if ResourceExists(winterDecal) then begin
+                bIgnoreLandAlterations := True;
+                bIgnoreRotations := False;
+            end else begin
+                winterDecal := StringReplace(model, 'meshes', 'meshes\WinterDecals\_IgnoreRotations', [rfIgnoreCase]);
+                if ResourceExists(winterDecal) then begin
+                    bIgnoreLandAlterations := False;
+                    bIgnoreRotations := True;
+                end else begin
+                    winterDecal := StringReplace(model, 'meshes', 'meshes\WinterDecals\_IgnoreRotationsAndLandAlterations', [rfIgnoreCase]);
+                    if ResourceExists(winterDecal) then begin
+                        bIgnoreLandAlterations := True;
+                        bIgnoreRotations := True;
+                    end else begin
+                        Continue; //no winter decal found
+                    end;
+                end;
+            end;
+        end;
         statEdid := GetElementEditValues(base, 'EDID');
         rWinterDecal := CreateNewStat(winterDecal, '', '', '', 'winterDecal_' + statEdid);
         AddMessage('Processing Winter Decals: ' + #9 + statEdid);
-        ProcessWinterDecalREFRs(base, base, rWinterDecal, False);
+        ProcessWinterDecalREFRs(base, base, rWinterDecal, False, bIgnoreLandAlterations, bIgnoreRotations);
     end;
 end;
 
-procedure ProcessWinterReplacementREFRs(base, rWinterReplacement: IwbElement);
+procedure ProcessWinterReplacementREFRs(base, rWinterReplacement: IwbElement; bIgnoreLandAlterations, bIgnoreRotations: boolean);
 {
     Places winter replacements.
 }
 var
     i: integer;
+    posX, posY, rotX, rotY: double;
+    wrldEdid: string;
 
     r, rCell, rWrld: IwbElement;
 begin
@@ -2188,6 +2236,22 @@ begin
         if Signature(rWrld) <> 'WRLD' then continue;
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspacesWinterDecals) <> 0 then continue;
         if joWinterDecalRules.Contains(RecordFormIdFileId(r)) then continue; //currently just skipping winter decal rule refs. Eventually break this out to allow alternative models to be used.
+
+        if not bIgnoreRotations then begin
+            rotX := GetElementNativeValues(r, 'DATA\Rotation\X');
+            rotY := GetElementNativeValues(r, 'DATA\Rotation\Y');
+            if ((rotX > 60) and (rotX < 300)) then continue;
+            if ((rotY > 60) and (rotY < 300)) then continue;
+        end;
+        if not bIgnoreLandAlterations then begin
+            posX := GetElementNativeValues(r, 'DATA\Position\X');
+            posY := GetElementNativeValues(r, 'DATA\Position\Y');
+            wrldEdid := GetElementEditValues(rWrld, 'EDID');
+            if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 0 then begin
+                AddMessage('Skipping winter replacement due to land alteration being below 0' + #9 + Name(r));
+                continue;
+            end;
+        end;
 
         AddWinterReplacementREFR(r, rCell, rWrld, rWinterReplacement);
     end;
@@ -2216,7 +2280,7 @@ begin
     SetElementEditValues(rOverride, 'NAME', winterReplacementFormid);
 end;
 
-procedure ProcessWinterDecalREFRs(base, fromBase, rWinterDecal: IwbElement; bSCOL: boolean);
+procedure ProcessWinterDecalREFRs(base, fromBase, rWinterDecal: IwbElement; bSCOL, bIgnoreLandAlterations, bIgnoreRotations: boolean);
 {
     Places winter decals;
 }
@@ -2233,7 +2297,7 @@ begin
     for i := Pred(ReferencedByCount(base)) downto 0 do begin
         r := ReferencedByIndex(base, i);
         if Signature(r) = 'SCOL' then begin
-            ProcessWinterDecalREFRs(r, base, rWinterDecal, True);
+            ProcessWinterDecalREFRs(r, base, rWinterDecal, True, bIgnoreLandAlterations, bIgnoreRotations);
             continue;
         end;
         if Signature(r) <> 'REFR' then continue;
@@ -2311,15 +2375,18 @@ begin
                 posYHere := posY + raw_y;
                 posZHere := posZ + raw_z;
 
-                PlaceWinterDecal(r, rWinterDecal, rWrld, wrldEdid, posXHere, posYHere, posZHere, rawr_x, rawr_y, rawr_z, pmScale);
+                PlaceWinterDecal(r, rWinterDecal, rWrld, wrldEdid, posXHere, posYHere, posZHere, rawr_x, rawr_y, rawr_z, pmScale, bIgnoreLandAlterations, bIgnoreRotations);
             end;
         end
         else
-            PlaceWinterDecal(r, rWinterDecal, rWrld, wrldEdid, posX, posY, posZ, rotX, rotY, rotZ, scale);
+            PlaceWinterDecal(r, rWinterDecal, rWrld, wrldEdid, posX, posY, posZ, rotX, rotY, rotZ, scale, bIgnoreLandAlterations, bIgnoreRotations);
     end;
 end;
 
-procedure PlaceWinterDecal(r, rWinterDecal, rWrld: IwbElement; wrldEdid: string; posX, posY, posZ, rotX, rotY, rotZ, scale: double);
+procedure PlaceWinterDecal(r, rWinterDecal, rWrld: IwbElement; wrldEdid: string; posX, posY, posZ, rotX, rotY, rotZ, scale: double; bIgnoreLandAlterations, bIgnoreRotations: boolean);
+{
+    Places a winter decal at a specific position.
+}
 var
     winterDecalFormid, cellRecordId: string;
 
@@ -2328,9 +2395,17 @@ var
 
     rCell, nCell, winterDecalRef, base, eScale, xesp: IwbElement;
 begin
-    // can't do this because of things like rocks. might reimplement with rules to refine.
-    // if ((rotX > 60) and (rotX < 330)) then Exit;
-    // if ((rotY > 60) and (rotY < 330)) then Exit;
+    if not bIgnoreRotations then begin
+        if ((rotX > 60) and (rotX < 300)) then Exit;
+        if ((rotY > 60) and (rotY < 300)) then Exit;
+    end;
+    if not bIgnoreLandAlterations then begin
+        if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 0 then begin
+            AddMessage('Skipping winter decal due to land alteration being below 0' + #9 + Name(r));
+            Exit;
+        end;
+    end;
+
 
     position.x := posX;
     position.y := posY;
@@ -2387,7 +2462,7 @@ function GetLandAlterationAtPosition(wrldEdid: string; posX, posY: double): inte
 }
 var
     joLandAlteration: TJsonObject;
-    cellXHere, cellYHere, cellPosX, cellPosY, column_closest, row_closest: integer;
+    cellXHere, cellYHere, column_closest, row_closest: integer;
     cellPosX, cellPosY: double;
 begin
     Result := 0;
@@ -2405,7 +2480,7 @@ begin
     joLandAlteration := TJsonObject.Create;
     try
         joLandAlteration.Assign(joLandscapeHeightsAltered.O[wrldEdid].O[cellXHere].O[cellYHere]);
-        Result := GetLandAlteration(joLandAlteration, row, column, 0);
+        Result := GetLandAlteration(joLandAlteration, row_closest, column_closest, 0);
     finally
         joLandAlteration.Free;
     end;
