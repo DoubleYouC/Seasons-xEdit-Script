@@ -2328,6 +2328,9 @@ var
 
     rCell, nCell, winterDecalRef, base, eScale, xesp: IwbElement;
 begin
+    // can't do this because of things like rocks. might reimplement with rules to refine.
+    // if ((rotX > 60) and (rotX < 330)) then Exit;
+    // if ((rotY > 60) and (rotY < 330)) then Exit;
 
     position.x := posX;
     position.y := posY;
@@ -2342,8 +2345,7 @@ begin
 
     AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
     AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
-    AddRequiredElementMasters(r, SeasonsMainFile, False, True);
-  	SortMasters(SeasonsMainFile);
+    SortMasters(SeasonsMainFile);
     wbCopyElementToFile(rWrld, SeasonsMainFile, False, True);
     nCell := wbCopyElementToFile(rCell, SeasonsMainFile, False, True);
     winterDecalRef := Add(nCell, 'REFR', True);
@@ -2356,6 +2358,8 @@ begin
     SetElementEditValues(winterDecalRef, 'DATA\Rotation\Y', rotY);
     SetElementEditValues(winterDecalRef, 'DATA\Rotation\Z', rotZ);
     if ElementExists(r, 'XESP') then begin
+        AddRequiredElementMasters(r, SeasonsMainFile, False, True);
+  	    SortMasters(SeasonsMainFile);
         xesp := Add(winterDecalRef, 'XESP', True);
         ElementAssign(xesp, 0, nil, False);
         SetElementEditValues(xesp, 'Reference', IntToHex(GetLoadOrderFormID(r), 8));
@@ -2369,7 +2373,42 @@ begin
 
     base := ElementByPath(winterDecalRef, 'NAME');
     SetEditValue(base, winterDecalFormid);
-    AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', Name(r));
+    if not IsRefPrecombined(r) then begin
+        AddRequiredElementMasters(r, SeasonsMainFile, False, True);
+  	    SortMasters(SeasonsMainFile);
+        AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', Name(r));
+    end;
+
+end;
+
+function GetLandAlterationAtPosition(wrldEdid: string; posX, posY: double): integer;
+{
+    Gets the land alteration value at a specific position.
+}
+var
+    joLandAlteration: TJsonObject;
+    cellXHere, cellYHere, cellPosX, cellPosY, column_closest, row_closest: integer;
+    cellPosX, cellPosY: double;
+begin
+    Result := 0;
+    //Find the cell this position is in.
+    cellXHere := Floor(posX/4096);
+    cellYHere := Floor(posY/4096);
+
+    if not LandHeightsExist(wrldEdid, cellXHere, cellYHere) then Exit;
+
+    cellPosX := (posX - (cellXHere * 4096))/128;
+    cellPosY := (posY - (cellYHere * 4096))/128;
+    column_closest := Round(cellPosX);
+    row_closest := Round(cellPosY);
+
+    joLandAlteration := TJsonObject.Create;
+    try
+        joLandAlteration.Assign(joLandscapeHeightsAltered.O[wrldEdid].O[cellXHere].O[cellYHere]);
+        Result := GetLandAlteration(joLandAlteration, row, column, 0);
+    finally
+        joLandAlteration.Free;
+    end;
 end;
 
 procedure AlterLandHeightsForTheseBases;
