@@ -159,6 +159,9 @@ begin
     ProcessStats;
     ProcessFurnActiMstt;
     ProcessTxst;
+    joLandscapeHeightsAltered.Free;
+    joLandscapeHeightsAltered := TJsonObject.Create;
+    LoadLandJsons(joLandscapeHeightsAltered, 'LandHeightsAltered');
     if bCreateWinterDecals then begin
         CreateWinterReplacements;
         CreateWinterDecals;
@@ -483,7 +486,7 @@ begin
         lvWinterDecalRules.Columns[0].Width := 200;
         lvWinterDecalRules.Columns.Add.Caption := 'Reference ID';
         lvWinterDecalRules.Columns[1].Width := 200;
-        lvWinterDecalRules.Columns.Add.Caption := 'Model';
+        lvWinterDecalRules.Columns.Add.Caption := 'Instruction';
         lvWinterDecalRules.Columns[2].Width := 305;
         lvWinterDecalRules.OwnerData := True;
         lvWinterDecalRules.OnData := lvWinterDecalRulesData;
@@ -562,12 +565,12 @@ begin
     btnCancel.Left := btnOK.Left + btnOK.Width + 8;
 end;
 
-function EditWinterDecalRuleForm(var key, base, model: string): boolean;
+function EditWinterDecalRuleForm(var key, base, instruction: string): boolean;
 var
     frmRule: TForm;
     pnl: TPanel;
     btnOk, btnCancel, btnReferences: TButton;
-    edModel: TEdit;
+    edInstruction: TEdit;
     cbBase, cbRefKey: TComboBox;
 begin
     Result := False;
@@ -602,20 +605,20 @@ begin
         cbRefKey.Style := csDropDown;
         CreateLabel(frmRule, 16, cbRefKey.Top + 4, 'Reference ID');
 
-        edModel := TEdit.Create(frmRule);
-        edModel.Parent := frmRule;
-        edModel.Name := 'edModel';
-        edModel.Left := 120;
-        edModel.Top := cbRefKey.Top + 28;
-        edModel.Width := frmRule.Width - 150;
-        CreateLabel(frmRule, 16, edModel.Top + 4, 'Model');
+        edInstruction := TEdit.Create(frmRule);
+        edInstruction.Parent := frmRule;
+        edInstruction.Name := 'edInstruction';
+        edInstruction.Left := 120;
+        edInstruction.Top := cbRefKey.Top + 28;
+        edInstruction.Width := frmRule.Width - 150;
+        CreateLabel(frmRule, 16, edInstruction.Top + 4, 'Instruction');
 
         btnOk := TButton.Create(frmRule);
         btnOk.Parent := frmRule;
         btnOk.Name := 'OK';
         btnOk.Caption := 'OK';
         btnOk.ModalResult := mrOk;
-        btnOk.Top := edModel.Top + (2 * edModel.Height);
+        btnOk.Top := edInstruction.Top + (2 * edInstruction.Height);
 
         btnCancel := TButton.Create(frmRule);
         btnCancel.Parent := frmRule;
@@ -645,7 +648,7 @@ begin
         cbRefKey.Items.Add(key);
         cbRefKey.ItemIndex := 0;
 
-        edModel.Text := model;
+        edInstruction.Text := instruction;
 
         if cbRefKey.Text = '' then begin
             btnOk.Enabled := False;
@@ -657,7 +660,7 @@ begin
 
         base := cbBase.Text;
         key := cbRefKey.Text;
-        model := edModel.Text;
+        instruction := edInstruction.Text;
         Result := True;
     finally
         frmRule.Free;
@@ -674,7 +677,7 @@ var
     f: IwbFile;
 
     cbBase, cbRefKey: TComboBox;
-    edModel: TEdit;
+    edInstruction: TEdit;
     frm: TForm;
     btnOk: TButton;
 begin
@@ -682,7 +685,7 @@ begin
     cbRefKey := TComboBox(Sender);
     frm := GetParentForm(cbRefKey);
     cbBase := TComboBox(frm.FindComponent('cbBase'));
-    edModel := TEdit(frm.FindComponent('edModel'));
+    edInstruction := TEdit(frm.FindComponent('edInstruction'));
     btnOk := TButton(frm.FindComponent('OK'));
 
     refKey := cbRefKey.Text;
@@ -714,7 +717,7 @@ begin
         cbBase.Text := baseRecordId;
         btnOk.Enabled := True;
         if joWinterDecalRules.Contains(refKey) then begin
-            edModel.Text := joWinterDecalRules.O[refKey].S['Model'];
+            edInstruction.Text := joWinterDecalRules.O[refKey].S['Instruction'];
         end;
     end else begin
         ShowMessage(refKey + ' is not a valid reference.');
@@ -732,7 +735,7 @@ begin
         MessageDlg('Reference ID must not be empty.', mtInformation, [mbOk], 0);
         Action := caNone;
     end;
-    if TEdit(TForm(Sender).FindComponent('edModel')).Text = '' then begin
+    if TEdit(TForm(Sender).FindComponent('edInstruction')).Text = '' then begin
         MessageDlg('Model must not be empty.', mtInformation, [mbOk], 0);
         Action := caNone;
     end;
@@ -750,7 +753,7 @@ begin
     baseid := joWinterDecalRules.O[key].S['Base ID'];
     Item.Caption := EditorID(GetRecordFromFormIdFileId(baseid));
     Item.SubItems.Add(key);
-    Item.SubItems.Add(joWinterDecalRules.O[key].S['Model']);
+    Item.SubItems.Add(joWinterDecalRules.O[key].S['Instruction']);
 end;
 
 procedure WinterDecalMenuEditClick(Sender: TObject);
@@ -759,7 +762,7 @@ procedure WinterDecalMenuEditClick(Sender: TObject);
 }
 var
     idx: integer;
-    key, base, model: string;
+    key, base, instruction: string;
 
     lvWinterDecalRules: TListView;
     frm: TForm;
@@ -774,15 +777,15 @@ begin
 
     key := joWinterDecalRules.Names[idx];
     base := joWinterDecalRules.O[key].S['Base ID'];
-    model := joWinterDecalRules.O[key].S['Model'];
+    instruction := joWinterDecalRules.O[key].S['Instruction'];
 
-    if not EditWinterDecalRuleForm(key, base, model) then Exit;
+    if not EditWinterDecalRuleForm(key, base, instruction) then Exit;
 
     joWinterDecalRules.O[key].S['Base ID'] := base;
-    joWinterDecalRules.O[key].S['Model'] := model;
+    joWinterDecalRules.O[key].S['Instruction'] := instruction;
 
     joUserWinterDecalRules.O[key].S['Base ID'] := base;
-    joUserWinterDecalRules.O[key].S['Model'] := model;
+    joUserWinterDecalRules.O[key].S['Instruction'] := instruction;
 
     bUserWinterDecalRulesChanged := True;
 
@@ -795,7 +798,7 @@ procedure WinterDecalMenuAddClick(Sender: TObject);
     Add rule
 }
 var
-    key, base, model: string;
+    key, base, instruction: string;
 
     lvWinterDecalRules: TListView;
     frm: TForm;
@@ -807,15 +810,15 @@ begin
 
     key := '';
     base := '';
-    model := 'none';
+    instruction := 'add';
 
-    if not EditWinterDecalRuleForm(key, base, model) then Exit;
+    if not EditWinterDecalRuleForm(key, base, instruction) then Exit;
 
     joWinterDecalRules.O[key].S['Base ID'] := base;
-    joWinterDecalRules.O[key].S['Model'] := model;
+    joWinterDecalRules.O[key].S['Instruction'] := instruction;
 
     joUserWinterDecalRules.O[key].S['Base ID'] := base;
-    joUserWinterDecalRules.O[key].S['Model'] := model;
+    joUserWinterDecalRules.O[key].S['Instruction'] := instruction;
 
     bUserWinterDecalRulesChanged := True;
 
@@ -2055,12 +2058,14 @@ procedure ProcessTxst;
     Process TXST records.
 }
 var
+    rotX, rotY: double;
     i, j: integer;
     baseTxst, r, rCell, rWrld: IwbElement;
 begin
     for i := 0 to Pred(tlTxsts.Count) do begin
         baseTxst := ObjectToElement(tlTxsts[i]);
         if not joWinterDecalRules.Contains(RecordFormIdFileId(baseTxst)) then continue;
+        if SameText(joWinterDecalRules.O[RecordFormIdFileId(baseTxst)].S['Instruction'], 'add') then continue;
         for j := Pred(ReferencedByCount(baseTxst)) downto 0 do begin
             r := ReferencedByIndex(baseTxst, j);
             if Signature(r) <> 'REFR' then continue;
@@ -2073,7 +2078,14 @@ begin
             rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
             if Signature(rWrld) <> 'WRLD' then continue;
             if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspacesWinterDecals) <> 0 then continue;
-            OverrideDecalForREFR(r, rCell, rWrld);
+            if SameText(joWinterDecalRules.O[RecordFormIdFileId(r)].S['Instruction'], 'add') then continue;
+
+            rotX := GetElementNativeValues(r, 'DATA\Rotation\X');
+            rotY := GetElementNativeValues(r, 'DATA\Rotation\Y');
+            //only override decals pointing downwards.
+            if (rotX > 60 and rotX < 120) or (rotX > 240 and rotX < 300)
+                or (rotY > 60 and rotY < 120) or (rotY > 240 and rotY < 300) then
+                OverrideDecalForREFR(r, rCell, rWrld);
         end;
     end;
 end;
@@ -2235,21 +2247,23 @@ begin
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         if Signature(rWrld) <> 'WRLD' then continue;
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspacesWinterDecals) <> 0 then continue;
-        if joWinterDecalRules.Contains(RecordFormIdFileId(r)) then continue; //currently just skipping winter decal rule refs. Eventually break this out to allow alternative models to be used.
+        if SameText(joWinterDecalRules.O[RecordFormIdFileId(r)].S['Instruction'], 'remove') then continue;
 
-        if not bIgnoreRotations then begin
-            rotX := GetElementNativeValues(r, 'DATA\Rotation\X');
-            rotY := GetElementNativeValues(r, 'DATA\Rotation\Y');
-            if ((rotX > 60) and (rotX < 300)) then continue;
-            if ((rotY > 60) and (rotY < 300)) then continue;
-        end;
-        if not bIgnoreLandAlterations then begin
-            posX := GetElementNativeValues(r, 'DATA\Position\X');
-            posY := GetElementNativeValues(r, 'DATA\Position\Y');
-            wrldEdid := GetElementEditValues(rWrld, 'EDID');
-            if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 0 then begin
-                AddMessage('Skipping winter replacement due to land alteration being below 0' + #9 + Name(r));
-                continue;
+        if not SameText(joWinterDecalRules.O[RecordFormIdFileId(r)].S['Instruction'], 'add') then begin
+            if not bIgnoreRotations then begin
+                rotX := GetElementNativeValues(r, 'DATA\Rotation\X');
+                rotY := GetElementNativeValues(r, 'DATA\Rotation\Y');
+                if ((rotX > 60) and (rotX < 300)) then continue;
+                if ((rotY > 60) and (rotY < 300)) then continue;
+            end;
+            if not bIgnoreLandAlterations then begin
+                posX := GetElementNativeValues(r, 'DATA\Position\X');
+                posY := GetElementNativeValues(r, 'DATA\Position\Y');
+                wrldEdid := GetElementEditValues(rWrld, 'EDID');
+                if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 0 then begin
+                    AddMessage('Skipping winter replacement due to land alteration being below 0' + #9 + Name(r));
+                    continue;
+                end;
             end;
         end;
 
@@ -2310,7 +2324,11 @@ begin
         rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
         if Signature(rWrld) <> 'WRLD' then continue;
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspacesWinterDecals) <> 0 then continue;
-        if joWinterDecalRules.Contains(RecordFormIdFileId(r)) then continue; //currently just skipping winter decal rule refs. Eventually break this out to allow alternative models to be used.
+        if SameText(joWinterDecalRules.O[RecordFormIdFileId(r)].S['Instruction'], 'remove') then continue;
+        if SameText(joWinterDecalRules.O[RecordFormIdFileId(r)].S['Instruction'], 'add') then begin
+            bIgnoreLandAlterations := True;
+            bIgnoreRotations := True;
+        end;
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
         if ElementExists(r, 'XSCL') then scale := GetElementNativeValues(r, 'XSCL') else scale := 1;
@@ -3845,7 +3863,7 @@ begin
         for c := 0 to Pred(joUserWinterDecalRules.Count) do begin
             key := joUserWinterDecalRules.Names[c];
             joWinterDecalRules.O[key].S['Base ID'] := joUserWinterDecalRules.O[key].S['Base ID'];
-            joWinterDecalRules.O[key].S['Model'] := joUserWinterDecalRules.O[key].S['Model'];
+            joWinterDecalRules.O[key].S['Instruction'] := joUserWinterDecalRules.O[key].S['Instruction'];
         end;
     end;
     SortWinterDecalJSONObjectKeys;
@@ -3936,7 +3954,7 @@ begin
             for c := 0 to Pred(sub.Count) do begin
                 key := sub.Names[c];
                 joWinterDecalRules.O[key].S['Base ID'] := sub.O[key].S['Base ID'];
-                joWinterDecalRules.O[key].S['Model'] := sub.O[key].S['Model'];
+                joWinterDecalRules.O[key].S['Instruction'] := sub.O[key].S['Instruction'];
             end;
         finally
             sub.Free;
