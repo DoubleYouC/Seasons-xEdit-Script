@@ -903,17 +903,20 @@ begin
 
         mnRules := TPopupMenu.Create(frm);
         lvAlterLandRules.PopupMenu := mnRules;
+
         MenuItem := TMenuItem.Create(mnRules);
         MenuItem.Caption := 'Add';
         MenuItem.OnClick := AlterLandRulesMenuAddClick;
         mnRules.Items.Add(MenuItem);
-        MenuItem := TMenuItem.Create(mnRules);
-        MenuItem.Caption := 'Delete';
-        MenuItem.OnClick := AlterLandRulesMenuDeleteClick;
-        mnRules.Items.Add(MenuItem);
+
         MenuItem := TMenuItem.Create(mnRules);
         MenuItem.Caption := 'Edit';
         MenuItem.OnClick := AlterLandRulesMenuEditClick;
+        mnRules.Items.Add(MenuItem);
+
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Caption := 'Delete';
+        MenuItem.OnClick := AlterLandRulesMenuDeleteClick;
         mnRules.Items.Add(MenuItem);
 
         btnAlterLandRuleOk := TButton.Create(frm);
