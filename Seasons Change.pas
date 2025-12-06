@@ -2264,8 +2264,8 @@ begin
                 posX := GetElementNativeValues(r, 'DATA\Position\X');
                 posY := GetElementNativeValues(r, 'DATA\Position\Y');
                 wrldEdid := GetElementEditValues(rWrld, 'EDID');
-                if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 1 then begin
-                    AddMessage('Skipping winter replacement due to land alteration being below 1' + #9 + Name(r));
+                if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 0 then begin
+                    AddMessage('Skipping winter replacement due to land alteration being below 0' + #9 + Name(r));
                     continue;
                 end;
             end;
@@ -2329,10 +2329,6 @@ begin
         if Signature(rWrld) <> 'WRLD' then continue;
         if Pos(RecordFormIdFileId(rWrld), sIgnoredWorldspacesWinterDecals) <> 0 then continue;
         if SameText(joWinterDecalRules.O[RecordFormIdFileId(r)].S['Instruction'], 'remove') then continue;
-        if SameText(joWinterDecalRules.O[RecordFormIdFileId(r)].S['Instruction'], 'add') then begin
-            bIgnoreLandAlterations := True;
-            bIgnoreRotations := True;
-        end;
         wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
         if ElementExists(r, 'XSCL') then scale := GetElementNativeValues(r, 'XSCL') else scale := 1;
@@ -2417,23 +2413,24 @@ var
 
     rCell, nCell, winterDecalRef, base, eScale, xesp: IwbElement;
 begin
-    if not bIgnoreRotations then begin
-        if ((rotX > 60) and (rotX < 300)) then begin
-            AddMessage('Skipping winter decal due to rotation X being between 60 and 300' + #9 + Name(r));
-            Exit;
+    if not SameText(joWinterDecalRules.O[RecordFormIdFileId(r)].S['Instruction'], 'add') then begin
+        if not bIgnoreRotations then begin
+            if ((rotX > 60) and (rotX < 300)) then begin
+                //AddMessage('Skipping winter decal due to rotation X being between 60 and 300' + #9 + Name(r));
+                Exit;
+            end;
+            if ((rotY > 60) and (rotY < 300)) then begin
+                //AddMessage('Skipping winter decal due to rotation Y being between 60 and 300' + #9 + Name(r));
+                Exit;
+            end;
         end;
-        if ((rotY > 60) and (rotY < 300)) then begin
-            AddMessage('Skipping winter decal due to rotation X being between 60 and 300' + #9 + Name(r));
-            Exit;
+        if not bIgnoreLandAlterations then begin
+            if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 0 then begin
+                AddMessage('Skipping winter decal due to land alteration being below 0' + #9 + Name(r));
+                Exit;
+            end;
         end;
     end;
-    if not bIgnoreLandAlterations then begin
-        if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 1 then begin
-            AddMessage('Skipping winter decal due to land alteration being below 1' + #9 + Name(r));
-            Exit;
-        end;
-    end;
-    AddMessage('Placing Winter Decal for REFR: ' + Name(r));
 
     position.x := posX;
     position.y := posY;
@@ -2493,13 +2490,13 @@ var
     cellXHere, cellYHere, column_closest, row_closest: integer;
     cellPosX, cellPosY: double;
 begin
-    Result := 1;
+    Result := 0;
     //Find the cell this position is in.
     cellXHere := Floor(posX/4096); //-2
     cellYHere := Floor(posY/4096); //5
 
     if not LandHeightsExist(wrldEdid, cellXHere, cellYHere) then begin
-        AddMessage(#9 + 'No land heights exist at position ' + #9 + FloatToStr(posX) + ', ' + FloatToStr(posY));
+        //AddMessage(#9 + 'No land heights exist at position ' + #9 + FloatToStr(posX) + ', ' + FloatToStr(posY));
         Exit;
     end;
 
@@ -2511,8 +2508,8 @@ begin
     joLandAlteration := TJsonObject.Create;
     try
         joLandAlteration.Assign(joLandscapeHeightsAltered.O[wrldEdid].O[cellXHere].O[cellYHere]);
-        Result := GetLandAlteration(joLandAlteration, row_closest, column_closest, 2);
-        AddMessage(#9 + 'Land alteration at position ' + #9 + FloatToStr(posX) + ', ' + FloatToStr(posY) + #9 + 'is ' + IntToStr(Result));
+        Result := GetLandAlteration(joLandAlteration, row_closest, column_closest, 0);
+        //AddMessage(#9 + 'Land alteration at position ' + #9 + FloatToStr(posX) + ', ' + FloatToStr(posY) + #9 + 'is ' + IntToStr(Result));
     finally
         joLandAlteration.Free;
     end;
