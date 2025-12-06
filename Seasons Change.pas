@@ -1253,7 +1253,7 @@ var
 begin
     key := '';
     edid := '';
-    alteration := 16;
+    alteration := -32;
     x1 := nil;
     y1 := nil;
     z1 := nil;
@@ -1288,6 +1288,7 @@ begin
 
     lvAlterLandRules.Items.Count := joAlterLandRules.Count;
     lvAlterLandRules.Refresh;
+    AlterLandRulesMenuAddClick(Sender);
 end;
 
 procedure AlterLandRulesMenuEditClick(Sender: TObject);
@@ -2263,8 +2264,8 @@ begin
                 posX := GetElementNativeValues(r, 'DATA\Position\X');
                 posY := GetElementNativeValues(r, 'DATA\Position\Y');
                 wrldEdid := GetElementEditValues(rWrld, 'EDID');
-                if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 0 then begin
-                    AddMessage('Skipping winter replacement due to land alteration being below 0' + #9 + Name(r));
+                if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 1 then begin
+                    AddMessage('Skipping winter replacement due to land alteration being below 1' + #9 + Name(r));
                     continue;
                 end;
             end;
@@ -2417,16 +2418,22 @@ var
     rCell, nCell, winterDecalRef, base, eScale, xesp: IwbElement;
 begin
     if not bIgnoreRotations then begin
-        if ((rotX > 60) and (rotX < 300)) then Exit;
-        if ((rotY > 60) and (rotY < 300)) then Exit;
-    end;
-    if not bIgnoreLandAlterations then begin
-        if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 0 then begin
-            AddMessage('Skipping winter decal due to land alteration being below 0' + #9 + Name(r));
+        if ((rotX > 60) and (rotX < 300)) then begin
+            AddMessage('Skipping winter decal due to rotation X being between 60 and 300' + #9 + Name(r));
+            Exit;
+        end;
+        if ((rotY > 60) and (rotY < 300)) then begin
+            AddMessage('Skipping winter decal due to rotation X being between 60 and 300' + #9 + Name(r));
             Exit;
         end;
     end;
-
+    if not bIgnoreLandAlterations then begin
+        if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 1 then begin
+            AddMessage('Skipping winter decal due to land alteration being below 1' + #9 + Name(r));
+            Exit;
+        end;
+    end;
+    AddMessage('Placing Winter Decal for REFR: ' + Name(r));
 
     position.x := posX;
     position.y := posY;
@@ -2469,11 +2476,11 @@ begin
 
     base := ElementByPath(winterDecalRef, 'NAME');
     SetEditValue(base, winterDecalFormid);
-    if not IsRefPrecombined(r) then begin
+    //if not IsRefPrecombined(r) then begin
         AddRequiredElementMasters(r, SeasonsMainFile, False, True);
   	    SortMasters(SeasonsMainFile);
         AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', Name(r));
-    end;
+    //end;
 
 end;
 
@@ -2486,12 +2493,15 @@ var
     cellXHere, cellYHere, column_closest, row_closest: integer;
     cellPosX, cellPosY: double;
 begin
-    Result := 0;
+    Result := 1;
     //Find the cell this position is in.
-    cellXHere := Floor(posX/4096);
-    cellYHere := Floor(posY/4096);
+    cellXHere := Floor(posX/4096); //-2
+    cellYHere := Floor(posY/4096); //5
 
-    if not LandHeightsExist(wrldEdid, cellXHere, cellYHere) then Exit;
+    if not LandHeightsExist(wrldEdid, cellXHere, cellYHere) then begin
+        AddMessage(#9 + 'No land heights exist at position ' + #9 + FloatToStr(posX) + ', ' + FloatToStr(posY));
+        Exit;
+    end;
 
     cellPosX := (posX - (cellXHere * 4096))/128;
     cellPosY := (posY - (cellYHere * 4096))/128;
@@ -2501,7 +2511,8 @@ begin
     joLandAlteration := TJsonObject.Create;
     try
         joLandAlteration.Assign(joLandscapeHeightsAltered.O[wrldEdid].O[cellXHere].O[cellYHere]);
-        Result := GetLandAlteration(joLandAlteration, row_closest, column_closest, 0);
+        Result := GetLandAlteration(joLandAlteration, row_closest, column_closest, 2);
+        AddMessage(#9 + 'Land alteration at position ' + #9 + FloatToStr(posX) + ', ' + FloatToStr(posY) + #9 + 'is ' + IntToStr(Result));
     finally
         joLandAlteration.Free;
     end;
@@ -3857,6 +3868,7 @@ begin
             end;
         end;
     end;
+    SortAlterLandJSONObjectKeys;
 
     //User Winter Decal Rules
     j := 'Seasons\WinterDecalUserRules.json';
@@ -4387,26 +4399,46 @@ begin
     end;
 end;
 
-function IsHexChar(C: Char): Boolean;
+procedure SortAlterLandJSONObjectKeys;
+{
+    Sorts Alter Land JSON keys alphabetically.
+}
 var
-    hexchars: string;
-    i: integer;
+    SortedEditorIDs: TStringList;
+    Key, edid: string;
+    NewJSONObj, joEditorIDKeyMap: TJsonObject;
+    i, c: integer;
 begin
-    hexchars := '0123456789abcdefABCDEF';
-    Result := (Pos(C, hexchars) > 0);
-end;
-
-function IsValidHex(s: string): Boolean;
-var
-    i: Integer;
-    charHere: char;
-begin
-    Result := (s <> '');
-    for i := 1 to Length(s) do
-        if not IsHexChar(Copy(s, i, 1)) then begin
-            Result := False;
-            break;
+    // Create a sorted list of keys
+    SortedEditorIDs := TStringList.Create;
+    joEditorIDKeyMap := TJsonObject.Create;
+    NewJSONObj := TJsonObject.Create;
+    try
+        for i := 0 to Pred(joAlterLandRules.Count) do begin
+            Key := joAlterLandRules.Names[i];
+            edid := joAlterLandRules.O[Key].S['editorid'];
+            SortedEditorIDs.Add(edid);
+            joEditorIDKeyMap.A[edid].Add(Key);
         end;
+        SortedEditorIDs.Sort; // Sort the keys alphabetically
+
+        for i := 0 to Pred(SortedEditorIDs.Count) do begin
+            edid := SortedEditorIDs[i];
+            for c := 0 to Pred(joEditorIDKeyMap.A[edid].Count) do begin
+                Key := joEditorIDKeyMap.A[edid].S[c];
+                NewJSONObj.O[Key].Assign(joAlterLandRules.O[Key]);
+            end;
+        end;
+
+        // Replace the original joAlterLandRules with the sorted one
+        joAlterLandRules.Clear;
+        joAlterLandRules.Assign(NewJSONObj);
+    finally
+        SortedEditorIDs.Free;
+        joEditorIDKeyMap.Free;
+        NewJSONObj.Free;
+        AddMessage('Loaded ' + IntToStr(joAlterLandRules.Count) + ' Alter Land Rules.');
+    end;
 end;
 
 procedure SortWinterDecalJSONObjectKeys;
@@ -4450,6 +4482,28 @@ begin
         NewJSONObj.Free;
         AddMessage('Loaded ' + IntToStr(joWinterDecalRules.Count) + ' Winter Decal Rules.');
     end;
+end;
+
+function IsHexChar(C: Char): Boolean;
+var
+    hexchars: string;
+    i: integer;
+begin
+    hexchars := '0123456789abcdefABCDEF';
+    Result := (Pos(C, hexchars) > 0);
+end;
+
+function IsValidHex(s: string): Boolean;
+var
+    i: Integer;
+    charHere: char;
+begin
+    Result := (s <> '');
+    for i := 1 to Length(s) do
+        if not IsHexChar(Copy(s, i, 1)) then begin
+            Result := False;
+            break;
+        end;
 end;
 
 function GetFileFromLoadOrderFormID(formid: cardinal): IwbFile;
