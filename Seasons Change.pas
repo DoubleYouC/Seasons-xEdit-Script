@@ -570,8 +570,7 @@ var
     frmRule: TForm;
     pnl: TPanel;
     btnOk, btnCancel, btnReferences: TButton;
-    edInstruction: TEdit;
-    cbBase, cbRefKey: TComboBox;
+    cbBase, cbRefKey, cbInstruction: TComboBox;
 begin
     Result := False;
     frmRule := TForm.Create(nil);
@@ -605,20 +604,21 @@ begin
         cbRefKey.Style := csDropDown;
         CreateLabel(frmRule, 16, cbRefKey.Top + 4, 'Reference ID');
 
-        edInstruction := TEdit.Create(frmRule);
-        edInstruction.Parent := frmRule;
-        edInstruction.Name := 'edInstruction';
-        edInstruction.Left := 120;
-        edInstruction.Top := cbRefKey.Top + 28;
-        edInstruction.Width := frmRule.Width - 150;
-        CreateLabel(frmRule, 16, edInstruction.Top + 4, 'Instruction');
+        cbInstruction := TComboBox.Create(frmRule);
+        cbInstruction.Parent := frmRule;
+        cbInstruction.Name := 'cbInstruction';
+        cbInstruction.Left := 120;
+        cbInstruction.Top := cbRefKey.Top + 28;
+        cbInstruction.Width := frmRule.Width - 150;
+        cbInstruction.Style := csDropDown;
+        CreateLabel(frmRule, 16, cbInstruction.Top + 4, 'Instruction');
 
         btnOk := TButton.Create(frmRule);
         btnOk.Parent := frmRule;
         btnOk.Name := 'OK';
         btnOk.Caption := 'OK';
         btnOk.ModalResult := mrOk;
-        btnOk.Top := edInstruction.Top + (2 * edInstruction.Height);
+        btnOk.Top := cbInstruction.Top + (2 * cbInstruction.Height);
 
         btnCancel := TButton.Create(frmRule);
         btnCancel.Parent := frmRule;
@@ -648,7 +648,10 @@ begin
         cbRefKey.Items.Add(key);
         cbRefKey.ItemIndex := 0;
 
-        edInstruction.Text := instruction;
+        cbInstruction.Items.Add('add');
+        cbInstruction.Items.Add('remove');
+        cbInstruction.Items.Add('IgnoreLandAlterations');
+        cbInstruction.Text := instruction;
 
         if cbRefKey.Text = '' then begin
             btnOk.Enabled := False;
@@ -660,7 +663,7 @@ begin
 
         base := cbBase.Text;
         key := cbRefKey.Text;
-        instruction := edInstruction.Text;
+        instruction := cbInstruction.Text;
         Result := True;
     finally
         frmRule.Free;
@@ -676,8 +679,7 @@ var
     r, base: IwbElement;
     f: IwbFile;
 
-    cbBase, cbRefKey: TComboBox;
-    edInstruction: TEdit;
+    cbBase, cbRefKey, cbInstruction: TComboBox;
     frm: TForm;
     btnOk: TButton;
 begin
@@ -685,7 +687,7 @@ begin
     cbRefKey := TComboBox(Sender);
     frm := GetParentForm(cbRefKey);
     cbBase := TComboBox(frm.FindComponent('cbBase'));
-    edInstruction := TEdit(frm.FindComponent('edInstruction'));
+    cbInstruction := TComboBox(frm.FindComponent('cbInstruction'));
     btnOk := TButton(frm.FindComponent('OK'));
 
     refKey := cbRefKey.Text;
@@ -717,7 +719,7 @@ begin
         cbBase.Text := baseRecordId;
         btnOk.Enabled := True;
         if joWinterDecalRules.Contains(refKey) then begin
-            edInstruction.Text := joWinterDecalRules.O[refKey].S['Instruction'];
+            cbInstruction.Text := joWinterDecalRules.O[refKey].S['Instruction'];
         end;
     end else begin
         ShowMessage(refKey + ' is not a valid reference.');
@@ -735,7 +737,7 @@ begin
         MessageDlg('Reference ID must not be empty.', mtInformation, [mbOk], 0);
         Action := caNone;
     end;
-    if TEdit(TForm(Sender).FindComponent('edInstruction')).Text = '' then begin
+    if TComboBox(TForm(Sender).FindComponent('cbInstruction')).Text = '' then begin
         MessageDlg('Model must not be empty.', mtInformation, [mbOk], 0);
         Action := caNone;
     end;
@@ -810,7 +812,7 @@ begin
 
     key := '';
     base := '';
-    instruction := 'add';
+    instruction := 'remove';
 
     if not EditWinterDecalRuleForm(key, base, instruction) then Exit;
 
@@ -2195,6 +2197,7 @@ begin
     if not Assigned(SeasonsMainFile) then Exit;
     for i := 0 to Pred(tlWinterDecals.Count) do begin
         base := ObjectToElement(tlWinterDecals[i]);
+        if SameText(joWinterDecalRules.O[RecordFormIdFileId(base)].S['Instruction'], 'remove') then continue;
         model := wbNormalizeResourceName(GetElementEditValues(base, 'Model\MODL'), resMesh);
         winterDecal := StringReplace(model, 'meshes', 'meshes\WinterDecals', [rfIgnoreCase]);
         if ResourceExists(winterDecal) then begin
@@ -2221,6 +2224,7 @@ begin
                 end;
             end;
         end;
+        if SameText(joWinterDecalRules.O[RecordFormIdFileId(base)].S['Instruction'], 'IgnoreLandAlterations') then bIgnoreLandAlterations := True;
         statEdid := GetElementEditValues(base, 'EDID');
         rWinterDecal := CreateNewStat(winterDecal, '', '', '', 'winterDecal_' + statEdid);
         AddMessage('Processing Winter Decals: ' + #9 + statEdid);
