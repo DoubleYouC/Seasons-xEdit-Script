@@ -13,7 +13,7 @@ var
     uiScale: integer;
     sIgnoredWorldspacesLandscapeSnow, sIgnoredWorldspacesWinterDecals: string;
 
-    SeasonsMainFile, SeasonsPatchFile: IwbFile;
+    SeasonsMainFile, SeasonsPatchFile, PluginHere: IwbFile;
     statGroup, scolGroup, actiGroup, furnGroup, msttGroup,
     statPatchGroup, scolPatchGroup, actiPatchGroup, furnPatchGroup, msttPatchGroup: IwbGroupRecord;
     flatSnowStatic: IwbElement;
@@ -171,7 +171,7 @@ begin
     if bCreateWinterDecals then begin
         CreateWinterReplacements;
         CreateWinterDecals;
-        ProcessOneBigSCOL;
+        //ProcessOneBigSCOL;
     end;
 end;
 
@@ -2133,14 +2133,14 @@ procedure OverrideDecalForREFR(rOriginal, rCell, rWrld: IwbElement);
 var
     rOverride, nCell, baseTxst, rTxst, xesp: IwbElement;
 begin
-    AddRequiredElementMasters(rWrld, SeasonsPatchFile, False, True);
-    AddRequiredElementMasters(rCell, SeasonsPatchFile, False, True);
-    AddRequiredElementMasters(rOriginal, SeasonsPatchFile, False, True);
-  	SortMasters(SeasonsPatchFile);
-    wbCopyElementToFile(rWrld, SeasonsPatchFile, False, True);
-    nCell := wbCopyElementToFile(rCell, SeasonsPatchFile, False, True);
+    PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
+    PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
+    PluginHere := RefMastersDeterminePlugin(rOriginal, PluginHere);
 
-    rOverride := wbCopyElementToFile(rOriginal, SeasonsPatchFile, False, True);
+    wbCopyElementToFile(rWrld, PluginHere, False, True);
+    nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
+
+    rOverride := wbCopyElementToFile(rOriginal, PluginHere, False, True);
 
     if ElementExists(rOverride, 'XESP') then xesp := ElementByPath(rOverride, 'XESP')
     else begin
@@ -2205,11 +2205,38 @@ function CreateWinterReplacementBase(base: IwbElement; model, editorid: string):
 var
     newBaseRecord, newModel: IwbElement;
 begin
-    newBaseRecord := wbCopyElementToFile(base, SeasonsMainFile, True, True);
+    PluginHere := RefMastersDeterminePlugin(base, SeasonsMainFile);
+    newBaseRecord := wbCopyElementToFile(base, PluginHere, True, True);
     SetEditorID(newBaseRecord, editorid);
     newModel := ElementByPath(newBaseRecord, 'Model\MODL');
     SetEditValue(newModel, model);
     Result := newBaseRecord;
+end;
+
+function RefMastersDeterminePlugin(e: IwbElement; inputFile: IwbFile): IwbFile;
+{
+    Determines the plugin to use based on the reference's required masters.
+}
+var
+    slMasters: TStringList;
+    i: integer;
+begin
+    Result := inputFile;
+    slMasters := TStringList.Create;
+    try
+        ReportRequiredMasters(e, slMasters, False, True);
+        for i := 0 to Pred(slMasters.Count) do begin
+            if slMasterableMasters.IndexOf(slMasters[i]) <> -1 then begin
+                Result := SeasonsPatchFile;
+            end;
+        end;
+        for i := 0 to Pred(slMasters.Count) do begin
+            AddMasterIfMissing(Result, slMasters[i]);
+        end;
+    finally
+        slMasters.Free;
+    end;
+    SortMasters(Result);
 end;
 
 procedure CreateWinterDecals;
@@ -2319,14 +2346,13 @@ var
 
     rOverride, nCell: IwbElement;
 begin
-    AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
-    AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
-    AddRequiredElementMasters(rOriginal, SeasonsMainFile, False, True);
-  	SortMasters(SeasonsMainFile);
-    wbCopyElementToFile(rWrld, SeasonsMainFile, False, True);
-    nCell := wbCopyElementToFile(rCell, SeasonsMainFile, False, True);
+    PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
+    PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
+    PluginHere := RefMastersDeterminePlugin(rOriginal, PluginHere);
+    wbCopyElementToFile(rWrld, PluginHere, False, True);
+    nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
 
-    rOverride := wbCopyElementToFile(rOriginal, SeasonsMainFile, False, True);
+    rOverride := wbCopyElementToFile(rOriginal, PluginHere, False, True);
     winterReplacementFormid := IntToHex(GetLoadOrderFormID(rWinterReplacement), 8);
     SetElementEditValues(rOverride, 'NAME', winterReplacementFormid);
 end;
@@ -2477,15 +2503,15 @@ begin
     winterDecalFormid := IntToHex(GetLoadOrderFormID(rWinterDecal), 8);
     if ElementExists(r, 'XESP') then bXESP := True else bXESP := False;
 
-    if (bXESP or (not IsRefPrecombined(r))) then begin
+    // if (bXESP or (not IsRefPrecombined(r))) then begin
         rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
         if not Assigned(rCell) then Exit;
 
-        AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
-        AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
-        SortMasters(SeasonsMainFile);
-        wbCopyElementToFile(rWrld, SeasonsMainFile, False, True);
-        nCell := wbCopyElementToFile(rCell, SeasonsMainFile, False, True);
+        PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
+        PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
+        PluginHere := RefMastersDeterminePlugin(r, PluginHere);
+        wbCopyElementToFile(rWrld, PluginHere, False, True);
+        nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
         winterDecalRef := Add(nCell, 'REFR', True);
 
         SetElementEditValues(winterDecalRef, 'DATA\Position\X', posX);
@@ -2495,8 +2521,6 @@ begin
         SetElementEditValues(winterDecalRef, 'DATA\Rotation\Y', rotY);
         SetElementEditValues(winterDecalRef, 'DATA\Rotation\Z', rotZ);
         if bXESP then begin
-            AddRequiredElementMasters(r, SeasonsMainFile, False, True);
-            SortMasters(SeasonsMainFile);
             xesp := Add(winterDecalRef, 'XESP', True);
             ElementAssign(xesp, 0, nil, False);
             SetElementEditValues(xesp, 'Reference', IntToHex(GetLoadOrderFormID(r), 8));
@@ -2511,22 +2535,20 @@ begin
         base := ElementByPath(winterDecalRef, 'NAME');
         SetEditValue(base, winterDecalFormid);
 
-        AddRequiredElementMasters(r, SeasonsMainFile, False, True);
-        SortMasters(SeasonsMainFile);
         AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', Name(r));
-    end
-    else begin
-        unitsX := c.X * 4096;
-        unitsY := c.Y * 4096;
-        pX := FloatToStr(posX - unitsX - 2048); //we subtract 2048 from all positions, and add it back when placing the cell SCOL, so the SCOL is in the center of the cell.
-        pY := FloatToStr(posY - unitsY - 2048);
-        pZ := FloatToStr(posZ);
-        rX := FloatToStr(rotX);
-        rY := FloatToStr(rotY);
-        rZ := FloatToStr(rotZ);
-        sScale := FloatToStr(scale);
-        joOneBigSCOL.O[wrldEdid].O[c.X].O[c.Y].O[winterDecalFormid].A['Placements'].Add(pX + ',' + pY + ',' + pZ + ',' + rX + ',' + rY + ',' + rZ + ',' + sScale);
-    end
+    //end;
+    // else begin
+    //     unitsX := c.X * 4096;
+    //     unitsY := c.Y * 4096;
+    //     pX := FloatToStr(posX - unitsX - 2048); //we subtract 2048 from all positions, and add it back when placing the cell SCOL, so the SCOL is in the center of the cell.
+    //     pY := FloatToStr(posY - unitsY - 2048);
+    //     pZ := FloatToStr(posZ);
+    //     rX := FloatToStr(rotX);
+    //     rY := FloatToStr(rotY);
+    //     rZ := FloatToStr(rotZ);
+    //     sScale := FloatToStr(scale);
+    //     joOneBigSCOL.O[wrldEdid].O[c.X].O[c.Y].O[winterDecalFormid].A['Placements'].Add(pX + ',' + pY + ',' + pZ + ',' + rX + ',' + rY + ',' + rZ + ',' + sScale);
+    // end;
 
 end;
 
@@ -2671,12 +2693,11 @@ begin
     rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
     if not Assigned(rCell) then Exit;
     rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
-    AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
-    AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
-    SortMasters(SeasonsMainFile);
+    PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
+    PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
 
-    wbCopyElementToFile(rWrld, SeasonsMainFile, False, True);
-    nCell := wbCopyElementToFile(rCell, SeasonsMainFile, False, True);
+    wbCopyElementToFile(rWrld, PluginHere, False, True);
+    nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
     cellSCOLRef := Add(nCell, 'REFR', True);
 
     unitsX := StrToInt(cellX) * 4096;
@@ -3205,11 +3226,11 @@ begin
         joLand.Free;
     end;
 
-    AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
-    AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
-  	SortMasters(SeasonsMainFile);
-    wbCopyElementToFile(rWrld, SeasonsMainFile, False, True);
-    nCell := wbCopyElementToFile(rCell, SeasonsMainFile, False, True);
+    PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
+    PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
+
+    wbCopyElementToFile(rWrld, PluginHere, False, True);
+    nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
     snowRef := Add(nCell, 'REFR', True);
     snowStaticFormid := IntToHex(GetLoadOrderFormID(snowStatic), 8);
 
