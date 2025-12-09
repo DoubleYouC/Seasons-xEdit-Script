@@ -1860,7 +1860,7 @@ begin
     SeasonsMainFile := AddNewFile;
     AddMasterIfMissing(SeasonsMainFile, GetFileName(FileByIndex(0)));
     statGroup := Add(SeasonsMainFile, 'STAT', True);
-    //scolGroup := Add(SeasonsMainFile, 'SCOL', True);
+    scolGroup := Add(SeasonsMainFile, 'SCOL', True);
     SeasonsMainFileName := GetFileName(SeasonsMainFile);
     slPluginFiles.Add(SeasonsMainFileName);
     SetIsESM(SeasonsMainFile, True);
@@ -2531,7 +2531,7 @@ begin
         SetEditValue(base, winterDecalFormid);
 
         AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', Name(r));
-    end;
+    end
     else begin
         unitsX := c.X * 4096;
         unitsY := c.Y * 4096;
