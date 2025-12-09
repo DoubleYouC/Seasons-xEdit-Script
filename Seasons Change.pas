@@ -170,7 +170,7 @@ begin
     if bCreateWinterDecals then begin
         CreateWinterReplacements;
         CreateWinterDecals;
-        //ProcessOneBigSCOL;
+        ProcessOneBigSCOL;
     end;
 end;
 
@@ -2496,7 +2496,7 @@ begin
     winterDecalFormid := IntToHex(GetLoadOrderFormID(rWinterDecal), 8);
     if ElementExists(r, 'XESP') then bXESP := True else bXESP := False;
 
-    // if (bXESP or (not IsRefPrecombined(r))) then begin
+    if (bXESP or (not IsRefPrecombined(r))) then begin
         rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
         if not Assigned(rCell) then Exit;
 
@@ -2531,19 +2531,19 @@ begin
         SetEditValue(base, winterDecalFormid);
 
         AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', Name(r));
-    //end;
-    // else begin
-    //     unitsX := c.X * 4096;
-    //     unitsY := c.Y * 4096;
-    //     pX := FloatToStr(posX - unitsX - 2048); //we subtract 2048 from all positions, and add it back when placing the cell SCOL, so the SCOL is in the center of the cell.
-    //     pY := FloatToStr(posY - unitsY - 2048);
-    //     pZ := FloatToStr(posZ);
-    //     rX := FloatToStr(rotX);
-    //     rY := FloatToStr(rotY);
-    //     rZ := FloatToStr(rotZ);
-    //     sScale := FloatToStr(scale);
-    //     joOneBigSCOL.O[wrldEdid].O[c.X].O[c.Y].O[winterDecalFormid].A['Placements'].Add(pX + ',' + pY + ',' + pZ + ',' + rX + ',' + rY + ',' + rZ + ',' + sScale);
-    // end;
+    end;
+    else begin
+        unitsX := c.X * 4096;
+        unitsY := c.Y * 4096;
+        pX := FloatToStr(posX - unitsX - 2048); //we subtract 2048 from all positions, and add it back when placing the cell SCOL, so the SCOL is in the center of the cell.
+        pY := FloatToStr(posY - unitsY - 2048);
+        pZ := FloatToStr(posZ);
+        rX := FloatToStr(rotX);
+        rY := FloatToStr(rotY);
+        rZ := FloatToStr(rotZ);
+        sScale := FloatToStr(scale);
+        joOneBigSCOL.O[wrldEdid].O[c.X].O[c.Y].O[winterDecalFormid].A['Placements'].Add(pX + ',' + pY + ',' + pZ + ',' + rX + ',' + rY + ',' + rZ + ',' + sScale);
+    end;
 
 end;
 
