@@ -13,8 +13,9 @@ var
     uiScale: integer;
     sIgnoredWorldspacesLandscapeSnow, sIgnoredWorldspacesWinterDecals: string;
 
-    SeasonsMainFile: IwbFile;
-    statGroup, scolGroup, actiGroup, furnGroup, msttGroup: IwbGroupRecord;
+    SeasonsMainFile, SeasonsPatchFile: IwbFile;
+    statGroup, scolGroup, actiGroup, furnGroup, msttGroup,
+    statPatchGroup, scolPatchGroup, actiPatchGroup, furnPatchGroup, msttPatchGroup: IwbGroupRecord;
     flatSnowStatic: IwbElement;
 
     slPluginFiles: TStringList;
@@ -26,7 +27,8 @@ var
     btnAlterLandRuleOk, btnAlterLandRuleCancel: TButton;
 
 const
-    sSeasonsFileName = 'Seasons.esm';
+    sSeasonsMainFileName = 'Seasons.esm';
+    sSeasonsPatchFileName = 'Seasons_patch.esp';
     SCALE_FACTOR_TERRAIN = 8;
     bsSCALE_FACTOR_TERRAIN = 3;
     // epsilon to use for CompareValue calls
@@ -137,7 +139,7 @@ begin
         Result := 1;
         Exit;
     end;
-    if bCreateTestPlugin then CreatePlugin;
+    if bCreateTestPlugin then CreateTestPlugin;
 
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
@@ -1850,7 +1852,9 @@ end;
 // Actual Work
 // ----------------------------------------------------
 
-procedure CreatePlugin;
+procedure CreateTestPlugin;
+var
+    SeasonsMainFileName: string;
 begin
     SeasonsMainFile := AddNewFile;
     AddMasterIfMissing(SeasonsMainFile, GetFileName(FileByIndex(0)));
@@ -1859,7 +1863,18 @@ begin
     actiGroup := Add(SeasonsMainFile, 'ACTI', True);
     furnGroup := Add(SeasonsMainFile, 'FURN', True);
     msttGroup := Add(SeasonsMainFile, 'MSTT', True);
-    slPluginFiles.Add(GetFileName(SeasonsMainFile));
+    SeasonsMainFileName := GetFileName(SeasonsMainFile);
+    slPluginFiles.Add(SeasonsMainFileName);
+    SetIsESM(SeasonsMainFile, True);
+
+    SeasonsPatchFile := AddNewFileName(StringReplace(SeasonsMainFileName, '.esp', '', [rfIgnoreCase]) + '_patch.esp', False);
+    AddMasterIfMissing(SeasonsPatchFile, GetFileName(FileByIndex(0)));
+    statPatchGroup := Add(SeasonsPatchFile, 'STAT', True);
+    scolPatchGroup := Add(SeasonsPatchFile, 'SCOL', True);
+    actiPatchGroup := Add(SeasonsPatchFile, 'ACTI', True);
+    furnPatchGroup := Add(SeasonsPatchFile, 'FURN', True);
+    msttPatchGroup := Add(SeasonsPatchFile, 'MSTT', True);
+    slPluginFiles.Add(GetFileName(SeasonsPatchFile));
 end;
 
 procedure CollectRecords;
@@ -2116,14 +2131,14 @@ procedure OverrideDecalForREFR(rOriginal, rCell, rWrld: IwbElement);
 var
     rOverride, nCell, baseTxst, rTxst, xesp: IwbElement;
 begin
-    AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
-    AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
-    AddRequiredElementMasters(rOriginal, SeasonsMainFile, False, True);
-  	SortMasters(SeasonsMainFile);
-    wbCopyElementToFile(rWrld, SeasonsMainFile, False, True);
-    nCell := wbCopyElementToFile(rCell, SeasonsMainFile, False, True);
+    AddRequiredElementMasters(rWrld, SeasonsPatchFile, False, True);
+    AddRequiredElementMasters(rCell, SeasonsPatchFile, False, True);
+    AddRequiredElementMasters(rOriginal, SeasonsPatchFile, False, True);
+  	SortMasters(SeasonsPatchFile);
+    wbCopyElementToFile(rWrld, SeasonsPatchFile, False, True);
+    nCell := wbCopyElementToFile(rCell, SeasonsPatchFile, False, True);
 
-    rOverride := wbCopyElementToFile(rOriginal, SeasonsMainFile, False, True);
+    rOverride := wbCopyElementToFile(rOriginal, SeasonsPatchFile, False, True);
 
     if ElementExists(rOverride, 'XESP') then xesp := ElementByPath(rOverride, 'XESP')
     else begin
@@ -2638,7 +2653,7 @@ begin
             end;
         end;
     end;
-
+    Result := cellSCOL;
 end;
 
 procedure PlaceCellSCOL(cellX, cellY, cellRecordId: string; cellSCOL: IwbElement);
@@ -3991,8 +4006,11 @@ begin
         f := FileByIndex(i);
         fileName := GetFileName(f);
         if fileName = 'Fallout4.exe' then continue;
-        if fileName = sSeasonsFileName then begin
+        if fileName = sSeasonsMainFileName then begin
             SeasonsMainFile := f;
+        end;
+        if fileName = sSeasonsPatchFileName then begin
+            SeasonsPatchFile := f;
         end;
         slPluginFiles.Add(fileName);
         LoadRules(fileName);
