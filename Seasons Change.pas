@@ -2220,15 +2220,11 @@ begin
         for i := 0 to Pred(slMasters.Count) do begin
             if SameText(GetFileName(SeasonsMainFile), slMasters[i]) then continue;
             if (slMasterableMasters.IndexOf(slMasters[i]) = -1) then begin
-                AddMessage('Master cannot be in the main file' + #9 + slMasters[i]);
                 Result := SeasonsPatchFile;
             end;
         end;
 
-        for i := 0 to Pred(slMasters.Count) do begin
-            if SameText(GetFileName(Result), slMasters[i]) then continue;
-            AddMasterIfMissing(Result, slMasters[i]);
-        end;
+        AddRequiredElementMasters(e, Result, False, True);
     finally
         slMasters.Free;
     end;
