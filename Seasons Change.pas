@@ -14,8 +14,7 @@ var
     sIgnoredWorldspacesLandscapeSnow, sIgnoredWorldspacesWinterDecals: string;
 
     SeasonsMainFile, SeasonsPatchFile, PluginHere: IwbFile;
-    statGroup, scolGroup, actiGroup, furnGroup, msttGroup,
-    statPatchGroup, scolPatchGroup, actiPatchGroup, furnPatchGroup, msttPatchGroup: IwbGroupRecord;
+    statGroup, scolGroup: IwbGroupRecord;
     flatSnowStatic: IwbElement;
 
     slPluginFiles, slMasterableMasters: TStringList;
@@ -164,10 +163,10 @@ begin
     ProcessLandRecords;
     ProcessStats;
     ProcessFurnActiMstt;
-    ProcessTxst;
     joLandscapeHeightsAltered.Free;
     joLandscapeHeightsAltered := TJsonObject.Create;
     LoadLandJsons(joLandscapeHeightsAltered, 'LandHeightsAltered');
+    ProcessTxst;
     if bCreateWinterDecals then begin
         CreateWinterReplacements;
         CreateWinterDecals;
@@ -1861,21 +1860,13 @@ begin
     SeasonsMainFile := AddNewFile;
     AddMasterIfMissing(SeasonsMainFile, GetFileName(FileByIndex(0)));
     statGroup := Add(SeasonsMainFile, 'STAT', True);
-    scolGroup := Add(SeasonsMainFile, 'SCOL', True);
-    actiGroup := Add(SeasonsMainFile, 'ACTI', True);
-    furnGroup := Add(SeasonsMainFile, 'FURN', True);
-    msttGroup := Add(SeasonsMainFile, 'MSTT', True);
+    //scolGroup := Add(SeasonsMainFile, 'SCOL', True);
     SeasonsMainFileName := GetFileName(SeasonsMainFile);
     slPluginFiles.Add(SeasonsMainFileName);
     SetIsESM(SeasonsMainFile, True);
 
     SeasonsPatchFile := AddNewFileName(StringReplace(SeasonsMainFileName, '.esp', '', [rfIgnoreCase]) + '_patch.esp', False);
     AddMasterIfMissing(SeasonsPatchFile, GetFileName(FileByIndex(0)));
-    statPatchGroup := Add(SeasonsPatchFile, 'STAT', True);
-    scolPatchGroup := Add(SeasonsPatchFile, 'SCOL', True);
-    actiPatchGroup := Add(SeasonsPatchFile, 'ACTI', True);
-    furnPatchGroup := Add(SeasonsPatchFile, 'FURN', True);
-    msttPatchGroup := Add(SeasonsPatchFile, 'MSTT', True);
     slPluginFiles.Add(GetFileName(SeasonsPatchFile));
 end;
 
@@ -2225,12 +2216,17 @@ begin
     slMasters := TStringList.Create;
     try
         ReportRequiredMasters(e, slMasters, False, True);
+
         for i := 0 to Pred(slMasters.Count) do begin
-            if slMasterableMasters.IndexOf(slMasters[i]) <> -1 then begin
+            if SameText(GetFileName(SeasonsMainFile), slMasters[i]) then continue;
+            if (slMasterableMasters.IndexOf(slMasters[i]) = -1) then begin
+                AddMessage('Master cannot be in the main file' + #9 + slMasters[i]);
                 Result := SeasonsPatchFile;
             end;
         end;
+
         for i := 0 to Pred(slMasters.Count) do begin
+            if SameText(GetFileName(Result), slMasters[i]) then continue;
             AddMasterIfMissing(Result, slMasters[i]);
         end;
     finally
@@ -2349,6 +2345,7 @@ begin
     PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
     PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
     PluginHere := RefMastersDeterminePlugin(rOriginal, PluginHere);
+    PluginHere := RefMastersDeterminePlugin(rWinterReplacement, PluginHere);
     wbCopyElementToFile(rWrld, PluginHere, False, True);
     nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
 
@@ -2510,6 +2507,8 @@ begin
         PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
         PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
         PluginHere := RefMastersDeterminePlugin(r, PluginHere);
+        PluginHere := RefMastersDeterminePlugin(rWinterDecal, PluginHere);
+
         wbCopyElementToFile(rWrld, PluginHere, False, True);
         nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
         winterDecalRef := Add(nCell, 'REFR', True);
@@ -2523,8 +2522,8 @@ begin
         if bXESP then begin
             xesp := Add(winterDecalRef, 'XESP', True);
             ElementAssign(xesp, 0, nil, False);
-            SetElementEditValues(xesp, 'Reference', IntToHex(GetLoadOrderFormID(r), 8));
-            //SetElementNativeValues(xesp, 'Flags', GetElementNativeValues(r, 'XESP\Flags'));
+            SetElementNativeValues(xesp, 'Reference', GetElementNativeValues(r, 'XESP\Reference'));
+            SetElementNativeValues(xesp, 'Flags', GetElementNativeValues(r, 'XESP\Flags'));
         end;
 
         if scale <> 1 then begin
