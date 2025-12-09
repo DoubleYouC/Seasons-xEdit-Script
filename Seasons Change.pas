@@ -18,7 +18,7 @@ var
     statPatchGroup, scolPatchGroup, actiPatchGroup, furnPatchGroup, msttPatchGroup: IwbGroupRecord;
     flatSnowStatic: IwbElement;
 
-    slPluginFiles: TStringList;
+    slPluginFiles, slMasterableMasters: TStringList;
     tlLandRecords, tlBasesThatAlterLand, tlStats, tlFurnActiMstt, tlWinterDecals, tlWinterReplacements, tlTxsts: TList;
     joWinningCells, joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules, joWinterDecalRules,
     joUserWinterDecalRules, joLoadOrderFormIDFileID, joOneBigSCOL: TJsonObject;
@@ -66,6 +66,7 @@ begin
     tlTxsts := TList.Create;
 
     slPluginFiles := TStringList.Create;
+    slMasterableMasters := TStringList.Create;
 end;
 
 function Finalize: integer;
@@ -92,6 +93,7 @@ begin
     tlTxsts.Free;
 
     slPluginFiles.Free;
+    slMasterableMasters.Free;
 
     if bSaveUserRules and bUserAlterLandRulesChanged then begin
         AddMessage('Saving ' + IntToStr(joUserAlterLandRules.Count) + ' object snow alteration user rule(s) to ' + wbDataPath + 'Seasons\AlterLandUserRules.json');
@@ -3997,18 +3999,22 @@ procedure FetchRules;
     Loads the Rule JSON files.
 }
 var
+    bSeasonsMainFileFound: boolean;
     a, b, c, i: integer;
     fileName, j, key, refKey, boundKey, fileLoadOrderHexPrefix: string;
 
     f: IwbFile;
 begin
+    bSeasonsMainFileFound := False;
     for i := 0 to Pred(FileCount) do begin
         f := FileByIndex(i);
         fileName := GetFileName(f);
         if fileName = 'Fallout4.exe' then continue;
         if fileName = sSeasonsMainFileName then begin
             SeasonsMainFile := f;
+            bSeasonsMainFileFound := True;
         end;
+        if ((not bSeasonsMainFileFound) and GetIsESM(f)) then slMasterableMasters.Add(fileName);
         if fileName = sSeasonsPatchFileName then begin
             SeasonsPatchFile := f;
         end;
