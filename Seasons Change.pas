@@ -2064,12 +2064,14 @@ procedure ProcessTxst;
     Process TXST records.
 }
 var
-    rotX, rotY: double;
+    posX, posY, rotX, rotY: double;
     i, j: integer;
+    wrldEdid: string;
     baseTxst, r, rCell, rWrld: IwbElement;
 begin
     for i := 0 to Pred(tlTxsts.Count) do begin
         baseTxst := ObjectToElement(tlTxsts[i]);
+        AddMessage('Processing TXST overrides: ' + #9 + Name(baseTxst));
         if not joWinterDecalRules.Contains(RecordFormIdFileId(baseTxst)) then continue;
         if SameText(joWinterDecalRules.O[RecordFormIdFileId(baseTxst)].S['Instruction'], 'add') then continue;
         for j := Pred(ReferencedByCount(baseTxst)) downto 0 do begin
@@ -2090,8 +2092,16 @@ begin
             rotY := GetElementNativeValues(r, 'DATA\Rotation\Y');
             //only override decals pointing downwards.
             if (rotX > 60 and rotX < 120) or (rotX > 240 and rotX < 300)
-                or (rotY > 60 and rotY < 120) or (rotY > 240 and rotY < 300) then
-                OverrideDecalForREFR(r, rCell, rWrld);
+                or (rotY > 60 and rotY < 120) or (rotY > 240 and rotY < 300) then begin
+                    posX := GetElementNativeValues(r, 'DATA\Position\X');
+                    posY := GetElementNativeValues(r, 'DATA\Position\Y');
+                    wrldEdid := GetElementEditValues(rWrld, 'EDID');
+                    if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 0 then begin
+                        AddMessage(#9 + 'Skipping TXST override for REFR due to land alteration being below 0: ' + #9 + ShortName(r));
+                        continue;
+                    end;
+                    OverrideDecalForREFR(r, rCell, rWrld);
+                end;
         end;
     end;
 end;
@@ -2103,7 +2113,6 @@ procedure OverrideDecalForREFR(rOriginal, rCell, rWrld: IwbElement);
 var
     rOverride, nCell, baseTxst, rTxst, xesp: IwbElement;
 begin
-    AddMessage('Overriding winter decal for REFR: ' + Name(rOriginal));
     AddRequiredElementMasters(rWrld, SeasonsMainFile, False, True);
     AddRequiredElementMasters(rCell, SeasonsMainFile, False, True);
     AddRequiredElementMasters(rOriginal, SeasonsMainFile, False, True);
@@ -2269,7 +2278,7 @@ begin
                 posY := GetElementNativeValues(r, 'DATA\Position\Y');
                 wrldEdid := GetElementEditValues(rWrld, 'EDID');
                 if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 0 then begin
-                    AddMessage('Skipping winter replacement due to land alteration being below 0' + #9 + Name(r));
+                    AddMessage(#9 + 'Skipping winter replacement due to land alteration being below 0: ' + #9 + ShortName(r));
                     continue;
                 end;
             end;
@@ -2430,7 +2439,7 @@ begin
         end;
         if not bIgnoreLandAlterations then begin
             if GetLandAlterationAtPosition(wrldEdid, posX, posY) < 0 then begin
-                AddMessage('Skipping winter decal due to land alteration being below 0' + #9 + Name(r));
+                AddMessage(#9 + 'Skipping winter decal due to land alteration being below 0: ' + #9 + ShortName(r));
                 Exit;
             end;
         end;
@@ -2441,7 +2450,7 @@ begin
     position.z := posZ;
     c := wbPositionToGridCell(position);
     cellRecordId := joWinningCells.O[wrldEdid].O[c.X].S[c.Y];
-    AddMessage(#9 + ShortName(r) + #9 + IntToStr(Round(posX)) + ', ' + IntToStr(Round(posY)) + ', ' + IntToStr(Round(posZ)));
+    //AddMessage(#9 + ShortName(r) + #9 + IntToStr(Round(posX)) + ', ' + IntToStr(Round(posY)) + ', ' + IntToStr(Round(posZ)));
     if cellRecordId = '' then Exit;
 
     rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
@@ -2495,12 +2504,16 @@ var
     cellPosX, cellPosY: double;
 begin
     Result := 0;
+    //Skip certain worldspaces.
+    if SameText(wrldEdid, 'Goodneighbor') or SameText(wrldEdid, 'DiamondCity') then Exit;
+
     //Find the cell this position is in.
     cellXHere := Floor(posX/4096); //-2
     cellYHere := Floor(posY/4096); //5
 
     if not LandHeightsExist(wrldEdid, cellXHere, cellYHere) then begin
         //AddMessage(#9 + 'No land heights exist at position ' + #9 + FloatToStr(posX) + ', ' + FloatToStr(posY));
+        Result := -1;
         Exit;
     end;
 
