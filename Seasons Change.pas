@@ -170,7 +170,7 @@ begin
     if bCreateWinterDecals then begin
         CreateWinterReplacements;
         CreateWinterDecals;
-        ProcessOneBigSCOL;
+        //ProcessOneBigSCOL;
     end;
 end;
 
@@ -2272,11 +2272,67 @@ begin
                 end;
             end;
         end;
+        //AddCollisionFromModel(model, winterDecal);
         if SameText(joWinterDecalRules.O[RecordFormIdFileId(base)].S['Instruction'], 'IgnoreLandAlterations') then bIgnoreLandAlterations := True;
         statEdid := GetElementEditValues(base, 'EDID');
         rWinterDecal := CreateNewStat(winterDecal, '', '', '', 'winterDecal_' + statEdid);
         AddMessage('Processing Winter Decals: ' + #9 + statEdid);
         ProcessWinterDecalREFRs(base, base, rWinterDecal, False, bIgnoreLandAlterations, bIgnoreRotations);
+    end;
+end;
+
+procedure AddCollisionFromModel(model, winterDecal: string);
+{
+    Adds collision data from model to winter decal.
+}
+var
+    folder, outfile: string;
+    i: integer;
+    modelNif, decalNif: TwbNifFile;
+    bsx, collisionObject, block, child, shader, collisionObjectBlock: TwbNifBlock;
+begin
+    modelNif := TwbNifFile.Create;
+    decalNif := TwbNifFile.Create;
+    try
+        modelNif.LoadFromResource(model);
+        decalNif.LoadFromResource(winterDecal);
+        // bsx := modelNif.BlockByType('BSXFlags');
+        // if Assigned(bsx) then begin
+        //     decalNif.Blocks[0].AddExtraData('BSXFlags').Assign(bsx);
+        // end;
+        // collisionObject := TwbNifBlock(modelNif.Blocks[0].Elements['Collision Object'].LinksTo);
+        // if Assigned(collisionObject) then begin
+        //     decalNif.CopyBlock(collisionObject);
+        // end;
+
+        for i := Pred(modelNif.BlocksCount) downto 1 do begin
+            block := modelNif.Blocks[i];
+            if SameText(block.BlockType, 'NiNode') then continue;
+            if SameText(block.BlockType, 'BSXFlags') then continue;
+            if SameText(block.BlockType, 'bhkNPCollisionObject') then continue;
+            if SameText(block.BlockType, 'bhkPhysicsSystem') then continue;
+            modelNif.Delete(i);
+        end;
+
+        // bsx := modelNif.BlockByType('BSXFlags');
+        // if Assigned(bsx) then begin
+        //     decalNif.Blocks[0].AddExtraData('BSXFlags').Assign(bsx);
+        // end;
+        // collisionObject := TwbNifBlock(modelNif.Blocks[0].Elements['Collision Object'].LinksTo);
+        // collisionObjectBlock := decalNif.AddBlock(collisionObject.BlockType);
+        // collisionObjectBlock.Assign(collisionObject);
+        // decalNif.BlockByType('NiNode').EditValues['Collision Object'] := collisionObjectBlock.BlockIndex;
+
+
+        folder := 'R:\Game Tools\Sniff\input\' + ExtractFilePath(winterDecal);
+        AddMessage(folder);
+        EnsureDirectoryExists(folder);
+        outfile := folder + ExtractFileName(winterDecal);
+        modelNif.SaveToFile(outfile);
+
+    finally
+        modelNif.Free;
+        decalNif.Free;
     end;
 end;
 
@@ -2496,7 +2552,7 @@ begin
     winterDecalFormid := IntToHex(GetLoadOrderFormID(rWinterDecal), 8);
     if ElementExists(r, 'XESP') then bXESP := True else bXESP := False;
 
-    if (bXESP or (not IsRefPrecombined(r))) then begin
+    // if (bXESP or (not IsRefPrecombined(r))) then begin
         rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
         if not Assigned(rCell) then Exit;
 
@@ -2531,19 +2587,19 @@ begin
         SetEditValue(base, winterDecalFormid);
 
         AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', Name(r));
-    end
-    else begin
-        unitsX := c.X * 4096;
-        unitsY := c.Y * 4096;
-        pX := FloatToStr(posX - unitsX - 2048); //we subtract 2048 from all positions, and add it back when placing the cell SCOL, so the SCOL is in the center of the cell.
-        pY := FloatToStr(posY - unitsY - 2048);
-        pZ := FloatToStr(posZ);
-        rX := FloatToStr(rotX);
-        rY := FloatToStr(rotY);
-        rZ := FloatToStr(rotZ);
-        sScale := FloatToStr(scale);
-        joOneBigSCOL.O[wrldEdid].O[c.X].O[c.Y].O[winterDecalFormid].A['Placements'].Add(pX + ',' + pY + ',' + pZ + ',' + rX + ',' + rY + ',' + rZ + ',' + sScale);
-    end;
+    // end
+    // else begin
+    //     unitsX := c.X * 4096;
+    //     unitsY := c.Y * 4096;
+    //     pX := FloatToStr(posX - unitsX - 2048); //we subtract 2048 from all positions, and add it back when placing the cell SCOL, so the SCOL is in the center of the cell.
+    //     pY := FloatToStr(posY - unitsY - 2048);
+    //     pZ := FloatToStr(posZ);
+    //     rX := FloatToStr(rotX);
+    //     rY := FloatToStr(rotY);
+    //     rZ := FloatToStr(rotZ);
+    //     sScale := FloatToStr(scale);
+    //     joOneBigSCOL.O[wrldEdid].O[c.X].O[c.Y].O[winterDecalFormid].A['Placements'].Add(pX + ',' + pY + ',' + pZ + ',' + rX + ',' + rY + ',' + rZ + ',' + sScale);
+    // end;
 
 end;
 
