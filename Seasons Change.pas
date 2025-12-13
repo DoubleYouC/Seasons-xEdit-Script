@@ -135,7 +135,7 @@ begin
     //Gui settings
     bCreateLandscapeHeights := False;
     bCreateLandscapeSnowMeshes := False;
-    bPlaceLandscapeSnow := False;
+    bPlaceLandscapeSnow := True;
     bTestMode := False;
     bSnowMode := True;
     bSeasonsMode := False;
@@ -1932,7 +1932,7 @@ begin
     AddMasterIfMissing(SeasonsMasterFile, GetFileName(FileByIndex(0)));
     SeasonsMasterFileName := GetFileName(SeasonsMasterFile);
     statGroup := Add(SeasonsMasterFile, 'STAT', True);
-    scolGroup := Add(SeasonsMasterFile, 'SCOL', True);
+    if bUseCellSCOLs then scolGroup := Add(SeasonsMasterFile, 'SCOL', True);
     SetIsESM(SeasonsMasterFile, True);
     slPluginFiles.Add(GetFileName(SeasonsMasterFile));
 
@@ -1955,7 +1955,7 @@ begin
         AddMasterIfMissing(SeasonsMainFile, SeasonsMasterFileName);
         SeasonsMainFileName := GetFileName(SeasonsMainFile);
         statGroup := Add(SeasonsMainFile, 'STAT', True);
-        scolGroup := Add(SeasonsMainFile, 'SCOL', True);
+        if bUseCellSCOLs then scolGroup := Add(SeasonsMainFile, 'SCOL', True);
         SetIsESM(SeasonsMainFile, True);
         slPluginFiles.Add(SeasonsMainFileName);
     end;
@@ -2826,6 +2826,11 @@ begin
     Result := nil;
     if joMasterBaseObjects.O['SCOL'].Contains(cellSCOLEditorID) then begin
         cellSCOL := GetRecordFromFormIdFileId(joMasterBaseObjects.O['SCOL'].O[cellSCOLEditorID].S['RecordID']);
+        if not bTestMode then begin
+            AddRequiredElementMasters(cellSCOL, SeasonsMainFile, False, True);
+            cellSCOL := wbCopyElementToFile(cellSCOL, SeasonsMainFile, False, True);
+            if ElementExists(cellSCOL, 'Parts') then Remove(ElementByPath(cellSCOL, 'Parts'));
+        end;
     end else begin
         //Add SCOL record to SCOL group
         cellSCOL := Add(scolGroup, 'SCOL', True);
