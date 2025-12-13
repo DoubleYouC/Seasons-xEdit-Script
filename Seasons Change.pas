@@ -3681,7 +3681,7 @@ begin
     SetEditValue(newStaticModel, StringReplace(model, 'meshes\', '', [rfIgnoreCase]));
     Result := newStatic;
     joMasterBaseObjects.O['STAT'].O[model].S['RecordID'] := RecordFormIdFileId(newStatic);
-    if ((lod0 = '') and (lod1 = '') and (lod2 = '')) then Exit;
+    //if ((lod0 = '') and (lod1 = '') and (lod2 = '')) then Exit;
     newStaticMNAM := Add(newStatic, 'MNAM', True);
     SetElementEditValues(newStaticMNAM, 'LOD #0 (Level 0)\Mesh', lod0);
     SetElementEditValues(newStaticMNAM, 'LOD #1 (Level 1)\Mesh', lod1);
