@@ -178,9 +178,9 @@ begin
     joLandscapeHeightsAltered.Free;
     joLandscapeHeightsAltered := TJsonObject.Create;
     LoadLandJsons(joLandscapeHeightsAltered, 'LandHeightsAltered');
-    //ProcessTxst;
+    ProcessTxst;
     if bCreateWinterDecals then begin
-        //CreateWinterReplacements;
+        CreateWinterReplacements;
         CreateWinterDecals;
         ProcessOneBigSCOL;
         AddMastersForCells;
@@ -2311,7 +2311,6 @@ begin
         rWinterDecal := CreateNewStat(winterDecal, '', '', '', 'winterDecal_' + statEdid);
         AddMessage('Processing Winter Decals: ' + #9 + statEdid);
         ProcessWinterDecalREFRs(base, base, rWinterDecal, False, bIgnoreLandAlterations, bIgnoreRotations);
-        break;
     end;
 end;
 
@@ -2612,7 +2611,7 @@ begin
             FloatToStr(rotX) + '|' + FloatToStr(rotY) + '|' + FloatToStr(rotZ) + '|' +
             FloatToStr(scale) + '|' + BoolToStr(bXESP) + '|' +
             GetElementEditValues(r, 'XESP\Reference') + '|' + GetElementEditValues(r, 'XESP\Flags')
-            + IntToHex(GetLoadOrderFormID(r), 8)
+            + '|' + IntToHex(GetLoadOrderFormID(r), 8)
         );
 
         // wbCopyElementToFile(rWrld, PluginHere, False, True);
@@ -2829,7 +2828,7 @@ begin
         FloatToStr(unitsX + 2048) + '|' + FloatToStr(unitsY + 2048) + '|' + '0' + '|' +
         '0' + '|' + '0' + '|' + '0' + '|' +
         '1' + '|' + 'False' + '|' +
-        '' + '|' + ''
+        '' + '|' + '' + '|'
         + ''
     );
 
@@ -2896,7 +2895,8 @@ procedure ProcessNewPlacedReference(placedReferenceData, wrldEdid, cellX, cellY:
 var
     bXESP: boolean;
     n, DelimPos: integer;
-    placedReferenceDataCopy, Token, id, winterDecalFormid, posX, posY, posZ, rotX, rotY, rotZ, xespRef, xespFlags, linkedRef: string;
+    placedReferenceDataCopy, Token, id, winterDecalFormid, posX, posY, posZ, rotX, rotY, rotZ, xespRef, xespFlags, linkedRef,
+    wrldRecordId, cellRecordId: string;
     scale: double;
 
     rWrld, rCell, nCell, winterDecalRef, base, eScale, xesp: IwbElement;
@@ -2938,6 +2938,8 @@ begin
             14 : linkedRef := Token;
         end;
     end;
+    wrldRecordId := joWinningCells.O[wrldEdid].S['RecordID'];
+    cellRecordId := joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'];
     rWrld := WinningOverride(GetRecordFromFormIdFileId(wrldRecordId));
     rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
     wbCopyElementToFile(rWrld, PluginHere, False, True);
