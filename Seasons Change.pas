@@ -9,10 +9,10 @@ unit Seasons;
 
 var
     bSaveLandHeights, bCreateLandscapeHeights, bCreateLandscapeSnowMeshes, bPlaceLandscapeSnow, bTestMode, bSnowMode, bSeasonsMode, bUserAlterLandRulesChanged,
-    bLoadPreviousLandHeights, bSaveUserRules, bCreateWinterDecals, bUserWinterDecalRulesChanged: boolean;
+    bLoadPreviousLandHeights, bSaveUserRules, bCreateWinterDecals, bUserWinterDecalRulesChanged, bUseCellSCOLs: boolean;
     uiScale: integer;
     sIgnoredWorldspacesLandscapeSnow, sIgnoredWorldspacesWinterDecals,
-    SeasonsMasterFileName, SeasonsMainFileName: string;
+    SeasonsMasterFileName, SeasonsMainFileName, SeasonsPatchFileName: string;
 
     SeasonsMasterFile, SeasonsMainFile, SeasonsPatchFile, PluginHere: IwbFile;
     statGroup, scolGroup: IwbGroupRecord;
@@ -21,7 +21,7 @@ var
     slPluginFiles, slMasterableMasters, slMainMasters, slPatchMasters: TStringList;
     tlLandRecords, tlBasesThatAlterLand, tlStats, tlFurnActiMstt, tlWinterDecals, tlWinterReplacements, tlTxsts: TList;
     joWinningCells, joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules, joWinterDecalRules,
-    joUserWinterDecalRules, joLoadOrderFormIDFileID, joOneBigSCOL, joPlacedReferences: TJsonObject;
+    joUserWinterDecalRules, joLoadOrderFormIDFileID, joOneBigSCOL, joPlacedReferences, joMasterBaseObjects: TJsonObject;
 
     lvAlterLandRules: TListView;
     btnAlterLandRuleOk, btnAlterLandRuleCancel: TButton;
@@ -58,6 +58,7 @@ begin
     joLoadOrderFormIDFileID := TJsonObject.Create;
     joOneBigSCOL := TJsonObject.Create;
     joPlacedReferences := TJsonObject.Create;
+    joMasterBaseObjects := TJsonObject.Create;
 
     tlLandRecords := TList.Create;
     tlBasesThatAlterLand := TList.Create;
@@ -94,6 +95,7 @@ begin
     joLoadOrderFormIDFileID.Free;
     joOneBigSCOL.Free;
     joPlacedReferences.Free;
+    joMasterBaseObjects.Free;
 
     tlLandRecords.Free;
     tlBasesThatAlterLand.Free;
@@ -139,6 +141,7 @@ begin
     bSeasonsMode := False;
     bLoadPreviousLandHeights := True;
     bCreateWinterDecals := True;
+    bUseCellSCOLs := True;
 
     //Rules
     bSaveUserRules := False;
@@ -156,7 +159,7 @@ begin
         Result := 1;
         Exit;
     end;
-    if bTestMode then CreateTestPlugin;
+    if bTestMode then CreateTestPlugin else CreatePatchPlugins;
 
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
@@ -186,7 +189,7 @@ begin
     if bCreateWinterDecals then begin
         CreateWinterReplacements;
         CreateWinterDecals;
-        ProcessOneBigSCOL;
+        if bUseCellSCOLs then ProcessOneBigSCOL;
         AddMastersForCells;
         ProcessReferences;
     end;
@@ -205,12 +208,12 @@ var
 
     btnStart, btnCancel, btnAlterationRuleEditor, btnGenerateSnowMesh, btnWinterDecalRuleEditor: TButton;
     chkCreateLandscapeHeights, chkCreateLandscapeSnowMeshes, chkPlaceLandscapeSnow, chkLoadLastLandHeights,
-    chkCreateWinterDecals: TCheckBox;
+    chkCreateWinterDecals, chkUseCellSCOLs: TCheckBox;
     rbTestMode, rbSnowMode, rbSeasonsMode: TRadioButton;
     cbWrld: TComboBox;
     edX, edY: TEdit;
     frm: TForm;
-    gbSnowOptions, gbMode: TGroupBox;
+    gbSnowOptions, gbMode, gbGeneral: TGroupBox;
     fImage: TImage;
     lblWrld, lblX, lblY: TLabel;
     pnl: TPanel;
@@ -250,7 +253,6 @@ begin
         gbMode.Top := fImage.Top + fImage.Height + 16;
         gbMode.Width := frm.Width - 30;
         gbMode.Caption := 'Mode';
-        gbMode.Height := 54;
 
         rbSeasonsMode := TRadioButton.Create(gbMode);
         rbSeasonsMode.Parent := gbMode;
@@ -265,7 +267,7 @@ begin
         iWidgetHeight := rbSeasonsMode.Height * 2;
         rbSeasonsMode.Top := Round(iWidgetHeight * 0.75);
         iButtonHeightModifier := Round(rbSeasonsMode.Height * 0.1);
-        gbMode.Height := rbSeasonsMode.Top + Round(iWidgetHeight * 0.75);
+        gbMode.Height := Round(iWidgetHeight * 1.5);
 
         rbSnowMode := TRadioButton.Create(gbMode);
         rbSnowMode.Parent := gbMode;
@@ -285,10 +287,27 @@ begin
         rbTestMode.Hint := 'Test mode. Creates new test plugins instead of using existing. This is for testing this script''s functionality.';
         rbTestMode.ShowHint := True;
 
+        gbGeneral := TGroupBox.Create(frm);
+        gbGeneral.Parent := frm;
+        gbGeneral.Left := 10;
+        gbGeneral.Top := gbMode.Top + Round(iWidgetHeight * 2);
+        gbGeneral.Width := frm.Width - 30;
+        gbGeneral.Caption := 'General Options';
+
+        chkUseCellSCOLs := TCheckBox.Create(gbGeneral);
+        chkUseCellSCOLs.Parent := gbGeneral;
+        chkUseCellSCOLs.Left := 16;
+        chkUseCellSCOLs.Top := Round(iWidgetHeight * 0.75);
+        chkUseCellSCOLs.Width := 170;
+        chkUseCellSCOLs.Caption := 'Use Cell SCOLs';
+        chkUseCellSCOLs.Hint := 'Instead of every object having its own placed reference, use cell SCOLs to reduce the number of placed references and draw calls.';
+        chkUseCellSCOLs.ShowHint := True;
+        gbGeneral.Height := Round(iWidgetHeight * 1.5);
+
         gbSnowOptions := TGroupBox.Create(frm);
         gbSnowOptions.Parent := frm;
         gbSnowOptions.Left := 10;
-        gbSnowOptions.Top := gbMode.Top + Round(iWidgetHeight * 2);
+        gbSnowOptions.Top := gbGeneral.Top + Round(iWidgetHeight * 2);
         gbSnowOptions.Width := frm.Width - 30;
         gbSnowOptions.Caption := 'Snow Controls';
         gbSnowOptions.Height := 100;
@@ -437,6 +456,7 @@ begin
         frm.Font.Size := 8;
         frm.Height := Round(btnStart.Top + btnStart.Height + 1.33 * iWidgetHeight);
 
+        chkUseCellSCOLs.Checked := bUseCellSCOLs;
         rbTestMode.Checked := bTestMode;
         rbSnowMode.Checked := bSnowMode;
         rbSeasonsMode.Checked := bSeasonsMode;
@@ -448,6 +468,7 @@ begin
 
         if frm.ShowModal <> mrOk then Exit;
 
+        bUseCellSCOLs := chkUseCellSCOLs.Checked;
         bTestMode := rbTestMode.Checked;
         bSnowMode := rbSnowMode.Checked;
         bSeasonsMode := rbSeasonsMode.Checked;
@@ -1926,14 +1947,36 @@ begin
     slPluginFiles.Add(GetFileName(SeasonsPatchFile));
 end;
 
+procedure CreatePatchPlugins;
+begin
+    if not Assigned(SeasonsMainFile) then begin
+        SeasonsMainFile := AddNewFile;
+        AddMasterIfMissing(SeasonsMainFile, GetFileName(FileByIndex(0)));
+        AddMasterIfMissing(SeasonsMainFile, SeasonsMasterFileName);
+        SeasonsMainFileName := GetFileName(SeasonsMainFile);
+        statGroup := Add(SeasonsMainFile, 'STAT', True);
+        scolGroup := Add(SeasonsMainFile, 'SCOL', True);
+        SetIsESM(SeasonsMainFile, True);
+        slPluginFiles.Add(SeasonsMainFileName);
+    end;
+
+    if not Assigned(SeasonsPatchFile) then begin
+        SeasonsPatchFileName := StringReplace(SeasonsMainFileName, '.esp', '', [rfIgnoreCase]) + '_patch.esp';
+        SeasonsPatchFile := AddNewFileName(SeasonsPatchFileName, False);
+        AddMasterIfMissing(SeasonsPatchFile, GetFileName(FileByIndex(0)));
+        AddMasterIfMissing(SeasonsPatchFile, SeasonsMasterFileName);
+        slPluginFiles.Add(GetFileName(SeasonsPatchFile));
+    end;
+end;
+
 procedure CollectRecords;
 {
     Collect records;
 }
 var
-    bLandHasChanged: boolean;
+    bLandHasChanged, bSeasonsMaster: boolean;
     i, j, count, blockidx, subblockidx, cellidx, cellX, cellY: integer;
-    recordid, fileName, wrldEdid: string;
+    recordid, fileName, wrldEdid, model, edid: string;
 
     tlLand: TList;
     slHideQuads: TStringList;
@@ -1948,6 +1991,16 @@ begin
         for i := 0 to Pred(FileCount) do begin
             f := FileByIndex(i);
             fileName := GetFileName(f);
+
+            bSeasonsMaster := False;
+
+            if SameText(fileName, SeasonsMasterFileName) then begin
+                bSeasonsMaster := True;
+            end else if SameText(fileName, SeasonsMainFileName) then begin
+                continue;
+            end else if SameText(fileName, SeasonsPatchFileName) then begin
+                continue;
+            end;
 
             //Collect LAND
             g := GroupBySignature(f, 'WRLD');
@@ -1972,6 +2025,7 @@ begin
                             cellY := GetElementNativeValues(rCell, 'XCLC\Y');
 
                             joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'] := RecordFormIdFileId(rCell);
+                            if bSeasonsMaster then continue;
 
                             land := GetLandscapeForCell(rCell);
                             if not Assigned(land) then continue;
@@ -2004,9 +2058,16 @@ begin
                 //if count > 10 then break;
             end;
 
+
+
             g := GroupBySignature(f, 'STAT');
             for j := 0 to Pred(ElementCount(g)) do begin
                 r := ElementByIndex(g, j);
+                if bSeasonsMaster then begin
+                    model := GetElementEditValues(r, 'Model\MODL');
+                    joMasterBaseObjects.O['STAT'].O[model].S['RecordID'] := RecordFormIdFileId(r);
+                    continue;
+                end;
                 if not IsWinningOverride(r) then continue;
                 if ReferencedByCount(r) = 0 then continue;
                 recordid := RecordFormIdFileId(r);
@@ -2018,6 +2079,11 @@ begin
             g := GroupBySignature(f, 'SCOL');
             for j := 0 to Pred(ElementCount(g)) do begin
                 r := ElementByIndex(g, j);
+                if bSeasonsMaster then begin
+                    edid := GetElementEditValues(r, 'EDID');
+                    joMasterBaseObjects.O['SCOL'].O[edid].S['RecordID'] := RecordFormIdFileId(r);
+                    continue;
+                end;
                 if not IsWinningOverride(r) then continue;
                 if ReferencedByCount(r) = 0 then continue;
                 recordid := RecordFormIdFileId(r);
@@ -2028,6 +2094,11 @@ begin
             g := GroupBySignature(f, 'FURN');
             for j := 0 to Pred(ElementCount(g)) do begin
                 r := ElementByIndex(g, j);
+                if bSeasonsMaster then begin
+                    edid := GetElementEditValues(r, 'EDID');
+                    joMasterBaseObjects.O['FURN'].O[edid].S['RecordID'] := RecordFormIdFileId(r);
+                    continue;
+                end;
                 if not IsWinningOverride(r) then continue;
                 if ReferencedByCount(r) = 0 then continue;
                 recordid := RecordFormIdFileId(r);
@@ -2039,6 +2110,11 @@ begin
             g := GroupBySignature(f, 'ACTI');
             for j := 0 to Pred(ElementCount(g)) do begin
                 r := ElementByIndex(g, j);
+                if bSeasonsMaster then begin
+                    edid := GetElementEditValues(r, 'EDID');
+                    joMasterBaseObjects.O['ACTI'].O[edid].S['RecordID'] := RecordFormIdFileId(r);
+                    continue;
+                end;
                 if not IsWinningOverride(r) then continue;
                 if ReferencedByCount(r) = 0 then continue;
                 recordid := RecordFormIdFileId(r);
@@ -2050,6 +2126,11 @@ begin
             g := GroupBySignature(f, 'MSTT');
             for j := 0 to Pred(ElementCount(g)) do begin
                 r := ElementByIndex(g, j);
+                if bSeasonsMaster then begin
+                    edid := GetElementEditValues(r, 'EDID');
+                    joMasterBaseObjects.O['MSTT'].O[edid].S['RecordID'] := RecordFormIdFileId(r);
+                    continue;
+                end;
                 if not IsWinningOverride(r) then continue;
                 if ReferencedByCount(r) = 0 then continue;
                 recordid := RecordFormIdFileId(r);
@@ -2252,25 +2333,32 @@ begin
             end;
         end;
         baseEdid := GetElementEditValues(base, 'EDID');
-        rWinterReplacement := CreateWinterReplacementBase(base, winterReplacement, 'winterReplacement_' + baseEdid);
+        rWinterReplacement := GetOrCreateWinterReplacementBase(base, winterReplacement, 'winterReplacement_' + baseEdid);
         AddMessage('Processing Winter Replacements: ' + #9 + baseEdid);
         ProcessWinterReplacementREFRs(base, rWinterReplacement, bIgnoreLandAlterations, bIgnoreRotations);
     end;
 end;
 
-function CreateWinterReplacementBase(base: IwbElement; model, editorid: string): IwbElement;
+function GetOrCreateWinterReplacementBase(base: IwbElement; model, editorid: string): IwbElement;
 {
     Creates a winter replacement base object.
 }
 var
+    sig: string;
     newBaseRecord, newModel: IwbElement;
 begin
+    sig := Signature(base);
+    if joMasterBaseObjects.O[sig].Contains(editorid) then begin
+        Result := GetRecordFromFormIdFileId(joMasterBaseObjects.O[sig].O[editorid].S['RecordID']);
+        Exit;
+    end;
     PluginHere := RefMastersDeterminePlugin(base, SeasonsMasterFile);
     AddRequiredElementMasters(base, PluginHere, False, True);
     newBaseRecord := wbCopyElementToFile(base, PluginHere, True, True);
     SetEditorID(newBaseRecord, editorid);
     newModel := ElementByPath(newBaseRecord, 'Model\MODL');
     SetEditValue(newModel, StringReplace(model, 'meshes\', '', [rfIgnoreCase]));
+    joMasterBaseObjects.O[sig].O[editorid].S['RecordID'] := RecordFormIdFileId(newBaseRecord);
     Result := newBaseRecord;
 end;
 
@@ -2349,68 +2437,11 @@ begin
                 end;
             end;
         end;
-        //AddCollisionFromModel(model, winterDecal);
         if SameText(joWinterDecalRules.O[RecordFormIdFileId(base)].S['Instruction'], 'IgnoreLandAlterations') then bIgnoreLandAlterations := True;
         statEdid := GetElementEditValues(base, 'EDID');
-        rWinterDecal := CreateNewStat(winterDecal, '', '', '', 'winterDecal_' + statEdid);
+        rWinterDecal := GetOrCreateStat(winterDecal, '', '', '', 'winterDecal_' + statEdid);
         AddMessage('Processing Winter Decals: ' + #9 + statEdid);
         ProcessWinterDecalREFRs(base, base, rWinterDecal, False, bIgnoreLandAlterations, bIgnoreRotations);
-    end;
-end;
-
-procedure AddCollisionFromModel(model, winterDecal: string);
-{
-    Adds collision data from model to winter decal.
-    This don't work.
-}
-var
-    folder, outfile: string;
-    i: integer;
-    modelNif, decalNif: TwbNifFile;
-    bsx, collisionObject, block, child, shader, collisionObjectBlock: TwbNifBlock;
-begin
-    modelNif := TwbNifFile.Create;
-    decalNif := TwbNifFile.Create;
-    try
-        modelNif.LoadFromResource(model);
-        decalNif.LoadFromResource(winterDecal);
-        // bsx := modelNif.BlockByType('BSXFlags');
-        // if Assigned(bsx) then begin
-        //     decalNif.Blocks[0].AddExtraData('BSXFlags').Assign(bsx);
-        // end;
-        // collisionObject := TwbNifBlock(modelNif.Blocks[0].Elements['Collision Object'].LinksTo);
-        // if Assigned(collisionObject) then begin
-        //     decalNif.CopyBlock(collisionObject);
-        // end;
-
-        for i := Pred(modelNif.BlocksCount) downto 1 do begin
-            block := modelNif.Blocks[i];
-            if SameText(block.BlockType, 'NiNode') then continue;
-            if SameText(block.BlockType, 'BSXFlags') then continue;
-            if SameText(block.BlockType, 'bhkNPCollisionObject') then continue;
-            if SameText(block.BlockType, 'bhkPhysicsSystem') then continue;
-            modelNif.Delete(i);
-        end;
-
-        // bsx := modelNif.BlockByType('BSXFlags');
-        // if Assigned(bsx) then begin
-        //     decalNif.Blocks[0].AddExtraData('BSXFlags').Assign(bsx);
-        // end;
-        // collisionObject := TwbNifBlock(modelNif.Blocks[0].Elements['Collision Object'].LinksTo);
-        // collisionObjectBlock := decalNif.AddBlock(collisionObject.BlockType);
-        // collisionObjectBlock.Assign(collisionObject);
-        // decalNif.BlockByType('NiNode').EditValues['Collision Object'] := collisionObjectBlock.BlockIndex;
-
-
-        folder := 'R:\Game Tools\Sniff\input\' + ExtractFilePath(winterDecal);
-        AddMessage(folder);
-        EnsureDirectoryExists(folder);
-        outfile := folder + ExtractFileName(winterDecal);
-        modelNif.SaveToFile(outfile);
-
-    finally
-        modelNif.Free;
-        decalNif.Free;
     end;
 end;
 
@@ -2641,7 +2672,7 @@ begin
     winterDecalFormid := IntToHex(GetLoadOrderFormID(rWinterDecal), 8);
     if ElementExists(r, 'XESP') then bXESP := True else bXESP := False;
 
-    if (bXESP or (not IsRefPrecombined(r))) then begin
+    if ((not bUseCellSCOLs) or bXESP or (not IsRefPrecombined(r))) then begin
         rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
         if not Assigned(rCell) then Exit;
 
@@ -2793,9 +2824,14 @@ var
     cellSCOL, parts, part, onam, placements, placement: IwbElement;
 begin
     Result := nil;
-    //Add SCOL record to SCOL group
-    cellSCOL := Add(scolGroup, 'SCOL', True);
-    SetEditorID(cellSCOL, cellSCOLEditorID);
+    if joMasterBaseObjects.O['SCOL'].Contains(cellSCOLEditorID) then begin
+        cellSCOL := GetRecordFromFormIdFileId(joMasterBaseObjects.O['SCOL'].O[cellSCOLEditorID].S['RecordID']);
+    end else begin
+        //Add SCOL record to SCOL group
+        cellSCOL := Add(scolGroup, 'SCOL', True);
+        SetEditorID(cellSCOL, cellSCOLEditorID);
+        joMasterBaseObjects.O['SCOL'].O[cellSCOLEditorID].S['RecordID'] := RecordFormIdFileId(cellSCOL);
+    end;
 
     //Add Parts
     parts := Add(cellSCOL, 'Parts', True);
@@ -3555,9 +3591,9 @@ begin
         snowLodModel0 := '';
         snowLodModel1 := '';
         snowLodModel2 := '';
-        if not Assigned(flatSnowStatic) then flatSnowStatic := CreateNewStat(snowModel, snowLodModel0, snowLodModel1, snowLodModel2, 'FlatSnowStatic01');
+        if not Assigned(flatSnowStatic) then flatSnowStatic := GetOrCreateStat(snowModel, snowLodModel0, snowLodModel1, snowLodModel2, 'FlatSnowStatic01');
         snowStatic := flatSnowStatic;
-    end else snowStatic := CreateNewStat(snowModel, snowLodModel0, snowLodModel1, snowLodModel2, editorIdSnowNif);
+    end else snowStatic := GetOrCreateStat(snowModel, snowLodModel0, snowLodModel1, snowLodModel2, editorIdSnowNif);
 
     joLand := TJsonObject.Create;
     try
@@ -3583,15 +3619,31 @@ begin
     SetEditValue(base, snowStaticFormid);
 end;
 
-function CreateNewStat(model, lod0, lod1, lod2, editorid: string): IwbElement;
+function GetOrCreateStat(model, lod0, lod1, lod2, editorid: string): IwbElement;
+{
+    Gets or creates a STAT record for the specified model.
+
+    Parameters:
+      model     - Path to the main model.
+      lod0,1,2  - Paths to the LOD models.
+      editorid  - EditorID for the new STAT record.
+
+    Returns:
+      The created or existing STAT record element.
+}
 var
     newStatic, newStaticModel, newStaticMNAM: IwbElement;
 begin
+    if joMasterBaseObjects.O['STAT'].Contains(model) then begin
+        Result := GetRecordFromFormIdFileId(joMasterBaseObjects.O['STAT'].O[model].S['RecordID']);
+        Exit;
+    end;
     newStatic := Add(statGroup, 'STAT', True);
     SetEditorID(newStatic, editorid);
     newStaticModel := Add(Add(newStatic, 'Model', True), 'MODL', True);
     SetEditValue(newStaticModel, StringReplace(model, 'meshes\', '', [rfIgnoreCase]));
     Result := newStatic;
+    joMasterBaseObjects.O['STAT'].O[model].S['RecordID'] := RecordFormIdFileId(newStatic);
     if ((lod0 = '') and (lod1 = '') and (lod2 = '')) then Exit;
     newStaticMNAM := Add(newStatic, 'MNAM', True);
     SetElementEditValues(newStaticMNAM, 'LOD #0 (Level 0)\Mesh', lod0);
@@ -4372,7 +4424,7 @@ begin
         f := FileByIndex(i);
         fileName := GetFileName(f);
         if fileName = 'Fallout4.exe' then continue;
-        if fileName = SeasonsMasterFileName then begin
+        if fileName = sSeasonsMasterFileName then begin
             SeasonsMasterFile := f;
         end;
         if fileName = sSeasonsMainFileName then begin
