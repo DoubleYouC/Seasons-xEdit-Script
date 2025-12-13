@@ -3581,7 +3581,7 @@ begin
         if not LandHeightsExist(wrldEdid, cellX, cellY) then continue;
         AddMessage(IntToStr(i + 1) + ' of ' + IntToStr(count) + #9 + ShortName(rLand) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
 
-        CreateLandscapeSnow(wrldEdid, cellX, cellY);
+        if bCreateLandscapeSnowMeshes then CreateLandscapeSnow(wrldEdid, cellX, cellY);
         if bPlaceLandscapeSnow then PlaceLandscapeSnow(rCell, rWrld, wrldEdid, cellX, cellY);
     end;
 end;
