@@ -11,16 +11,16 @@ var
     bSaveLandHeights, bCreateLandscapeHeights, bCreateLandscapeSnowMeshes, bPlaceLandscapeSnow, bCreateTestPlugin, bUserAlterLandRulesChanged,
     bLoadPreviousLandHeights, bSaveUserRules, bCreateWinterDecals, bUserWinterDecalRulesChanged: boolean;
     uiScale: integer;
-    sIgnoredWorldspacesLandscapeSnow, sIgnoredWorldspacesWinterDecals: string;
+    sIgnoredWorldspacesLandscapeSnow, sIgnoredWorldspacesWinterDecals, SeasonsMainFileName: string;
 
     SeasonsMainFile, SeasonsPatchFile, PluginHere: IwbFile;
     statGroup, scolGroup: IwbGroupRecord;
     flatSnowStatic: IwbElement;
 
-    slPluginFiles, slMasterableMasters: TStringList;
+    slPluginFiles, slMasterableMasters, slMainMasters, slPatchMasters: TStringList;
     tlLandRecords, tlBasesThatAlterLand, tlStats, tlFurnActiMstt, tlWinterDecals, tlWinterReplacements, tlTxsts: TList;
     joWinningCells, joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules, joWinterDecalRules,
-    joUserWinterDecalRules, joLoadOrderFormIDFileID, joOneBigSCOL: TJsonObject;
+    joUserWinterDecalRules, joLoadOrderFormIDFileID, joOneBigSCOL, joPlacedReferences: TJsonObject;
 
     lvAlterLandRules: TListView;
     btnAlterLandRuleOk, btnAlterLandRuleCancel: TButton;
@@ -33,7 +33,7 @@ const
     // epsilon to use for CompareValue calls
     // between positions and rotations, positions have more significant decimals (6), so this is set
     // to compliment that
-    EPSILON = 0.0000000001;
+    EPSILON = 0.000001;
 
 // ----------------------------------------------------
 // Main functions and procedures go immediately below.
@@ -55,6 +55,7 @@ begin
     joWinningCells := TJsonObject.Create;
     joLoadOrderFormIDFileID := TJsonObject.Create;
     joOneBigSCOL := TJsonObject.Create;
+    joPlacedReferences := TJsonObject.Create;
 
     tlLandRecords := TList.Create;
     tlBasesThatAlterLand := TList.Create;
@@ -66,6 +67,14 @@ begin
 
     slPluginFiles := TStringList.Create;
     slMasterableMasters := TStringList.Create;
+
+    slMainMasters := TStringList.Create;
+    slMainMasters.Sorted := True;
+    slMainMasters.Duplicates := dupIgnore;
+
+    slPatchMasters := TStringList.Create;
+    slPatchMasters.Sorted := True;
+    slPatchMasters.Duplicates := dupIgnore;
 end;
 
 function Finalize: integer;
@@ -82,6 +91,7 @@ begin
     joWinningCells.Free;
     joLoadOrderFormIDFileID.Free;
     joOneBigSCOL.Free;
+    joPlacedReferences.Free;
 
     tlLandRecords.Free;
     tlBasesThatAlterLand.Free;
@@ -93,6 +103,8 @@ begin
 
     slPluginFiles.Free;
     slMasterableMasters.Free;
+    slMainMasters.Free;
+    slPatchMasters.Free;
 
     if bSaveUserRules and bUserAlterLandRulesChanged then begin
         AddMessage('Saving ' + IntToStr(joUserAlterLandRules.Count) + ' object snow alteration user rule(s) to ' + wbDataPath + 'Seasons\AlterLandUserRules.json');
@@ -170,7 +182,9 @@ begin
     if bCreateWinterDecals then begin
         CreateWinterReplacements;
         CreateWinterDecals;
-        //ProcessOneBigSCOL;
+        ProcessOneBigSCOL;
+        AddMastersForCells;
+        ProcessReferences;
     end;
 end;
 
@@ -1854,8 +1868,6 @@ end;
 // ----------------------------------------------------
 
 procedure CreateTestPlugin;
-var
-    SeasonsMainFileName: string;
 begin
     SeasonsMainFile := AddNewFile;
     AddMasterIfMissing(SeasonsMainFile, GetFileName(FileByIndex(0)));
@@ -1900,6 +1912,7 @@ begin
                 recordid := RecordFormIdFileId(rWrld);
                 if Pos(recordid, sIgnoredWorldspacesLandscapeSnow) <> 0 then continue;
                 wrldEdid := GetElementEditValues(rWrld, 'EDID');
+                joWinningCells.O[wrldEdid].S['RecordID'] := RecordFormIdFileId(rWrld);
                 wWrld := WinningOverride(rWrld);
                 if GetElementNativeValues(wWrld, 'DATA\No Landscape') = 1 then continue;
 
@@ -1913,12 +1926,15 @@ begin
                             if (Signature(rCell) <> 'CELL') or GetIsPersistent(rCell) then continue;
                             cellX := GetElementNativeValues(rCell, 'XCLC\X');
                             cellY := GetElementNativeValues(rCell, 'XCLC\Y');
-                            joWinningCells.O[wrldEdid].O[cellX].S[cellY] := RecordFormIdFileId(rCell);
+
+                            joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'] := RecordFormIdFileId(rCell);
+
                             land := GetLandscapeForCell(rCell);
                             if not Assigned(land) then continue;
                             if not IsWinningOverride(land) then continue;
                             if not ElementExists(land, 'VHGT') then continue;
                             wCell := WinningOverride(rCell);
+
                             landFlags := ElementByPath(wCell, 'XCLC\Land Flags');
                             if GetElementEditValues(landFlags, 'Hide - Quad 1') <> '0'
                                 then slHideQuads.Add(ShortName(rCell) + #9 + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY) + #9 + 'has hidden land quad 1.');
@@ -2122,24 +2138,34 @@ procedure OverrideDecalForREFR(rOriginal, rCell, rWrld: IwbElement);
     Overrides decal for a REFR based on an original REFR.
 }
 var
+    wrldEdid: string;
     rOverride, nCell, baseTxst, rTxst, xesp: IwbElement;
 begin
     PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
     PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
     PluginHere := RefMastersDeterminePlugin(rOriginal, PluginHere);
+    wrldEdid := GetElementEditValues(rWrld, 'EDID');
 
-    wbCopyElementToFile(rWrld, PluginHere, False, True);
-    nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
+    joPlacedReferences.O[wrldEdid].O['0'].O['0'].O['Overrides'].O[RecordFormIdFileId(rOriginal)].S['plugin'] := GetFileName(PluginHere);
+    joPlacedReferences.O[wrldEdid].O['0'].O['0'].O['Overrides'].O[RecordFormIdFileId(rOriginal)].S['Clean Delete'] := 'True';
+    joPlacedReferences.O[wrldEdid].O['0'].O['0'].O['Overrides'].O[RecordFormIdFileId(rOriginal)].S['persistent'] := 'True';
+    joPlacedReferences.O[wrldEdid].O['0'].O['0'].O['Overrides'].O[RecordFormIdFileId(rOriginal)].S['cellRecordId'] := RecordFormIdFileId(rCell);
 
-    rOverride := wbCopyElementToFile(rOriginal, PluginHere, False, True);
+    // wbCopyElementToFile(rWrld, PluginHere, False, True);
+    // nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
 
-    if ElementExists(rOverride, 'XESP') then xesp := ElementByPath(rOverride, 'XESP')
-    else begin
-        xesp := Add(rOverride, 'XESP', True);
-        ElementAssign(xesp, 0, nil, False);
-    end;
-    SetElementEditValues(xesp, 'Reference', '14'); //playerref
-    SetElementEditValues(xesp, 'Flags\Set Enable State to Opposite of Parent', 1);
+    // rOverride := wbCopyElementToFile(rOriginal, PluginHere, False, True);
+
+    // if ElementExists(rOverride, 'XESP') then begin
+    //     xesp := ElementByPath(rOverride, 'XESP')
+    // end
+    // else begin
+    //     xesp := Add(rOverride, 'XESP', True);
+    //     ElementAssign(xesp, 0, nil, False);
+
+    // end;
+    // SetElementEditValues(xesp, 'Reference', '14'); //playerref
+    // SetElementEditValues(xesp, 'Flags\Set Enable State to Opposite of Parent', 1);
 end;
 
 procedure CreateWinterReplacements;
@@ -2197,10 +2223,11 @@ var
     newBaseRecord, newModel: IwbElement;
 begin
     PluginHere := RefMastersDeterminePlugin(base, SeasonsMainFile);
+    AddRequiredElementMasters(base, PluginHere, False, True);
     newBaseRecord := wbCopyElementToFile(base, PluginHere, True, True);
     SetEditorID(newBaseRecord, editorid);
     newModel := ElementByPath(newBaseRecord, 'Model\MODL');
-    SetEditValue(newModel, model);
+    SetEditValue(newModel, StringReplace(model, 'meshes\', '', [rfIgnoreCase]));
     Result := newBaseRecord;
 end;
 
@@ -2218,17 +2245,23 @@ begin
         ReportRequiredMasters(e, slMasters, False, True);
 
         for i := 0 to Pred(slMasters.Count) do begin
-            if SameText(GetFileName(SeasonsMainFile), slMasters[i]) then continue;
+            if SameText(SeasonsMainFileName, slMasters[i]) then continue;
             if (slMasterableMasters.IndexOf(slMasters[i]) = -1) then begin
                 Result := SeasonsPatchFile;
+                break;
             end;
         end;
-
-        AddRequiredElementMasters(e, Result, False, True);
+        for i := 0 to Pred(slMasters.Count) do begin
+            if SameText(GetFileName(Result), SeasonsMainFileName) then begin
+                if slMasters[i] = SeasonsMainFileName then continue;
+                slMainMasters.Add(slMasters[i]);
+            end else begin
+                slPatchMasters.Add(slMasters[i]);
+            end;
+        end;
     finally
         slMasters.Free;
     end;
-    SortMasters(Result);
 end;
 
 procedure CreateWinterDecals;
@@ -2284,6 +2317,7 @@ end;
 procedure AddCollisionFromModel(model, winterDecal: string);
 {
     Adds collision data from model to winter decal.
+    This don't work.
 }
 var
     folder, outfile: string;
@@ -2390,20 +2424,31 @@ procedure AddWinterReplacementREFR(rOriginal, rCell, rWrld, rWinterReplacement: 
     This currently is not seasonal and simply replaces the base NAME with the winter replacement.
 }
 var
-    winterReplacementFormid: string;
+    winterReplacementFormid, wrldEdid, cellX, cellY: string;
 
     rOverride, nCell: IwbElement;
 begin
+    winterReplacementFormid := IntToHex(GetLoadOrderFormID(rWinterReplacement), 8);
     PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
     PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
     PluginHere := RefMastersDeterminePlugin(rOriginal, PluginHere);
     PluginHere := RefMastersDeterminePlugin(rWinterReplacement, PluginHere);
-    wbCopyElementToFile(rWrld, PluginHere, False, True);
-    nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
+    wrldEdid := GetElementEditValues(rWrld, 'EDID');
+    cellX := GetElementEditValues(rCell, 'XCLC\X');
+    cellY := GetElementEditValues(rCell, 'XCLC\Y');
+    joPlacedReferences.O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[RecordFormIdFileId(rOriginal)].S['plugin'] := GetFileName(PluginHere);
+    joPlacedReferences.O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[RecordFormIdFileId(rOriginal)].S['Replace Base'] := winterReplacementFormid;
+    if GetIsPersistent(rOriginal) then begin
+        joPlacedReferences.O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[RecordFormIdFileId(rOriginal)].S['persistent'] := 'True';
+        joPlacedReferences.O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[RecordFormIdFileId(rOriginal)].S['cellRecordId'] := RecordFormIdFileId(rCell);
+    end;
 
-    rOverride := wbCopyElementToFile(rOriginal, PluginHere, False, True);
-    winterReplacementFormid := IntToHex(GetLoadOrderFormID(rWinterReplacement), 8);
-    SetElementEditValues(rOverride, 'NAME', winterReplacementFormid);
+    // wbCopyElementToFile(rWrld, PluginHere, False, True);
+    // nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
+
+    // rOverride := wbCopyElementToFile(rOriginal, PluginHere, False, True);
+
+    // SetElementEditValues(rOverride, 'NAME', winterReplacementFormid);
 end;
 
 procedure ProcessWinterDecalREFRs(base, fromBase, rWinterDecal: IwbElement; bSCOL, bIgnoreLandAlterations, bIgnoreRotations: boolean);
@@ -2546,13 +2591,13 @@ begin
     position.y := posY;
     position.z := posZ;
     c := wbPositionToGridCell(position);
-    cellRecordId := joWinningCells.O[wrldEdid].O[c.X].S[c.Y];
+    cellRecordId := joWinningCells.O[wrldEdid].O[c.X].O[c.Y].S['RecordID'];
     //AddMessage(#9 + ShortName(r) + #9 + IntToStr(Round(posX)) + ', ' + IntToStr(Round(posY)) + ', ' + IntToStr(Round(posZ)));
     if cellRecordId = '' then Exit;
     winterDecalFormid := IntToHex(GetLoadOrderFormID(rWinterDecal), 8);
     if ElementExists(r, 'XESP') then bXESP := True else bXESP := False;
 
-    // if (bXESP or (not IsRefPrecombined(r))) then begin
+    if (bXESP or (not IsRefPrecombined(r))) then begin
         rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
         if not Assigned(rCell) then Exit;
 
@@ -2560,46 +2605,54 @@ begin
         PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
         PluginHere := RefMastersDeterminePlugin(r, PluginHere);
         PluginHere := RefMastersDeterminePlugin(rWinterDecal, PluginHere);
+        joPlacedReferences.O[wrldEdid].O[c.X].O[c.Y].A['New References'].Add(
+            'winterdecal' + '|' + GetFileName(PluginHere) + '|' + winterDecalFormid + '|' +
+            FloatToStr(posX) + '|' + FloatToStr(posY) + '|' + FloatToStr(posZ) + '|' +
+            FloatToStr(rotX) + '|' + FloatToStr(rotY) + '|' + FloatToStr(rotZ) + '|' +
+            FloatToStr(scale) + '|' + BoolToStr(bXESP) + '|' +
+            GetElementEditValues(r, 'XESP\Reference') + '|' + GetElementEditValues(r, 'XESP\Flags')
+            + IntToHex(GetLoadOrderFormID(r), 8)
+        );
 
-        wbCopyElementToFile(rWrld, PluginHere, False, True);
-        nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
-        winterDecalRef := Add(nCell, 'REFR', True);
+        // wbCopyElementToFile(rWrld, PluginHere, False, True);
+        // nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
+        // winterDecalRef := Add(nCell, 'REFR', True);
 
-        SetElementEditValues(winterDecalRef, 'DATA\Position\X', posX);
-        SetElementEditValues(winterDecalRef, 'DATA\Position\Y', posY);
-        SetElementEditValues(winterDecalRef, 'DATA\Position\Z', posZ);
-        SetElementEditValues(winterDecalRef, 'DATA\Rotation\X', rotX);
-        SetElementEditValues(winterDecalRef, 'DATA\Rotation\Y', rotY);
-        SetElementEditValues(winterDecalRef, 'DATA\Rotation\Z', rotZ);
-        if bXESP then begin
-            xesp := Add(winterDecalRef, 'XESP', True);
-            ElementAssign(xesp, 0, nil, False);
-            SetElementNativeValues(xesp, 'Reference', GetElementNativeValues(r, 'XESP\Reference'));
-            SetElementNativeValues(xesp, 'Flags', GetElementNativeValues(r, 'XESP\Flags'));
-        end;
+        // SetElementEditValues(winterDecalRef, 'DATA\Position\X', posX);
+        // SetElementEditValues(winterDecalRef, 'DATA\Position\Y', posY);
+        // SetElementEditValues(winterDecalRef, 'DATA\Position\Z', posZ);
+        // SetElementEditValues(winterDecalRef, 'DATA\Rotation\X', rotX);
+        // SetElementEditValues(winterDecalRef, 'DATA\Rotation\Y', rotY);
+        // SetElementEditValues(winterDecalRef, 'DATA\Rotation\Z', rotZ);
+        // if bXESP then begin
+        //     xesp := Add(winterDecalRef, 'XESP', True);
+        //     ElementAssign(xesp, 0, nil, False);
+        //     SetElementNativeValues(xesp, 'Reference', GetElementNativeValues(r, 'XESP\Reference'));
+        //     SetElementNativeValues(xesp, 'Flags', GetElementNativeValues(r, 'XESP\Flags'));
+        // end;
 
-        if scale <> 1 then begin
-            eScale := Add(winterDecalRef, 'XSCL', True);
-            SetNativeValue(eScale, scale);
-        end;
+        // if scale <> 1 then begin
+        //     eScale := Add(winterDecalRef, 'XSCL', True);
+        //     SetNativeValue(eScale, scale);
+        // end;
 
-        base := ElementByPath(winterDecalRef, 'NAME');
-        SetEditValue(base, winterDecalFormid);
+        // base := ElementByPath(winterDecalRef, 'NAME');
+        // SetEditValue(base, winterDecalFormid);
 
-        AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', Name(r));
-    // end
-    // else begin
-    //     unitsX := c.X * 4096;
-    //     unitsY := c.Y * 4096;
-    //     pX := FloatToStr(posX - unitsX - 2048); //we subtract 2048 from all positions, and add it back when placing the cell SCOL, so the SCOL is in the center of the cell.
-    //     pY := FloatToStr(posY - unitsY - 2048);
-    //     pZ := FloatToStr(posZ);
-    //     rX := FloatToStr(rotX);
-    //     rY := FloatToStr(rotY);
-    //     rZ := FloatToStr(rotZ);
-    //     sScale := FloatToStr(scale);
-    //     joOneBigSCOL.O[wrldEdid].O[c.X].O[c.Y].O[winterDecalFormid].A['Placements'].Add(pX + ',' + pY + ',' + pZ + ',' + rX + ',' + rY + ',' + rZ + ',' + sScale);
-    // end;
+        // AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', Name(r));
+    end
+    else begin
+        unitsX := c.X * 4096;
+        unitsY := c.Y * 4096;
+        pX := FloatToStr(posX - unitsX - 2048); //we subtract 2048 from all positions, and add it back when placing the cell SCOL, so the SCOL is in the center of the cell.
+        pY := FloatToStr(posY - unitsY - 2048);
+        pZ := FloatToStr(posZ);
+        rX := FloatToStr(rotX);
+        rY := FloatToStr(rotY);
+        rZ := FloatToStr(rotZ);
+        sScale := FloatToStr(scale);
+        joOneBigSCOL.O[wrldEdid].O[c.X].O[c.Y].O[winterDecalFormid].A['Placements'].Add(pX + ',' + pY + ',' + pZ + ',' + rX + ',' + rY + ',' + rZ + ',' + sScale);
+    end;
 
 end;
 
@@ -2641,6 +2694,24 @@ begin
     end;
 end;
 
+procedure AddMastersForCells;
+{
+    Adds required masters for cells that will have new placed references.
+}
+var
+    i: integer;
+begin
+    if not Assigned(SeasonsMainFile) then Exit;
+    for i := 0 to Pred(slMainMasters.Count) do begin
+        AddMasterIfMissing(SeasonsMainFile, slMainMasters[i]);
+    end;
+    for i := 0 to Pred(slPatchMasters.Count) do begin
+        AddMasterIfMissing(SeasonsPatchFile, slPatchMasters[i]);
+    end;
+    SortMasters(SeasonsMainFile);
+    SortMasters(SeasonsPatchFile);
+end;
+
 procedure ProcessOneBigSCOL;
 {
     Processes the one big SCOL for snow decals at the end.
@@ -2660,7 +2731,7 @@ begin
             for y := 0 to Pred(joOneBigSCOL.O[wrldEdid].O[cellX].Count) do begin
                 cellY := joOneBigSCOL.O[wrldEdid].O[cellX].Names[y];
                 AddMessage('Placing winter decal SCOL in cell: ' + wrldEdid + ' [' + cellX + ', ' + cellY + ']');
-                cellRecordId := joWinningCells.O[wrldEdid].O[cellX].S[cellY];
+                cellRecordId := joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'];
                 cellSCOLEditorID := 'winterDecalSCOL_' + wrldEdid + '_' + cellX + '_' + cellY;
                 cellSCOL := MakeCellSCOL(cellSCOLEditorID, joOneBigSCOL.O[wrldEdid].O[cellX].O[cellY]);
                 PlaceCellSCOL(cellX, cellY, cellRecordId, cellSCOL);
@@ -2747,19 +2818,194 @@ begin
     PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
     PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
 
-    wbCopyElementToFile(rWrld, PluginHere, False, True);
-    nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
-    cellSCOLRef := Add(nCell, 'REFR', True);
+    cellSCOLFormid := IntToHex(GetLoadOrderFormID(cellSCOL), 8);
 
     unitsX := StrToInt(cellX) * 4096;
     unitsY := StrToInt(cellY) * 4096;
 
-    SetElementEditValues(cellSCOLRef, 'DATA\Position\X', unitsX + 2048);
-    SetElementEditValues(cellSCOLRef, 'DATA\Position\Y', unitsY + 2048);
+    joPlacedReferences.O[wrldEdid].O[c.X].[c.Y].A['New References'].Add(
+        'winterdecal' + '|' + GetFileName(PluginHere) + '|' + cellSCOLFormid + '|' +
+        FloatToStr(unitsX + 2048) + '|' + FloatToStr(unitsY + 2048) + '|' + '0' + '|' +
+        '0' + '|' + '0' + '|' + '0' + '|' +
+        '1' + '|' + 'False' + '|' +
+        '' + '|' + ''
+        + ''
+    );
 
-    cellSCOLFormid := IntToHex(GetLoadOrderFormID(cellSCOL), 8);
-    base := ElementByPath(cellSCOLRef, 'NAME');
-    SetEditValue(base, cellSCOLFormid);
+    // wbCopyElementToFile(rWrld, PluginHere, False, True);
+    // nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
+    // cellSCOLRef := Add(nCell, 'REFR', True);
+
+    // SetElementEditValues(cellSCOLRef, 'DATA\Position\X', unitsX + 2048);
+    // SetElementEditValues(cellSCOLRef, 'DATA\Position\Y', unitsY + 2048);
+
+    // base := ElementByPath(cellSCOLRef, 'NAME');
+    // SetEditValue(base, cellSCOLFormid);
+end;
+
+procedure ProcessReferences;
+{
+    Processes all placed references and places them in the appropriate plugins.
+}
+var
+    w, x, y, r: integer;
+    wrldEdid, wrldRecordId, cellRecordId, ref, cellX, cellY: string;
+begin
+    // joPlacedReferences.O[RecordFormIdFileId(rWrld)].O[cellRecordId].A['New References'].Add(
+    //         'winterdecal' + '|' + GetFileName(PluginHere) + '|' + winterDecalFormid + '|' +
+    //         FloatToStr(posX) + '|' + FloatToStr(posY) + '|' + FloatToStr(posZ) + '|' +
+    //         FloatToStr(rotX) + '|' + FloatToStr(rotY) + '|' + FloatToStr(rotZ) + '|' +
+    //         FloatToStr(scale) + '|' + BoolToStr(bXESP) + '|' +
+    //         GetElementEditValues(r, 'XESP\Reference') + '|' + GetElementEditValues(r, 'XESP\Flags'));
+
+    // joPlacedReferences.O[RecordFormIdFileId(rWrld)].O[RecordFormIdFileId(rCell)].O['Overrides'].O[RecordFormIdFileId(rOriginal)].S['plugin'] := GetFileName(PluginHere);
+    // joPlacedReferences.O[RecordFormIdFileId(rWrld)].O[RecordFormIdFileId(rCell)].O['Overrides'].O[RecordFormIdFileId(rOriginal)].S['Replace Base'] := winterReplacementFormid;
+
+    // joPlacedReferences.O[RecordFormIdFileId(rWrld)].O[RecordFormIdFileId(rCell)].O['Overrides'].O[RecordFormIdFileId(rOriginal)].S['plugin'] := GetFileName(PluginHere);
+    // joPlacedReferences.O[RecordFormIdFileId(rWrld)].O[RecordFormIdFileId(rCell)].O['Overrides'].O[RecordFormIdFileId(rOriginal)].S['Clean Delete'] := 'True';
+    for w := 0 to Pred(joPlacedReferences.Count) do begin
+        wrldEdid := joPlacedReferences.Names[w];
+        for x := 0 to Pred(joPlacedReferences.O[wrldEdid].Count) do begin
+            cellX := joPlacedReferences.O[wrldEdid].Names[x];
+            for y := 0 to Pred(joPlacedReferences.O[wrldEdid].O[cellX].Count) do begin
+                cellY := joPlacedReferences.O[wrldEdid].O[cellX].Names[y];
+
+                //Process Overrides
+                for r := Pred(joPlacedReferences.O[wrldEdid].O[cellX].O[cellY].O['Overrides'].Count) downto 0 do begin
+                    ref := joPlacedReferences.O[wrldEdid].O[cellX].O[cellY].O['Overrides'].Names[r];
+                    AddMessage('Processing placed reference override: ' + ref + ' in worldspace ' + wrldEdid + ' cell [' + cellX + ', ' + cellY + ']');
+                    ProcessPlacedReferenceOverride(joPlacedReferences.O[wrldEdid].O[cellX].O[cellY].O['Overrides'].O[ref], ref, wrldEdid, cellX, cellY);
+                end;
+
+                //Process New References
+                for r := Pred(joPlacedReferences.O[wrldEdid].O[cellX].O[cellY].A['New References'].Count) downto 0 do begin
+                    AddMessage('Processing new placed reference in worldspace ' + wrldEdid + ' cell [' + cellX + ', ' + cellY + ']');
+                    AddMessage(#9 + joPlacedReferences.O[wrldEdid].O[cellX].O[cellY].A['New References'].S[r]);
+                    ProcessNewPlacedReference(joPlacedReferences.O[wrldEdid].O[cellX].O[cellY].A['New References'].S[r], wrldEdid, cellX, cellY);
+                end;
+            end;
+        end;
+    end;
+end;
+
+procedure ProcessNewPlacedReference(placedReferenceData, wrldEdid, cellX, cellY: string);
+{
+    Processes a new placed reference.
+}
+var
+    bXESP: boolean;
+    n, DelimPos: integer;
+    placedReferenceDataCop, Token, id, winterDecalFormid, posX, posY, posZ, rotX, rotY, rotZ, xespRef, xespFlags, linkedRef: string;
+    scale: double;
+
+    rWrld, rCell, nCell, winterDecalRef, base, eScale, xesp: IwbElement;
+begin
+    // joPlacedReferences.O[RecordFormIdFileId(rWrld)].O[cellRecordId].A['New References'].Add(
+    //         'winterdecal' + '|' + GetFileName(PluginHere) + '|' + winterDecalFormid + '|' +
+    //         FloatToStr(posX) + '|' + FloatToStr(posY) + '|' + FloatToStr(posZ) + '|' +
+    //         FloatToStr(rotX) + '|' + FloatToStr(rotY) + '|' + FloatToStr(rotZ) + '|' +
+    //         FloatToStr(scale) + '|' + BoolToStr(bXESP) + '|' +
+    //         GetElementEditValues(r, 'XESP\Reference') + '|' + GetElementEditValues(r, 'XESP\Flags'));
+    placedReferenceDataCopy := placedReferenceData;
+    n := 0;
+    while placedReferenceDataCopy <> '' do begin
+        DelimPos := Pos('|', placedReferenceDataCopy);
+        if DelimPos > 0 then begin
+            Token := Copy(placedReferenceDataCopy, 1, DelimPos - 1);
+            Delete(placedReferenceDataCopy, 1, DelimPos);
+        end
+        else begin
+            Token := placedReferenceDataCopy;
+            placedReferenceDataCopy := '';
+        end;
+        n := n + 1;
+
+        Case n of
+            1 : id := Token;
+            2 : if SameText(Token, GetFileName(SeasonsMainFile)) then PluginHere := SeasonsMainFile else PluginHere := SeasonsPatchFile;
+            3 : winterDecalFormid := Token;
+            4 : posX := Token;
+            5 : posY := Token;
+            6 : posZ := Token;
+            7 : rotX := Token;
+            8 : rotY := Token;
+            9 : rotZ := Token;
+            10 : scale := StrToFloatDef(Token, 1);
+            11 : bXESP := StrToBool(Token);
+            12 : xespRef := Token;
+            13 : xespFlags := Token;
+            14 : linkedRef := Token;
+        end;
+    end;
+    rWrld := WinningOverride(GetRecordFromFormIdFileId(wrldRecordId));
+    rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
+    wbCopyElementToFile(rWrld, PluginHere, False, True);
+    nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
+    winterDecalRef := Add(nCell, 'REFR', True);
+
+    SetElementEditValues(winterDecalRef, 'DATA\Position\X', posX);
+    SetElementEditValues(winterDecalRef, 'DATA\Position\Y', posY);
+    SetElementEditValues(winterDecalRef, 'DATA\Position\Z', posZ);
+    SetElementEditValues(winterDecalRef, 'DATA\Rotation\X', rotX);
+    SetElementEditValues(winterDecalRef, 'DATA\Rotation\Y', rotY);
+    SetElementEditValues(winterDecalRef, 'DATA\Rotation\Z', rotZ);
+    if bXESP then begin
+        xesp := Add(winterDecalRef, 'XESP', True);
+        ElementAssign(xesp, 0, nil, False);
+        SetElementEditValues(xesp, 'Reference', xespRef);
+        SetElementEditValues(xesp, 'Flags', xespFlags);
+    end;
+
+    if scale <> 1 then begin
+        eScale := Add(winterDecalRef, 'XSCL', True);
+        SetNativeValue(eScale, scale);
+    end;
+
+    base := ElementByPath(winterDecalRef, 'NAME');
+    SetEditValue(base, winterDecalFormid);
+
+    AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', linkedRef);
+end;
+
+procedure ProcessPlacedReferenceOverride(placedReferenceOverride: TJsonObject; ref, wrldEdid, cellX, cellY: string);
+{
+    Processes a placed reference override.
+}
+var
+    bPersistent: boolean;
+    winterReplacementFormid, cellRecordId, wrldRecordId: string;
+    rWrld, rCell, rOriginal, rOverride, xesp: IwbElement;
+begin
+
+    if SameText(placedReferenceOverride.S['plugin'], GetFileName(SeasonsMainFile)) then PluginHere := SeasonsMainFile else PluginHere := SeasonsPatchFile;
+    if placedReferenceOverride.S['persistent'] = 'True' then begin
+        bPersistent := True;
+        cellRecordId := placedReferenceOverride.S['cellRecordId'];
+    end
+    else cellRecordId := joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'];
+    wrldRecordId := joWinningCells.O[wrldEdid].S['RecordID'];
+    rWrld := WinningOverride(GetRecordFromFormIdFileId(wrldRecordId));
+    rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
+    rOriginal := WinningOverride(GetRecordFromFormIdFileId(ref));
+    wbCopyElementToFile(rWrld, PluginHere, False, True);
+    wbCopyElementToFile(rCell, PluginHere, False, True);
+    rOverride := wbCopyElementToFile(rOriginal, PluginHere, False, True);
+    if placedReferenceOverride.S['Replace Base'] <> '' then begin
+        winterReplacementFormid := placedReferenceOverride.S['Replace Base'];
+        SetElementEditValues(rOverride, 'NAME', winterReplacementFormid);
+    end;
+    if placedReferenceOverride.S['Clean Delete'] = 'True' then begin
+        if ElementExists(rOverride, 'XESP') then begin
+            xesp := ElementByPath(rOverride, 'XESP')
+        end
+        else begin
+            xesp := Add(rOverride, 'XESP', True);
+            ElementAssign(xesp, 0, nil, False);
+        end;
+        SetElementEditValues(xesp, 'Reference', '14'); //playerref
+        SetElementEditValues(xesp, 'Flags\Set Enable State to Opposite of Parent', '1');
+        SetElementEditValues(rOverride, 'DATA\Position\Z', '-30000');
+    end;
 end;
 
 procedure AlterLandHeightsForTheseBases;
@@ -3300,13 +3546,15 @@ begin
     newStatic := Add(statGroup, 'STAT', True);
     SetEditorID(newStatic, editorid);
     newStaticModel := Add(Add(newStatic, 'Model', True), 'MODL', True);
-    SetEditValue(newStaticModel, model);
+    SetEditValue(newStaticModel, StringReplace(model, 'meshes\', '', [rfIgnoreCase]));
     //SetElementNativeValues(newStatic, 'Record Header\Record Flags\Has Distant LOD', 1);
+    Result := newStatic;
+    if ((lod0 = '') and (lod1 = '') and (lod2 = '')) then Exit;
     newStaticMNAM := Add(newStatic, 'MNAM', True);
     SetElementEditValues(newStaticMNAM, 'LOD #0 (Level 0)\Mesh', lod0);
     SetElementEditValues(newStaticMNAM, 'LOD #1 (Level 1)\Mesh', lod1);
     SetElementEditValues(newStaticMNAM, 'LOD #2 (Level 2)\Mesh', lod2);
-    Result := newStatic;
+
 end;
 
 
@@ -4899,6 +5147,14 @@ function BoolToStr(b: boolean): string;
 }
 begin
     if b then Result := 'true' else Result := 'false';
+end;
+
+function StrToBool(str: string): boolean;
+{
+    Given a string, return a boolean.
+}
+begin
+    if (LowerCase(str) = 'true') or (str = '1') then Result := True else Result := False;
 end;
 
 
