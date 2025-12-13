@@ -68,6 +68,7 @@ __recovery/
 # Boss dependency manager vendor folder https://github.com/HashLoad/boss
 modules/
 /.vs
-Seasons/LandHeights.json
-Seasons/LandHeightsAlteredPreAlteration.json
-Seasons/LandHeightsPreAlteration.json
+Seasons/LandHeights/
+Seasons/LandHeightsAltered/
+Seasons/LandHeightsBaseAlterations/
+Seasons/LandHeightsPreAlteration/
