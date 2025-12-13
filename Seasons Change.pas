@@ -10,9 +10,10 @@ unit Seasons;
 var
     bSaveLandHeights, bCreateLandscapeHeights, bCreateLandscapeSnowMeshes, bPlaceLandscapeSnow, bTestMode, bSnowMode, bSeasonsMode, bUserAlterLandRulesChanged,
     bLoadPreviousLandHeights, bSaveUserRules, bCreateWinterDecals, bUserWinterDecalRulesChanged, bUseCellSCOLs: boolean;
-    uiScale: integer;
+    uiScale, defaultAlteration: integer;
     sIgnoredWorldspacesLandscapeSnow, sIgnoredWorldspacesWinterDecals,
-    SeasonsMasterFileName, SeasonsMainFileName, SeasonsPatchFileName: string;
+    SeasonsMasterFileName, SeasonsMainFileName, SeasonsPatchFileName,
+    defaultInstruction: string;
 
     SeasonsMasterFile, SeasonsMainFile, SeasonsPatchFile, PluginHere: IwbFile;
     statGroup, scolGroup: IwbGroupRecord;
@@ -142,6 +143,8 @@ begin
     bLoadPreviousLandHeights := True;
     bCreateWinterDecals := True;
     bUseCellSCOLs := True;
+    defaultAlteration := -32;
+    defaultInstruction := 'add';
 
     //Rules
     bSaveUserRules := False;
@@ -743,6 +746,7 @@ begin
         base := cbBase.Text;
         key := cbRefKey.Text;
         instruction := cbInstruction.Text;
+        defaultInstruction := cbInstruction.Text;
         Result := True;
     finally
         frmRule.Free;
@@ -891,7 +895,7 @@ begin
 
     key := '';
     base := '';
-    instruction := 'remove';
+    instruction := defaultInstruction;
 
     if not EditWinterDecalRuleForm(key, base, instruction) then Exit;
 
@@ -1195,6 +1199,7 @@ begin
         key := cbKey.Text;
         edid := cbEditorID.Text;
         alteration := StrToInt(edAlteration.Text);
+        defaultAlteration := StrToInt(edAlteration.Text);
         if edX1.Text <> '' then x1 := StrToInt(edX1.Text) else x1 := nil;
         if edY1.Text <> '' then y1 := StrToInt(edY1.Text) else y1 := nil;
         if edZ1.Text <> '' then z1 := StrToInt(edZ1.Text) else z1 := nil;
@@ -1334,7 +1339,7 @@ var
 begin
     key := '';
     edid := '';
-    alteration := -32;
+    alteration := defaultAlteration;
     x1 := nil;
     y1 := nil;
     z1 := nil;
