@@ -178,9 +178,9 @@ begin
     joLandscapeHeightsAltered.Free;
     joLandscapeHeightsAltered := TJsonObject.Create;
     LoadLandJsons(joLandscapeHeightsAltered, 'LandHeightsAltered');
-    ProcessTxst;
+    //ProcessTxst;
     if bCreateWinterDecals then begin
-        CreateWinterReplacements;
+        //CreateWinterReplacements;
         CreateWinterDecals;
         ProcessOneBigSCOL;
         AddMastersForCells;
@@ -2311,6 +2311,7 @@ begin
         rWinterDecal := CreateNewStat(winterDecal, '', '', '', 'winterDecal_' + statEdid);
         AddMessage('Processing Winter Decals: ' + #9 + statEdid);
         ProcessWinterDecalREFRs(base, base, rWinterDecal, False, bIgnoreLandAlterations, bIgnoreRotations);
+        break;
     end;
 end;
 
@@ -2734,7 +2735,7 @@ begin
                 cellRecordId := joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'];
                 cellSCOLEditorID := 'winterDecalSCOL_' + wrldEdid + '_' + cellX + '_' + cellY;
                 cellSCOL := MakeCellSCOL(cellSCOLEditorID, joOneBigSCOL.O[wrldEdid].O[cellX].O[cellY]);
-                PlaceCellSCOL(cellX, cellY, cellRecordId, cellSCOL);
+                PlaceCellSCOL(wrldEdid, cellX, cellY, cellRecordId, cellSCOL);
             end;
         end;
     end;
@@ -2802,7 +2803,7 @@ begin
     Result := cellSCOL;
 end;
 
-procedure PlaceCellSCOL(cellX, cellY, cellRecordId: string; cellSCOL: IwbElement);
+procedure PlaceCellSCOL(wrldEdid, cellX, cellY, cellRecordId: string; cellSCOL: IwbElement);
 {
     Places the cell SCOL in the cell.
 }
@@ -2823,7 +2824,7 @@ begin
     unitsX := StrToInt(cellX) * 4096;
     unitsY := StrToInt(cellY) * 4096;
 
-    joPlacedReferences.O[wrldEdid].O[c.X].[c.Y].A['New References'].Add(
+    joPlacedReferences.O[wrldEdid].O[cellX].O[cellY].A['New References'].Add(
         'winterdecal' + '|' + GetFileName(PluginHere) + '|' + cellSCOLFormid + '|' +
         FloatToStr(unitsX + 2048) + '|' + FloatToStr(unitsY + 2048) + '|' + '0' + '|' +
         '0' + '|' + '0' + '|' + '0' + '|' +
@@ -2895,7 +2896,7 @@ procedure ProcessNewPlacedReference(placedReferenceData, wrldEdid, cellX, cellY:
 var
     bXESP: boolean;
     n, DelimPos: integer;
-    placedReferenceDataCop, Token, id, winterDecalFormid, posX, posY, posZ, rotX, rotY, rotZ, xespRef, xespFlags, linkedRef: string;
+    placedReferenceDataCopy, Token, id, winterDecalFormid, posX, posY, posZ, rotX, rotY, rotZ, xespRef, xespFlags, linkedRef: string;
     scale: double;
 
     rWrld, rCell, nCell, winterDecalRef, base, eScale, xesp: IwbElement;
