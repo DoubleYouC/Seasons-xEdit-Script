@@ -3019,7 +3019,9 @@ begin
 
         Case n of
             1 : id := Token;
-            2 : if SameText(Token, GetFileName(SeasonsMainFile)) then PluginHere := SeasonsMainFile else PluginHere := SeasonsPatchFile;
+            2 : if SameText(Token, SeasonsMainFileName) then PluginHere := SeasonsMainFile
+            else if SameText(Token, SeasonsMasterFileName) then PluginHere := SeasonsMasterFile
+            else PluginHere := SeasonsPatchFile;
             3 : winterDecalFormid := Token;
             4 : posX := Token;
             5 : posY := Token;
@@ -3076,7 +3078,10 @@ var
     rWrld, rCell, rOriginal, rOverride, xesp: IwbElement;
 begin
 
-    if SameText(placedReferenceOverride.S['plugin'], GetFileName(SeasonsMainFile)) then PluginHere := SeasonsMainFile else PluginHere := SeasonsPatchFile;
+    if SameText(placedReferenceOverride.S['plugin'], SeasonsMainFileName) then PluginHere := SeasonsMainFile
+    else if SameText(placedReferenceOverride.S['plugin'], SeasonsMasterFileName) then PluginHere := SeasonsMasterFile
+    else PluginHere := SeasonsPatchFile;
+
     if placedReferenceOverride.S['persistent'] = 'True' then begin
         bPersistent := True;
         cellRecordId := placedReferenceOverride.S['cellRecordId'];
