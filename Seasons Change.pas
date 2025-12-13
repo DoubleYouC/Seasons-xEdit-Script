@@ -3597,6 +3597,8 @@ begin
         snowStatic := flatSnowStatic;
     end else snowStatic := GetOrCreateStat(snowModel, snowLodModel0, snowLodModel1, snowLodModel2, editorIdSnowNif);
 
+    if ReferencedByCount(snowStatic) > 0 then Exit; // In case we already placed the landscape snow in the master.
+
     joLand := TJsonObject.Create;
     try
         joLand.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json');
@@ -3605,20 +3607,32 @@ begin
         joLand.Free;
     end;
 
-    PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
+    if bTestMode then PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMasterFile)
+    else PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
     PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
 
-    wbCopyElementToFile(rWrld, PluginHere, False, True);
-    nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
-    snowRef := Add(nCell, 'REFR', True);
     snowStaticFormid := IntToHex(GetLoadOrderFormID(snowStatic), 8);
 
-    SetElementEditValues(snowRef, 'DATA\Position\X', IntToStr(unitsX + 2048));
-    SetElementEditValues(snowRef, 'DATA\Position\Y', IntToStr(unitsY + 2048));
-    SetElementEditValues(snowRef, 'DATA\Position\Z', IntToStr(landOffsetZ + 16));
+    joPlacedReferences.O[wrldEdid].O[cellX].O[cellY].A['New References'].Add(
+        'landscapeSnow' + '|' + GetFileName(PluginHere) + '|' + snowStaticFormid + '|' +
+        IntToStr(unitsX + 2048) + '|' + IntToStr(unitsY + 2048) + '|' + IntToStr(landOffsetZ + 16) + '|' +
+        '0' + '|' + '0' + '|' + '0' + '|' +
+        '1' + '|' + 'False' + '|' +
+        '' + '|' + ''
+        + '|' + ''
+    );
 
-    base := ElementByPath(snowRef, 'NAME');
-    SetEditValue(base, snowStaticFormid);
+    // wbCopyElementToFile(rWrld, PluginHere, False, True);
+    // nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
+    // snowRef := Add(nCell, 'REFR', True);
+    // snowStaticFormid := IntToHex(GetLoadOrderFormID(snowStatic), 8);
+
+    // SetElementEditValues(snowRef, 'DATA\Position\X', IntToStr(unitsX + 2048));
+    // SetElementEditValues(snowRef, 'DATA\Position\Y', IntToStr(unitsY + 2048));
+    // SetElementEditValues(snowRef, 'DATA\Position\Z', IntToStr(landOffsetZ + 16));
+
+    // base := ElementByPath(snowRef, 'NAME');
+    // SetEditValue(base, snowStaticFormid);
 end;
 
 function GetOrCreateStat(model, lod0, lod1, lod2, editorid: string): IwbElement;
