@@ -2890,10 +2890,12 @@ var
 
     rCell, rWrld, nCell, cellSCOLRef, base: IwbElement;
 begin
+    if ReferencedByCount(cellSCOL) > 0 then Exit; //In case we already placed the cellSCOL in the world.
     rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
     if not Assigned(rCell) then Exit;
     rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
-    PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
+    if bTestMode then PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMasterFile)
+    else PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
     PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
 
     cellSCOLFormid := IntToHex(GetLoadOrderFormID(cellSCOL), 8);
