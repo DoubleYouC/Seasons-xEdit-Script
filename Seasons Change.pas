@@ -8,12 +8,13 @@ unit Seasons;
 // ----------------------------------------------------
 
 var
-    bSaveLandHeights, bCreateLandscapeHeights, bCreateLandscapeSnowMeshes, bPlaceLandscapeSnow, bCreateTestPlugin, bUserAlterLandRulesChanged,
+    bSaveLandHeights, bCreateLandscapeHeights, bCreateLandscapeSnowMeshes, bPlaceLandscapeSnow, bTestMode, bSnowMode, bSeasonsMode, bUserAlterLandRulesChanged,
     bLoadPreviousLandHeights, bSaveUserRules, bCreateWinterDecals, bUserWinterDecalRulesChanged: boolean;
     uiScale: integer;
-    sIgnoredWorldspacesLandscapeSnow, sIgnoredWorldspacesWinterDecals, SeasonsMainFileName: string;
+    sIgnoredWorldspacesLandscapeSnow, sIgnoredWorldspacesWinterDecals,
+    SeasonsMasterFileName, SeasonsMainFileName: string;
 
-    SeasonsMainFile, SeasonsPatchFile, PluginHere: IwbFile;
+    SeasonsMasterFile, SeasonsMainFile, SeasonsPatchFile, PluginHere: IwbFile;
     statGroup, scolGroup: IwbGroupRecord;
     flatSnowStatic: IwbElement;
 
@@ -26,10 +27,11 @@ var
     btnAlterLandRuleOk, btnAlterLandRuleCancel: TButton;
 
 const
-    sSeasonsMainFileName = 'Seasons.esm';
-    sSeasonsPatchFileName = 'Seasons_patch.esp';
+    sSeasonsMasterFileName = 'Seasons.esm';
+    sSeasonsMainFileName = 'SeasonsMainRefs.esm';
+    sSeasonsPatchFileName = 'SeasonsPluginRefs.esp';
+
     SCALE_FACTOR_TERRAIN = 8;
-    bsSCALE_FACTOR_TERRAIN = 3;
     // epsilon to use for CompareValue calls
     // between positions and rotations, positions have more significant decimals (6), so this is set
     // to compliment that
@@ -132,7 +134,9 @@ begin
     bCreateLandscapeHeights := False;
     bCreateLandscapeSnowMeshes := False;
     bPlaceLandscapeSnow := False;
-    bCreateTestPlugin := False;
+    bTestMode := False;
+    bSnowMode := True;
+    bSeasonsMode := False;
     bLoadPreviousLandHeights := True;
     bCreateWinterDecals := True;
 
@@ -152,7 +156,7 @@ begin
         Result := 1;
         Exit;
     end;
-    if bCreateTestPlugin then CreateTestPlugin;
+    if bTestMode then CreateTestPlugin;
 
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
     EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
@@ -200,12 +204,13 @@ var
     iWidgetHeight, iButtonHeightModifier: integer;
 
     btnStart, btnCancel, btnAlterationRuleEditor, btnGenerateSnowMesh, btnWinterDecalRuleEditor: TButton;
-    chkCreateTestPlugin, chkCreateLandscapeHeights, chkCreateLandscapeSnowMeshes, chkPlaceLandscapeSnow, chkLoadLastLandHeights,
+    chkCreateLandscapeHeights, chkCreateLandscapeSnowMeshes, chkPlaceLandscapeSnow, chkLoadLastLandHeights,
     chkCreateWinterDecals: TCheckBox;
+    rbTestMode, rbSnowMode, rbSeasonsMode: TRadioButton;
     cbWrld: TComboBox;
     edX, edY: TEdit;
     frm: TForm;
-    gbSnowOptions: TGroupBox;
+    gbSnowOptions, gbMode: TGroupBox;
     fImage: TImage;
     lblWrld, lblX, lblY: TLabel;
     pnl: TPanel;
@@ -239,22 +244,51 @@ begin
         fImage.Top := 12;
         fImage.Stretch := True;
 
-        chkCreateTestPlugin := TCheckBox.Create(frm);
-        chkCreateTestPlugin.Parent := frm;
-        chkCreateTestPlugin.Left := 24;
-        chkCreateTestPlugin.Top := fImage.Top + fImage.Height + 16;
-        chkCreateTestPlugin.Width := 120;
-        chkCreateTestPlugin.Caption := 'Create Test Plugin';
-        chkCreateTestPlugin.Hint := 'Creates a test plugin.';
-        chkCreateTestPlugin.ShowHint := True;
+        gbMode := TGroupBox.Create(frm);
+        gbMode.Parent := frm;
+        gbMode.Left := 10;
+        gbMode.Top := fImage.Top + fImage.Height + 16;
+        gbMode.Width := frm.Width - 30;
+        gbMode.Caption := 'Mode';
+        gbMode.Height := 54;
 
-        iWidgetHeight := chkCreateTestPlugin.Height * 2;
-        iButtonHeightModifier := Round(chkCreateTestPlugin.Height * 0.1);
+        rbSeasonsMode := TRadioButton.Create(gbMode);
+        rbSeasonsMode.Parent := gbMode;
+        rbSeasonsMode.Left := 16;
+        rbSeasonsMode.Top := 16;
+        rbSeasonsMode.Width := 140;
+        rbSeasonsMode.Caption := 'Seasons Change';
+        rbSeasonsMode.Hint := 'Seasons Change mode.';
+        rbSeasonsMode.ShowHint := True;
+        rbSeasonsMode.Enabled := False; // Disabled until implemented.
+
+        iWidgetHeight := rbSeasonsMode.Height * 2;
+        rbSeasonsMode.Top := Round(iWidgetHeight * 0.75);
+        iButtonHeightModifier := Round(rbSeasonsMode.Height * 0.1);
+        gbMode.Height := rbSeasonsMode.Top + Round(iWidgetHeight * 0.75);
+
+        rbSnowMode := TRadioButton.Create(gbMode);
+        rbSnowMode.Parent := gbMode;
+        rbSnowMode.Left := rbSeasonsMode.Left + rbSeasonsMode.Width + 16;
+        rbSnowMode.Top := Round(iWidgetHeight * 0.75);
+        rbSnowMode.Width := 100;
+        rbSnowMode.Caption := 'SNOW';
+        rbSnowMode.Hint := 'Snow Now Overwhelms Winter mode.';
+        rbSnowMode.ShowHint := True;
+
+        rbTestMode := TRadioButton.Create(gbMode);
+        rbTestMode.Parent := gbMode;
+        rbTestMode.Left := rbSnowMode.Left + rbSnowMode.Width + 16;
+        rbTestMode.Top := Round(iWidgetHeight * 0.75);
+        rbTestMode.Width := 100;
+        rbTestMode.Caption := 'Test';
+        rbTestMode.Hint := 'Test mode. Creates new test plugins instead of using existing. This is for testing this script''s functionality.';
+        rbTestMode.ShowHint := True;
 
         gbSnowOptions := TGroupBox.Create(frm);
         gbSnowOptions.Parent := frm;
         gbSnowOptions.Left := 10;
-        gbSnowOptions.Top := chkCreateTestPlugin.Top + iWidgetHeight;
+        gbSnowOptions.Top := gbMode.Top + Round(iWidgetHeight * 2);
         gbSnowOptions.Width := frm.Width - 30;
         gbSnowOptions.Caption := 'Snow Controls';
         gbSnowOptions.Height := 100;
@@ -283,7 +317,7 @@ begin
         btnAlterationRuleEditor.OnClick := AlterLandRuleEditor;
         btnAlterationRuleEditor.Width := 120;
         btnAlterationRuleEditor.Left := chkLoadLastLandHeights.Left + chkLoadLastLandHeights.Width + 72;
-        btnAlterationRuleEditor.Top := chkCreateLandscapeHeights.Top -iButtonHeightModifier;
+        btnAlterationRuleEditor.Top := chkCreateLandscapeHeights.Top - iButtonHeightModifier;
 
         chkCreateLandscapeSnowMeshes := TCheckBox.Create(gbSnowOptions);
         chkCreateLandscapeSnowMeshes.Parent := gbSnowOptions;
@@ -403,7 +437,9 @@ begin
         frm.Font.Size := 8;
         frm.Height := Round(btnStart.Top + btnStart.Height + 1.33 * iWidgetHeight);
 
-        chkCreateTestPlugin.Checked := bCreateTestPlugin;
+        rbTestMode.Checked := bTestMode;
+        rbSnowMode.Checked := bSnowMode;
+        rbSeasonsMode.Checked := bSeasonsMode;
         chkCreateLandscapeHeights.Checked := bCreateLandscapeHeights;
         chkCreateLandscapeSnowMeshes.Checked := bCreateLandscapeSnowMeshes;
         chkPlaceLandscapeSnow.Checked := bPlaceLandscapeSnow;
@@ -412,7 +448,9 @@ begin
 
         if frm.ShowModal <> mrOk then Exit;
 
-        bCreateTestPlugin := chkCreateTestPlugin.Checked;
+        bTestMode := rbTestMode.Checked;
+        bSnowMode := rbSnowMode.Checked;
+        bSeasonsMode := rbSeasonsMode.Checked;
         bCreateLandscapeHeights := chkCreateLandscapeHeights.Checked;
         bCreateLandscapeSnowMeshes := chkCreateLandscapeSnowMeshes.Checked;
         bPlaceLandscapeSnow := chkPlaceLandscapeSnow.Checked;
@@ -1869,13 +1907,19 @@ end;
 
 procedure CreateTestPlugin;
 begin
+    SeasonsMasterFile := AddNewFile;
+    AddMasterIfMissing(SeasonsMasterFile, GetFileName(FileByIndex(0)));
+    SeasonsMasterFileName := GetFileName(SeasonsMasterFile);
+    statGroup := Add(SeasonsMasterFile, 'STAT', True);
+    scolGroup := Add(SeasonsMasterFile, 'SCOL', True);
+    SetIsESM(SeasonsMasterFile, True);
+    slPluginFiles.Add(GetFileName(SeasonsMasterFile));
+
     SeasonsMainFile := AddNewFile;
     AddMasterIfMissing(SeasonsMainFile, GetFileName(FileByIndex(0)));
-    statGroup := Add(SeasonsMainFile, 'STAT', True);
-    scolGroup := Add(SeasonsMainFile, 'SCOL', True);
     SeasonsMainFileName := GetFileName(SeasonsMainFile);
-    slPluginFiles.Add(SeasonsMainFileName);
     SetIsESM(SeasonsMainFile, True);
+    slPluginFiles.Add(SeasonsMainFileName);
 
     SeasonsPatchFile := AddNewFileName(StringReplace(SeasonsMainFileName, '.esp', '', [rfIgnoreCase]) + '_patch.esp', False);
     AddMasterIfMissing(SeasonsPatchFile, GetFileName(FileByIndex(0)));
@@ -2179,7 +2223,6 @@ var
 
     base, rWinterReplacement: IwbElement;
 begin
-    if not Assigned(SeasonsMainFile) then Exit;
     for i := 0 to Pred(tlWinterReplacements.Count) do begin
         base := ObjectToElement(tlWinterReplacements[i]);
         model := wbNormalizeResourceName(GetElementEditValues(base, 'Model\MODL'), resMesh);
@@ -2222,7 +2265,7 @@ function CreateWinterReplacementBase(base: IwbElement; model, editorid: string):
 var
     newBaseRecord, newModel: IwbElement;
 begin
-    PluginHere := RefMastersDeterminePlugin(base, SeasonsMainFile);
+    PluginHere := RefMastersDeterminePlugin(base, SeasonsMasterFile);
     AddRequiredElementMasters(base, PluginHere, False, True);
     newBaseRecord := wbCopyElementToFile(base, PluginHere, True, True);
     SetEditorID(newBaseRecord, editorid);
@@ -2245,18 +2288,20 @@ begin
         ReportRequiredMasters(e, slMasters, False, True);
 
         for i := 0 to Pred(slMasters.Count) do begin
+            if SameText(SeasonsMasterFileName, slMasters[i]) then continue;
             if SameText(SeasonsMainFileName, slMasters[i]) then continue;
             if (slMasterableMasters.IndexOf(slMasters[i]) = -1) then begin
                 Result := SeasonsPatchFile;
                 break;
             end;
         end;
-        for i := 0 to Pred(slMasters.Count) do begin
-            if SameText(GetFileName(Result), SeasonsMainFileName) then begin
-                if slMasters[i] = SeasonsMainFileName then continue;
-                slMainMasters.Add(slMasters[i]);
-            end else begin
-                slPatchMasters.Add(slMasters[i]);
+        if not SameText(GetFileName(Result), SeasonsMasterFileName) then begin
+            for i := 0 to Pred(slMasters.Count) do begin
+                if SameText(GetFileName(Result), SeasonsMainFileName) then begin
+                    slMainMasters.Add(slMasters[i]);
+                end else begin
+                    slPatchMasters.Add(slMasters[i]);
+                end;
             end;
         end;
     finally
@@ -2275,7 +2320,6 @@ var
 
     base, rWinterDecal: IwbElement;
 begin
-    if not Assigned(SeasonsMainFile) then Exit;
     for i := 0 to Pred(tlWinterDecals.Count) do begin
         base := ObjectToElement(tlWinterDecals[i]);
         if SameText(joWinterDecalRules.O[RecordFormIdFileId(base)].S['Instruction'], 'remove') then continue;
@@ -2701,7 +2745,6 @@ procedure AddMastersForCells;
 var
     i: integer;
 begin
-    if not Assigned(SeasonsMainFile) then Exit;
     for i := 0 to Pred(slMainMasters.Count) do begin
         AddMasterIfMissing(SeasonsMainFile, slMainMasters[i]);
     end;
@@ -2722,7 +2765,6 @@ var
 
     cellSCOL: IwbElement;
 begin
-    if not Assigned(SeasonsMainFile) then Exit;
     if not Assigned(scolGroup) then Exit;
     for w := 0 to Pred(joOneBigSCOL.Count) do begin
         wrldEdid := joOneBigSCOL.Names[w];
@@ -3500,7 +3542,6 @@ var
     snowStatic, nCell, snowRef, base: IwbElement;
 begin
     Result := 0;
-    if not Assigned(SeasonsMainFile) then Exit;
     unitsX := cellX * 4096;
     unitsY := cellY * 4096;
     editorIdSnowNif := wrldEdid + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
@@ -3550,14 +3591,12 @@ begin
     SetEditorID(newStatic, editorid);
     newStaticModel := Add(Add(newStatic, 'Model', True), 'MODL', True);
     SetEditValue(newStaticModel, StringReplace(model, 'meshes\', '', [rfIgnoreCase]));
-    //SetElementNativeValues(newStatic, 'Record Header\Record Flags\Has Distant LOD', 1);
     Result := newStatic;
     if ((lod0 = '') and (lod1 = '') and (lod2 = '')) then Exit;
     newStaticMNAM := Add(newStatic, 'MNAM', True);
     SetElementEditValues(newStaticMNAM, 'LOD #0 (Level 0)\Mesh', lod0);
     SetElementEditValues(newStaticMNAM, 'LOD #1 (Level 1)\Mesh', lod1);
     SetElementEditValues(newStaticMNAM, 'LOD #2 (Level 2)\Mesh', lod2);
-
 end;
 
 
@@ -4333,6 +4372,9 @@ begin
         f := FileByIndex(i);
         fileName := GetFileName(f);
         if fileName = 'Fallout4.exe' then continue;
+        if fileName = SeasonsMasterFileName then begin
+            SeasonsMasterFile := f;
+        end;
         if fileName = sSeasonsMainFileName then begin
             SeasonsMainFile := f;
             bSeasonsMainFileFound := True;
