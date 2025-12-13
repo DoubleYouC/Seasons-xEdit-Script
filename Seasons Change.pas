@@ -28,9 +28,9 @@ var
     btnAlterLandRuleOk, btnAlterLandRuleCancel: TButton;
 
 const
-    sSeasonsMasterFileName = 'Seasons.esm';
-    sSeasonsMainFileName = 'SeasonsMainRefs.esm';
-    sSeasonsPatchFileName = 'SeasonsPluginRefs.esp';
+    sSeasonsMasterFileName = 'SnowNowOverwhelmsWinter.esm';
+    sSeasonsMainFileName = 'SnowNowOverwhelmsWinterMainRefs.esm';
+    sSeasonsPatchFileName = 'SnowNowOverwhelmsWinterPluginRefs.esp';
 
     SCALE_FACTOR_TERRAIN = 8;
     // epsilon to use for CompareValue calls
@@ -88,7 +88,7 @@ function Finalize: integer;
 begin
 
     joSeasons.Free;
-    joAlterLandRules.Free;
+
     joLandFiles.Free;
     joLandscapeHeights.Free;
     joLandscapeHeightsAltered.Free;
@@ -121,6 +121,12 @@ begin
         joUserWinterDecalRules.SaveToFile(wbDataPath + 'Seasons\WinterDecalUserRules.json', False, TEncoding.UTF8, True);
     end;
     joUserWinterDecalRules.Free;
+
+    //joWinterDecalRules.SaveToFile(wbDataPath + 'Seasons\WinterDecalRulesFull.json', False, TEncoding.UTF8, True);
+    joWinterDecalRules.Free;
+
+    //joAlterLandRules.SaveToFile(wbDataPath + 'Seasons\AlterLandRulesFull.json', False, TEncoding.UTF8, True);
+    joAlterLandRules.Free;
     Result := 0;
 end;
 
@@ -136,7 +142,7 @@ begin
     //Gui settings
     bCreateLandscapeHeights := False;
     bCreateLandscapeSnowMeshes := False;
-    bPlaceLandscapeSnow := True;
+    bPlaceLandscapeSnow := False;
     bTestMode := False;
     bSnowMode := True;
     bSeasonsMode := False;
