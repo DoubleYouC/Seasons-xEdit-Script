@@ -2018,7 +2018,7 @@ begin
             for j := 0 to Pred(ElementCount(g)) do begin
                 rWrld := ElementByIndex(g, j);
                 recordid := RecordFormIdFileId(rWrld);
-                if Pos(recordid, sIgnoredWorldspacesLandscapeSnow) <> 0 then continue;
+
                 wrldEdid := GetElementEditValues(rWrld, 'EDID');
                 joWinningCells.O[wrldEdid].S['RecordID'] := RecordFormIdFileId(rWrld);
                 wWrld := WinningOverride(rWrld);
@@ -2037,6 +2037,8 @@ begin
 
                             joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'] := RecordFormIdFileId(rCell);
                             if bSeasonsMaster then continue;
+
+                            if Pos(recordid, sIgnoredWorldspacesLandscapeSnow) <> 0 then continue;
 
                             land := GetLandscapeForCell(rCell);
                             if not Assigned(land) then continue;
@@ -3088,8 +3090,11 @@ begin
     end
     else cellRecordId := joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'];
     wrldRecordId := joWinningCells.O[wrldEdid].S['RecordID'];
+    //AddMessage('World: ' + wrldRecordId);
     rWrld := WinningOverride(GetRecordFromFormIdFileId(wrldRecordId));
+    //AddMessage('Cell: ' + cellRecordId);
     rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
+    //AddMessage('Original reference: ' + ref);
     rOriginal := WinningOverride(GetRecordFromFormIdFileId(ref));
     wbCopyElementToFile(rWrld, PluginHere, False, True);
     wbCopyElementToFile(rCell, PluginHere, False, True);
