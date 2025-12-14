@@ -142,7 +142,7 @@ begin
     //Gui settings
     bCreateLandscapeHeights := False;
     bCreateLandscapeSnowMeshes := False;
-    bPlaceLandscapeSnow := False;
+    bPlaceLandscapeSnow := True;
     bTestMode := False;
     bSnowMode := True;
     bSeasonsMode := False;
