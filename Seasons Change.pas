@@ -29,7 +29,7 @@ var
 
 const
     sSeasonsMasterFileName = 'SnowNowOverwhelmsWinter.esm';
-    sSeasonsMainFileName = 'SnowNowOverwhelmsWinterMainRefs.esm';
+    sSeasonsMainFileName = 'SnowNowOverwhelmsWinterMainRefs.esp';
     sSeasonsPatchFileName = 'SnowNowOverwhelmsWinterPluginRefs.esp';
 
     SCALE_FACTOR_TERRAIN = 8;
@@ -2078,8 +2078,8 @@ begin
             for j := 0 to Pred(ElementCount(g)) do begin
                 r := ElementByIndex(g, j);
                 if bSeasonsMaster then begin
-                    model := GetElementEditValues(r, 'Model\MODL');
-                    joMasterBaseObjects.O['STAT'].O[model].S['RecordID'] := RecordFormIdFileId(r);
+                    model := 'meshes\' + GetElementEditValues(r, 'Model\MODL');
+                    joMasterBaseObjects.O['STAT'].O[LowerCase(model)].S['RecordID'] := RecordFormIdFileId(r);
                     continue;
                 end;
                 if not IsWinningOverride(r) then continue;
@@ -2400,8 +2400,10 @@ begin
         if not SameText(GetFileName(Result), SeasonsMasterFileName) then begin
             for i := 0 to Pred(slMasters.Count) do begin
                 if SameText(GetFileName(Result), SeasonsMainFileName) then begin
+                    if SameText(slMasters[i], SeasonsMainFileName) then continue;
                     slMainMasters.Add(slMasters[i]);
                 end else begin
+                    if SameText(slMasters[i], SeasonsPatchFileName) then continue;
                     slPatchMasters.Add(slMasters[i]);
                 end;
             end;
@@ -3067,7 +3069,8 @@ begin
     base := ElementByPath(winterDecalRef, 'NAME');
     SetEditValue(base, winterDecalFormid);
 
-    AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', linkedRef);
+    if Assigned(linkedRef) then
+        AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', linkedRef);
 end;
 
 procedure ProcessPlacedReferenceOverride(placedReferenceOverride: TJsonObject; ref, wrldEdid, cellX, cellY: string);
@@ -3675,21 +3678,21 @@ function GetOrCreateStat(model, lod0, lod1, lod2, editorid: string): IwbElement;
 var
     newStatic, newStaticModel, newStaticMNAM: IwbElement;
 begin
-    if joMasterBaseObjects.O['STAT'].Contains(model) then begin
-        Result := GetRecordFromFormIdFileId(joMasterBaseObjects.O['STAT'].O[model].S['RecordID']);
+    if joMasterBaseObjects.O['STAT'].Contains(LowerCase(model)) then begin
+        Result := GetRecordFromFormIdFileId(joMasterBaseObjects.O['STAT'].O[LowerCase(model)].S['RecordID']);
         Exit;
     end;
     newStatic := Add(statGroup, 'STAT', True);
     SetEditorID(newStatic, editorid);
     newStaticModel := Add(Add(newStatic, 'Model', True), 'MODL', True);
     SetEditValue(newStaticModel, StringReplace(model, 'meshes\', '', [rfIgnoreCase]));
-    Result := newStatic;
     joMasterBaseObjects.O['STAT'].O[model].S['RecordID'] := RecordFormIdFileId(newStatic);
     //if ((lod0 = '') and (lod1 = '') and (lod2 = '')) then Exit;
     newStaticMNAM := Add(newStatic, 'MNAM', True);
     SetElementEditValues(newStaticMNAM, 'LOD #0 (Level 0)\Mesh', lod0);
     SetElementEditValues(newStaticMNAM, 'LOD #1 (Level 1)\Mesh', lod1);
     SetElementEditValues(newStaticMNAM, 'LOD #2 (Level 2)\Mesh', lod2);
+    Result := newStatic;
 end;
 
 
