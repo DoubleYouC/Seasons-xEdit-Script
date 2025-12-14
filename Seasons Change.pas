@@ -2366,7 +2366,7 @@ begin
         Result := GetRecordFromFormIdFileId(joMasterBaseObjects.O[sig].O[editorid].S['RecordID']);
         Exit;
     end;
-    PluginHere := RefMastersDeterminePlugin(base, SeasonsMasterFile);
+    PluginHere := RefMastersDeterminePlugin(base, SeasonsMainFile);
     AddRequiredElementMasters(base, PluginHere, False, True);
     newBaseRecord := wbCopyElementToFile(base, PluginHere, True, True);
     SetEditorID(newBaseRecord, editorid);
