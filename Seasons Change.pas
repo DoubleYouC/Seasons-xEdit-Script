@@ -2912,8 +2912,7 @@ begin
     rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
     if not Assigned(rCell) then Exit;
     rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
-    if bTestMode then PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMasterFile)
-    else PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
+    PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
     PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
 
     cellSCOLFormid := IntToHex(GetLoadOrderFormID(cellSCOL), 8);
@@ -3633,8 +3632,7 @@ begin
         joLand.Free;
     end;
 
-    if bTestMode then PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMasterFile)
-    else PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
+    PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
     PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
 
     snowStaticFormid := IntToHex(GetLoadOrderFormID(snowStatic), 8);
