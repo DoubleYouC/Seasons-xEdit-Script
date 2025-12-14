@@ -1960,11 +1960,12 @@ end;
 
 procedure CreatePatchPlugins;
 begin
+    //statGroup := Add(SeasonsMasterFile, 'STAT', True);
     if not Assigned(SeasonsMainFile) then begin
-        SeasonsMainFile := AddNewFile;
+        SeasonsMainFileName := sSeasonsMainFileName;
+        SeasonsMainFile := AddNewFileName(SeasonsMainFileName, False);
         AddMasterIfMissing(SeasonsMainFile, GetFileName(FileByIndex(0)));
         AddMasterIfMissing(SeasonsMainFile, SeasonsMasterFileName);
-        SeasonsMainFileName := GetFileName(SeasonsMainFile);
         statGroup := Add(SeasonsMainFile, 'STAT', True);
         if bUseCellSCOLs then scolGroup := Add(SeasonsMainFile, 'SCOL', True);
         SetIsESM(SeasonsMainFile, True);
@@ -1972,7 +1973,7 @@ begin
     end;
 
     if not Assigned(SeasonsPatchFile) then begin
-        SeasonsPatchFileName := StringReplace(SeasonsMainFileName, '.esp', '', [rfIgnoreCase]) + '_patch.esp';
+        SeasonsPatchFileName := sSeasonsPatchFileName;
         SeasonsPatchFile := AddNewFileName(SeasonsPatchFileName, False);
         AddMasterIfMissing(SeasonsPatchFile, GetFileName(FileByIndex(0)));
         AddMasterIfMissing(SeasonsPatchFile, SeasonsMasterFileName);
