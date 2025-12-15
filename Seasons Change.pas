@@ -578,7 +578,9 @@ begin
         lvWinterDecalRules.Columns.Add.Caption := 'Reference ID';
         lvWinterDecalRules.Columns[1].Width := 200;
         lvWinterDecalRules.Columns.Add.Caption := 'Instruction';
-        lvWinterDecalRules.Columns[2].Width := 305;
+        lvWinterDecalRules.Columns[2].Width := 150;
+        lvWinterDecalRules.Columns.Add.Caption := 'Winter Decal Exists';
+        lvWinterDecalRules.Columns[3].Width := 155;
         lvWinterDecalRules.OwnerData := True;
         lvWinterDecalRules.OnData := lvWinterDecalRulesData;
         lvWinterDecalRules.Items.Count := joWinterDecalRules.Count;
@@ -837,17 +839,27 @@ end;
 
 procedure lvWinterDecalRulesData(Sender: TObject; Item: TListItem);
 {
-    Populate lvRules
+    Populate lvWinterDecalRulesData
 }
 var
     i: integer;
-    key, edid, baseid: string;
+    key, edid, baseid, instruction: string;
+
+    base: IwbElement;
 begin
     key := joWinterDecalRules.Names[Item.Index];
     baseid := joWinterDecalRules.O[key].S['Base ID'];
-    Item.Caption := EditorID(GetRecordFromFormIdFileId(baseid));
+    base := GetRecordFromFormIdFileId(baseid);
+    Item.Caption := EditorID(base);
     Item.SubItems.Add(key);
-    Item.SubItems.Add(joWinterDecalRules.O[key].S['Instruction']);
+    instruction := joWinterDecalRules.O[key].S['Instruction'];
+    Item.SubItems.Add(instruction);
+    if Pos(Signature(base), 'SCOL,TXST') > 0 then
+        Item.SubItems.Add('')
+    else if SameText(instruction, 'remove') then
+        Item.SubItems.Add('')
+    else
+        Item.SubItems.Add(BoolToStr(DoesWinterDecalExist(base)));
 end;
 
 procedure WinterDecalMenuEditClick(Sender: TObject);
@@ -2474,6 +2486,62 @@ begin
     end;
 end;
 
+function DoesWinterDecalExist(base: IwbElement): boolean;
+var
+    model, winterDecal: string;
+begin
+    Result := False;
+    if not ElementExists(base, 'Model\MODL') then Exit;
+    model := wbNormalizeResourceName(GetElementEditValues(base, 'Model\MODL'), resMesh);
+    winterDecal := StringReplace(model, 'meshes', 'meshes\WinterDecals', [rfIgnoreCase]);
+    if ResourceExists(winterDecal) then begin
+        Result := True;
+        Exit;
+    end else begin
+        winterDecal := StringReplace(model, 'meshes', 'meshes\WinterDecals\_IgnoreLandAlterations', [rfIgnoreCase]);
+        if ResourceExists(winterDecal) then begin
+            Result := True;
+            Exit;
+        end else begin
+            winterDecal := StringReplace(model, 'meshes', 'meshes\WinterDecals\_IgnoreRotations', [rfIgnoreCase]);
+            if ResourceExists(winterDecal) then begin
+                Result := True;
+                Exit;
+            end else begin
+                winterDecal := StringReplace(model, 'meshes', 'meshes\WinterDecals\_IgnoreRotationsAndLandAlterations', [rfIgnoreCase]);
+                if ResourceExists(winterDecal) then begin
+                    Result := True;
+                    Exit;
+                end;
+            end;
+        end;
+    end;
+
+    winterDecal := StringReplace(model, 'meshes', 'meshes\WinterReplacements', [rfIgnoreCase]);
+    if ResourceExists(winterDecal) then begin
+        Result := True;
+        Exit;
+    end else begin
+        winterDecal := StringReplace(model, 'meshes', 'meshes\WinterReplacements\_IgnoreLandAlterations', [rfIgnoreCase]);
+        if ResourceExists(winterDecal) then begin
+            Result := True;
+            Exit;
+        end else begin
+            winterDecal := StringReplace(model, 'meshes', 'meshes\WinterReplacements\_IgnoreRotations', [rfIgnoreCase]);
+            if ResourceExists(winterDecal) then begin
+                Result := True;
+                Exit;
+            end else begin
+                winterDecal := StringReplace(model, 'meshes', 'meshes\WinterReplacements\_IgnoreRotationsAndLandAlterations', [rfIgnoreCase]);
+                if ResourceExists(winterDecal) then begin
+                    Result := True;
+                    Exit;
+                end;
+            end;
+        end;
+    end;
+end;
+
 procedure ProcessFormlists;
 {
     Add records to formlists in joFormlist.
@@ -3784,13 +3852,15 @@ function GetOrCreateStat(model, lod0, lod1, lod2, editorid: string): IwbElement;
       The created or existing STAT record element.
 }
 var
-    lowercaseModel: string;
+    lowercaseModel, recordid: string;
     newStatic, newStaticModel, newStaticMNAM: IwbElement;
 begin
     lowercaseModel := LowerCase(model);
     AddMessage('STAT' + #9 + lowercaseModel);
     if joMasterBaseObjects.O['STAT'].Contains(lowercaseModel) then begin
-        Result := GetRecordFromFormIdFileId(joMasterBaseObjects.O['STAT'].O[lowercaseModel].S['RecordID']);
+        recordid := joMasterBaseObjects.O['STAT'].O[lowercaseModel].S['RecordID'];
+        AddMessage(recordid);
+        Result := GetRecordFromFormIdFileId(recordid);
         Exit;
     end;
     newStatic := Add(statGroup, 'STAT', True);
