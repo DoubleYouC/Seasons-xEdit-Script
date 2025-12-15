@@ -22,7 +22,7 @@ var
     slPluginFiles, slMasterableMasters, slMainMasters, slPatchMasters: TStringList;
     tlLandRecords, tlBasesThatAlterLand, tlStats, tlFurnActiMstt, tlWinterDecals, tlWinterReplacements, tlTxsts: TList;
     joWinningCells, joSeasons, joLandscapeHeights, joLandscapeHeightsAltered, joLandFiles, joAlterLandRules, joUserAlterLandRules, joWinterDecalRules,
-    joUserWinterDecalRules, joLoadOrderFormIDFileID, joOneBigSCOL, joPlacedReferences, joMasterBaseObjects: TJsonObject;
+    joUserWinterDecalRules, joLoadOrderFormIDFileID, joOneBigSCOL, joPlacedReferences, joMasterBaseObjects, joFormlists: TJsonObject;
 
     lvAlterLandRules: TListView;
     btnAlterLandRuleOk, btnAlterLandRuleCancel: TButton;
@@ -60,6 +60,7 @@ begin
     joOneBigSCOL := TJsonObject.Create;
     joPlacedReferences := TJsonObject.Create;
     joMasterBaseObjects := TJsonObject.Create;
+    joFormlists := TJsonObject.Create;
 
     tlLandRecords := TList.Create;
     tlBasesThatAlterLand := TList.Create;
@@ -97,6 +98,7 @@ begin
     joOneBigSCOL.Free;
     joPlacedReferences.Free;
     joMasterBaseObjects.Free;
+    joFormlists.Free;
 
     tlLandRecords.Free;
     tlBasesThatAlterLand.Free;
@@ -201,6 +203,7 @@ begin
         if bUseCellSCOLs then ProcessOneBigSCOL;
         AddMastersForCells;
         ProcessReferences;
+        ProcessFormlists;
     end;
 end;
 
@@ -2471,6 +2474,58 @@ begin
     end;
 end;
 
+procedure ProcessFormlists;
+{
+    Add records to formlists in joFormlist.
+}
+var
+    bCopiedFormlist: boolean;
+    i, j: integer;
+    formlistRecordId, replacementRecordID, pluginName: string;
+    f, r, formlistOverride, replacementRecord, formlist: IwbElement;
+begin
+    //joFormlists.O[formlistRecordId].A['RecordsToAdd'].Add(RecordFormIdFileId(rWinterReplacement));
+    for i := 0 to Pred(joFormlists.Count) do begin
+        formlistRecordId := joFormlists.Names[i];
+        formlist := WinningOverride(GetRecordFromFormIdFileId(formlistRecordId));
+
+        pluginName := joFormlists.O[formlistRecordId].S['PluginHere'];
+        if SameText(pluginName, SeasonsMainFileName) then PluginHere := SeasonsMainFile
+        else if SameText(pluginName, SeasonsMasterFileName) then PluginHere := SeasonsMasterFile
+        else PluginHere := SeasonsPatchFile;
+
+        for j := 0 to Pred(joFormlists.O[formlistRecordId].A['RecordsToAdd'].Count) do begin
+            replacementRecordID := joFormlists.O[formlistRecordId].A['RecordsToAdd'].S[j];
+            replacementRecord := GetRecordFromFormIdFileId(replacementRecordID);
+            if RecordInFormlist(replacementRecord, formlistRecordId) then continue;
+            if not bCopiedFormlist then formlistOverride := wbCopyElementToFile(formlist, PluginHere, False, True);
+            AddRefToMyFormlist(replacementRecord, formlistOverride);
+        end;
+    end;
+end;
+
+function RecordInFormlist(r, frmlst: IwbElement): boolean;
+{
+    Checks a formlist for the given record. Returns true if found.
+}
+var
+    i: integer;
+    recordid: string;
+    formids, e: IwbElement;
+begin
+    Result := False;
+    if not ElementExists(frmlst, 'FormIDs') then Exit;
+    recordid := RecordFormIdFileId(r);
+    formids := ElementByName(frmlst, 'FormIDs');
+    for i := 0 to Pred(ElementCount(formids)) do begin
+        e := LinksTo(ElementByIndex(formids, i));
+        if SameText(RecordFormIdFileId(e), recordid) then begin
+            Result := True;
+            Exit;
+        end;
+    end;
+end;
+
 procedure ProcessWinterReplacementREFRs(base, rWinterReplacement: IwbElement; bIgnoreLandAlterations, bIgnoreRotations: boolean);
 {
     Places winter replacements.
@@ -2478,12 +2533,19 @@ procedure ProcessWinterReplacementREFRs(base, rWinterReplacement: IwbElement; bI
 var
     i: integer;
     posX, posY, rotX, rotY: double;
-    wrldEdid: string;
+    wrldEdid, formlistRecordId: string;
 
-    r, rCell, rWrld: IwbElement;
+    r, rCell, rWrld, formlist: IwbElement;
 begin
     for i := Pred(ReferencedByCount(base)) downto 0 do begin
         r := ReferencedByIndex(base, i);
+        if Signature(r) = 'FLST' then begin
+            formlistRecordId := RecordFormIdFileId(r);
+            formlist := WinningOverride(GetRecordFromFormIdFileId(formlistRecordId));
+            PluginHere := RefMastersDeterminePlugin(formlist, SeasonsMainFile);
+            joFormlists.O[formlistRecordId].S['PluginHere'] := GetfileName(PluginHere);
+            joFormlists.O[formlistRecordId].A['RecordsToAdd'].Add(RecordFormIdFileId(rWinterReplacement));
+        end;
         if Signature(r) <> 'REFR' then continue;
         if not IsWinningOverride(r) then continue;
         if GetIsDeleted(r) then continue;
@@ -5267,6 +5329,24 @@ begin
             end;
         end;
     end;
+end;
+
+procedure AddRefToMyFormlist(r, frmlst: IwbElement);
+{
+    Adds the given reference to the given formlist.
+}
+var
+    formids, lnam: IwbElement;
+begin
+    if not ElementExists(frmlst, 'FormIDs') then begin
+        formids := Add(frmlst, 'FormIDs', True);
+        lnam := ElementByIndex(formids, 0);
+    end
+    else begin
+        formids := ElementByName(frmlst, 'FormIDs');
+        lnam := ElementAssign(formids, HighInteger, nil, False);
+    end;
+    SetEditValue(lnam, ShortName(r));
 end;
 
 function IsEslFile(f: IwbFile): boolean;
