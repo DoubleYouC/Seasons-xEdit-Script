@@ -1949,20 +1949,24 @@ begin
 
     SeasonsMainFile := AddNewFile;
     AddMasterIfMissing(SeasonsMainFile, GetFileName(FileByIndex(0)));
+    AddMasterIfMissing(SeasonsPatchFile, SeasonsMasterFileName);
     SeasonsMainFileName := GetFileName(SeasonsMainFile);
     SetIsESM(SeasonsMainFile, True);
     slPluginFiles.Add(SeasonsMainFileName);
 
     SeasonsPatchFile := AddNewFileName(StringReplace(SeasonsMainFileName, '.esp', '', [rfIgnoreCase]) + '_patch.esp', False);
     AddMasterIfMissing(SeasonsPatchFile, GetFileName(FileByIndex(0)));
+    AddMasterIfMissing(SeasonsPatchFile, SeasonsMasterFileName);
+    AddMasterIfMissing(SeasonsPatchFile, SeasonsMainFileName);
     slPluginFiles.Add(GetFileName(SeasonsPatchFile));
 end;
 
 procedure CreatePatchPlugins;
 begin
     //statGroup := Add(SeasonsMasterFile, 'STAT', True);
+    if not Assigned(SeasonsMasterFileName) then SeasonsMasterFileName := sSeasonsMasterFileName;
     if not Assigned(SeasonsMainFile) then begin
-        SeasonsMainFileName := sSeasonsMainFileName;
+        if not Assigned(SeasonsMainFileName) then SeasonsMainFileName := sSeasonsMainFileName;
         SeasonsMainFile := AddNewFileName(SeasonsMainFileName, False);
         AddMasterIfMissing(SeasonsMainFile, GetFileName(FileByIndex(0)));
         AddMasterIfMissing(SeasonsMainFile, SeasonsMasterFileName);
@@ -1973,10 +1977,11 @@ begin
     end;
 
     if not Assigned(SeasonsPatchFile) then begin
-        SeasonsPatchFileName := sSeasonsPatchFileName;
+        if not Assigned(SeasonsPatchFileName) then SeasonsPatchFileName := sSeasonsPatchFileName;
         SeasonsPatchFile := AddNewFileName(SeasonsPatchFileName, False);
         AddMasterIfMissing(SeasonsPatchFile, GetFileName(FileByIndex(0)));
         AddMasterIfMissing(SeasonsPatchFile, SeasonsMasterFileName);
+        AddMasterIfMissing(SeasonsPatchFile, SeasonsMainFileName);
         slPluginFiles.Add(GetFileName(SeasonsPatchFile));
     end;
 end;
@@ -2003,6 +2008,7 @@ begin
         for i := 0 to Pred(FileCount) do begin
             f := FileByIndex(i);
             fileName := GetFileName(f);
+            AddMessage(fileName);
 
             bSeasonsMaster := False;
 
@@ -2072,19 +2078,18 @@ begin
                 //if count > 10 then break;
             end;
 
-
-
             g := GroupBySignature(f, 'STAT');
             for j := 0 to Pred(ElementCount(g)) do begin
                 r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
+                recordid := RecordFormIdFileId(r);
                 if bSeasonsMaster then begin
-                    model := 'meshes\' + GetElementEditValues(r, 'Model\MODL');
-                    joMasterBaseObjects.O['STAT'].O[LowerCase(model)].S['RecordID'] := RecordFormIdFileId(r);
+                    model := LowerCase('meshes\' + GetElementEditValues(r, 'Model\MODL'));
+                    joMasterBaseObjects.O['STAT'].O[model].S['RecordID'] := recordid;
+                    AddMessage('STAT' + #9  + model + #9 + 'RecordID' + #9 + recordid);
                     continue;
                 end;
-                if not IsWinningOverride(r) then continue;
                 if ReferencedByCount(r) = 0 then continue;
-                recordid := RecordFormIdFileId(r);
                 tlStats.Add(r);
                 if not joAlterLandRules.Contains(recordid) then continue;
                 tlBasesThatAlterLand.Add(r);
@@ -2093,14 +2098,15 @@ begin
             g := GroupBySignature(f, 'SCOL');
             for j := 0 to Pred(ElementCount(g)) do begin
                 r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
+                recordid := RecordFormIdFileId(r);
                 if bSeasonsMaster then begin
                     edid := GetElementEditValues(r, 'EDID');
-                    joMasterBaseObjects.O['SCOL'].O[edid].S['RecordID'] := RecordFormIdFileId(r);
+                    joMasterBaseObjects.O['SCOL'].O[edid].S['RecordID'] := recordid;
+                    AddMessage('SCOL' + #9  + edid + #9 + 'RecordID' + #9 + recordid);
                     continue;
                 end;
-                if not IsWinningOverride(r) then continue;
                 if ReferencedByCount(r) = 0 then continue;
-                recordid := RecordFormIdFileId(r);
                 if not joAlterLandRules.Contains(recordid) then continue;
                 tlBasesThatAlterLand.Add(r);
             end;
@@ -2108,14 +2114,15 @@ begin
             g := GroupBySignature(f, 'FURN');
             for j := 0 to Pred(ElementCount(g)) do begin
                 r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
+                recordid := RecordFormIdFileId(r);
                 if bSeasonsMaster then begin
                     edid := GetElementEditValues(r, 'EDID');
-                    joMasterBaseObjects.O['FURN'].O[edid].S['RecordID'] := RecordFormIdFileId(r);
+                    joMasterBaseObjects.O['FURN'].O[edid].S['RecordID'] := recordid;
+                    AddMessage('FURN' + #9  + edid + #9 + 'RecordID' + #9 + recordid);
                     continue;
                 end;
-                if not IsWinningOverride(r) then continue;
                 if ReferencedByCount(r) = 0 then continue;
-                recordid := RecordFormIdFileId(r);
                 tlFurnActiMstt.Add(r);
                 if not joAlterLandRules.Contains(recordid) then continue;
                 tlBasesThatAlterLand.Add(r);
@@ -2124,14 +2131,15 @@ begin
             g := GroupBySignature(f, 'ACTI');
             for j := 0 to Pred(ElementCount(g)) do begin
                 r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
+                recordid := RecordFormIdFileId(r);
                 if bSeasonsMaster then begin
                     edid := GetElementEditValues(r, 'EDID');
-                    joMasterBaseObjects.O['ACTI'].O[edid].S['RecordID'] := RecordFormIdFileId(r);
+                    joMasterBaseObjects.O['ACTI'].O[edid].S['RecordID'] := recordid;
+                    AddMessage('ACTI' + #9  + edid + #9 + 'RecordID' + #9 + recordid);
                     continue;
                 end;
-                if not IsWinningOverride(r) then continue;
                 if ReferencedByCount(r) = 0 then continue;
-                recordid := RecordFormIdFileId(r);
                 tlFurnActiMstt.Add(r);
                 if not joAlterLandRules.Contains(recordid) then continue;
                 tlBasesThatAlterLand.Add(r);
@@ -2140,14 +2148,15 @@ begin
             g := GroupBySignature(f, 'MSTT');
             for j := 0 to Pred(ElementCount(g)) do begin
                 r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
+                recordid := RecordFormIdFileId(r);
                 if bSeasonsMaster then begin
                     edid := GetElementEditValues(r, 'EDID');
-                    joMasterBaseObjects.O['MSTT'].O[edid].S['RecordID'] := RecordFormIdFileId(r);
+                    joMasterBaseObjects.O['MSTT'].O[edid].S['RecordID'] := recordid;
+                    AddMessage('MSTT' + #9  + edid + #9 + 'RecordID' + #9 + recordid);
                     continue;
                 end;
-                if not IsWinningOverride(r) then continue;
                 if ReferencedByCount(r) = 0 then continue;
-                recordid := RecordFormIdFileId(r);
                 tlFurnActiMstt.Add(r);
                 if not joAlterLandRules.Contains(recordid) then continue;
                 tlBasesThatAlterLand.Add(r);
@@ -2362,6 +2371,7 @@ var
     newBaseRecord, newModel: IwbElement;
 begin
     sig := Signature(base);
+    AddMessage(sig + #9 + editorid);
     if joMasterBaseObjects.O[sig].Contains(editorid) then begin
         Result := GetRecordFromFormIdFileId(joMasterBaseObjects.O[sig].O[editorid].S['RecordID']);
         Exit;
@@ -2523,7 +2533,6 @@ begin
     PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
     PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
     PluginHere := RefMastersDeterminePlugin(rOriginal, PluginHere);
-    PluginHere := RefMastersDeterminePlugin(rWinterReplacement, PluginHere);
     wrldEdid := GetElementEditValues(rWrld, 'EDID');
     cellX := GetElementEditValues(rCell, 'XCLC\X');
     cellY := GetElementEditValues(rCell, 'XCLC\Y');
@@ -2689,13 +2698,12 @@ begin
     if ElementExists(r, 'XESP') then bXESP := True else bXESP := False;
 
     if ((not bUseCellSCOLs) or bXESP or (not IsRefPrecombined(r))) then begin
-        rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
+        rCell := MasterOrSelf(GetRecordFromFormIdFileId(cellRecordId));
         if not Assigned(rCell) then Exit;
 
-        PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
+        PluginHere := RefMastersDeterminePlugin(MasterOrSelf(rWrld), SeasonsMainFile);
         PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
         PluginHere := RefMastersDeterminePlugin(r, PluginHere);
-        PluginHere := RefMastersDeterminePlugin(rWinterDecal, PluginHere);
         joPlacedReferences.O[wrldEdid].O[c.X].O[c.Y].A['New References'].Add(
             'winterdecal' + '|' + GetFileName(PluginHere) + '|' + winterDecalFormid + '|' +
             FloatToStr(posX) + '|' + FloatToStr(posY) + '|' + FloatToStr(posZ) + '|' +
@@ -2840,6 +2848,7 @@ var
     cellSCOL, parts, part, onam, placements, placement: IwbElement;
 begin
     Result := nil;
+    AddMessage('SCOL' + #9 + cellSCOLEditorID);
     if joMasterBaseObjects.O['SCOL'].Contains(cellSCOLEditorID) then begin
         cellSCOL := GetRecordFromFormIdFileId(joMasterBaseObjects.O['SCOL'].O[cellSCOLEditorID].S['RecordID']);
         if not bTestMode then begin
@@ -2912,9 +2921,9 @@ var
     rCell, rWrld, nCell, cellSCOLRef, base: IwbElement;
 begin
     if ReferencedByCount(cellSCOL) > 0 then Exit; //In case we already placed the cellSCOL in the world.
-    rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
+    rCell := MasterOrSelf(GetRecordFromFormIdFileId(cellRecordId));
     if not Assigned(rCell) then Exit;
-    rWrld := WinningOverride(LinksTo(ElementByIndex(rCell, 0)));
+    rWrld := MasterOrSelf(LinksTo(ElementByIndex(rCell, 0)));
     PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
     PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
 
@@ -3042,8 +3051,8 @@ begin
     end;
     wrldRecordId := joWinningCells.O[wrldEdid].S['RecordID'];
     cellRecordId := joWinningCells.O[wrldEdid].O[cellX].O[cellY].S['RecordID'];
-    rWrld := WinningOverride(GetRecordFromFormIdFileId(wrldRecordId));
-    rCell := WinningOverride(GetRecordFromFormIdFileId(cellRecordId));
+    rWrld := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(wrldRecordId), PluginHere);
+    rCell := GetHighestPossibleOverrideForFile(GetRecordFromFormIdFileId(cellRecordId), PluginHere);
     wbCopyElementToFile(rWrld, PluginHere, False, True);
     nCell := wbCopyElementToFile(rCell, PluginHere, False, True);
     winterDecalRef := Add(nCell, 'REFR', True);
@@ -3071,6 +3080,34 @@ begin
 
     if Assigned(linkedRef) then
         AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', linkedRef);
+end;
+
+function GetHighestPossibleOverrideForFile(r: IwbElement; PluginHere: IwbFile): IwbElement;
+{
+    Gets the highest possible override desired for the given reference and plugin.
+}
+var
+    i: integer;
+    PluginHereFileName: string;
+    o, masterRecord: IwbElement;
+    PluginThere: IwbFile;
+begin
+    PluginHereFileName := GetFileName(PluginHere);
+    if SameText(PluginHereFileName, SeasonsPatchFileName) then begin
+        Result := WinningOverride(r);
+        Exit;
+    end;
+    masterRecord := MasterOrSelf(r);
+    for i := Pred(OverrideCount(masterRecord)) downto 0 do begin
+        o := OverrideByIndex(masterRecord, i);
+        PluginThere := RefMastersDeterminePlugin(o, PluginHere);
+        if SameText(GetFileName(PluginThere), PluginHereFileName) then begin
+            Result := o;
+            Exit;
+        end;
+    end;
+    AddMessage('Error finding best override: Falling back to winning override for' + #9 + RecordFormIdFileId(r) + #9 + PluginHereFileName);
+    Result := WinningOverride(r);
 end;
 
 procedure ProcessPlacedReferenceOverride(placedReferenceOverride: TJsonObject; ref, wrldEdid, cellX, cellY: string);
@@ -3601,30 +3638,35 @@ end;
 
 function PlaceLandscapeSnow(rCell, rWrld: IwbElement; wrldEdid: string; cellX, cellY: integer): integer;
 var
+    bLandscapeSnowExists: boolean;
     unitsX, unitsY, landOffsetZ: integer;
-    editorIdSnowNif, snowModel, snowLodModel0, snowLodModel1, snowLodModel2, snowStaticFormid: string;
+    editorIdSnowNif, snowModel, snowLodModel0, snowLodModel1, snowLodModel2, snowStaticFormid, folder: string;
 
     joLand: TJsonObject;
 
     snowStatic, nCell, snowRef, base: IwbElement;
 begin
     Result := 0;
+    bLandscapeSnowExists := False;
     unitsX := cellX * 4096;
     unitsY := cellY * 4096;
     editorIdSnowNif := wrldEdid + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
 
-    snowModel := 'LandscapeSnow\' + editorIdSnowNif + '.nif';
+    snowModel := 'meshes\LandscapeSnow\' + editorIdSnowNif + '.nif';
     snowLodModel0 := 'LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_0.nif';
     snowLodModel1 := 'LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_1.nif';
     snowLodModel2 := 'LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_2.nif';
-    if not FileExists(wbScriptsPath + 'Seasons\output\Meshes\' + snowModel) then begin
-        snowModel := 'LandscapeSnow\LandscapeSnow.nif';
-        snowLodModel0 := '';
-        snowLodModel1 := '';
-        snowLodModel2 := '';
-        if not Assigned(flatSnowStatic) then flatSnowStatic := GetOrCreateStat(snowModel, snowLodModel0, snowLodModel1, snowLodModel2, 'FlatSnowStatic01');
-        snowStatic := flatSnowStatic;
-    end else snowStatic := GetOrCreateStat(snowModel, snowLodModel0, snowLodModel1, snowLodModel2, editorIdSnowNif);
+
+    if bCreateLandscapeSnowMeshes then begin
+        folder := wbScriptsPath + 'Seasons\output\Meshes\';
+        if FileExists(folder + snowModel) then bLandscapeSnowExists := True;
+    end else begin
+        // folder := 'Meshes\';
+        // if ResourceExists(folder + snowModel) then
+        bLandscapeSnowExists := True;
+    end;
+
+    if bLandscapeSnowExists then snowStatic := GetOrCreateStat(snowModel, snowLodModel0, snowLodModel1, snowLodModel2, editorIdSnowNif);
 
     if ReferencedByCount(snowStatic) > 0 then Exit; // In case we already placed the landscape snow in the master.
 
@@ -3636,8 +3678,8 @@ begin
         joLand.Free;
     end;
 
-    PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
-    PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
+    PluginHere := RefMastersDeterminePlugin(MasterOrSelf(rWrld), SeasonsMainFile);
+    PluginHere := RefMastersDeterminePlugin(MasterOrSelf(rCell), PluginHere);
 
     snowStaticFormid := IntToHex(GetLoadOrderFormID(snowStatic), 8);
 
@@ -3676,23 +3718,33 @@ function GetOrCreateStat(model, lod0, lod1, lod2, editorid: string): IwbElement;
       The created or existing STAT record element.
 }
 var
+    lowercaseModel: string;
     newStatic, newStaticModel, newStaticMNAM: IwbElement;
 begin
-    if joMasterBaseObjects.O['STAT'].Contains(LowerCase(model)) then begin
-        Result := GetRecordFromFormIdFileId(joMasterBaseObjects.O['STAT'].O[LowerCase(model)].S['RecordID']);
+    lowercaseModel := LowerCase(model);
+    AddMessage('STAT' + #9 + lowercaseModel);
+    if joMasterBaseObjects.O['STAT'].Contains(lowercaseModel) then begin
+        Result := GetRecordFromFormIdFileId(joMasterBaseObjects.O['STAT'].O[lowercaseModel].S['RecordID']);
         Exit;
     end;
     newStatic := Add(statGroup, 'STAT', True);
     SetEditorID(newStatic, editorid);
     newStaticModel := Add(Add(newStatic, 'Model', True), 'MODL', True);
     SetEditValue(newStaticModel, StringReplace(model, 'meshes\', '', [rfIgnoreCase]));
-    joMasterBaseObjects.O['STAT'].O[model].S['RecordID'] := RecordFormIdFileId(newStatic);
-    //if ((lod0 = '') and (lod1 = '') and (lod2 = '')) then Exit;
-    newStaticMNAM := Add(newStatic, 'MNAM', True);
-    SetElementEditValues(newStaticMNAM, 'LOD #0 (Level 0)\Mesh', lod0);
-    SetElementEditValues(newStaticMNAM, 'LOD #1 (Level 1)\Mesh', lod1);
-    SetElementEditValues(newStaticMNAM, 'LOD #2 (Level 2)\Mesh', lod2);
+    joMasterBaseObjects.O['STAT'].O[lowercaseModel].S['RecordID'] := RecordFormIdFileId(newStatic);
     Result := newStatic;
+    if ((lod0 = '') and (lod1 = '') and (lod2 = '')) then Exit;
+    newStaticMNAM := Add(newStatic, 'MNAM', True);
+    if ElementExists(newStaticMNAM, 'Level 0') then begin
+        SetElementNativeValues(n, 'MNAM\Level 0', lod0);
+        SetElementNativeValues(n, 'MNAM\Level 1', lod1);
+        SetElementNativeValues(n, 'MNAM\Level 2', lod2);
+    end
+    else begin
+        SetElementEditValues(newStaticMNAM, 'LOD #0 (Level 0)\Mesh', lod0);
+        SetElementEditValues(newStaticMNAM, 'LOD #1 (Level 1)\Mesh', lod1);
+        SetElementEditValues(newStaticMNAM, 'LOD #2 (Level 2)\Mesh', lod2);
+    end;
 end;
 
 
