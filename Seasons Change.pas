@@ -2486,6 +2486,7 @@ var
 begin
     //joFormlists.O[formlistRecordId].A['RecordsToAdd'].Add(RecordFormIdFileId(rWinterReplacement));
     for i := 0 to Pred(joFormlists.Count) do begin
+        bCopiedFormlist := False;
         formlistRecordId := joFormlists.Names[i];
         formlist := WinningOverride(GetRecordFromFormIdFileId(formlistRecordId));
 
@@ -2497,8 +2498,11 @@ begin
         for j := 0 to Pred(joFormlists.O[formlistRecordId].A['RecordsToAdd'].Count) do begin
             replacementRecordID := joFormlists.O[formlistRecordId].A['RecordsToAdd'].S[j];
             replacementRecord := GetRecordFromFormIdFileId(replacementRecordID);
-            if RecordInFormlist(replacementRecord, formlistRecordId) then continue;
-            if not bCopiedFormlist then formlistOverride := wbCopyElementToFile(formlist, PluginHere, False, True);
+            if RecordInFormlist(replacementRecord, formlist) then continue;
+            if not bCopiedFormlist then begin
+                formlistOverride := wbCopyElementToFile(formlist, PluginHere, False, True);
+                bCopiedFormlist := True;
+            end;
             AddRefToMyFormlist(replacementRecord, formlistOverride);
         end;
     end;
