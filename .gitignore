@@ -68,6 +68,11 @@ __recovery/
 # Boss dependency manager vendor folder https://github.com/HashLoad/boss
 modules/
 /.vs
+
+# 7z files
+*.7z
+
+# JSON landscape cache
 Seasons/LandHeights/
 Seasons/LandHeightsAltered/
 Seasons/LandHeightsBaseAlterations/
