@@ -2835,8 +2835,8 @@ begin
         rCell := MasterOrSelf(GetRecordFromFormIdFileId(cellRecordId));
         if not Assigned(rCell) then Exit;
 
-        PluginHere := RefMastersDeterminePlugin(MasterOrSelf(rWrld), SeasonsMainFile);
-        PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
+        PluginHere := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, SeasonsMainFile), SeasonsMainFile);
+        PluginHere := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, PluginHere), PluginHere);
         PluginHere := RefMastersDeterminePlugin(r, PluginHere);
         joPlacedReferences.O[wrldEdid].O[c.X].O[c.Y].A['New References'].Add(
             'winterdecal' + '|' + GetFileName(PluginHere) + '|' + winterDecalFormid + '|' +
@@ -3058,8 +3058,8 @@ begin
     rCell := MasterOrSelf(GetRecordFromFormIdFileId(cellRecordId));
     if not Assigned(rCell) then Exit;
     rWrld := MasterOrSelf(LinksTo(ElementByIndex(rCell, 0)));
-    PluginHere := RefMastersDeterminePlugin(rWrld, SeasonsMainFile);
-    PluginHere := RefMastersDeterminePlugin(rCell, PluginHere);
+    PluginHere := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, SeasonsMainFile), SeasonsMainFile);
+    PluginHere := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, PluginHere), PluginHere);
 
     cellSCOLFormid := IntToHex(GetLoadOrderFormID(cellSCOL), 8);
 
@@ -3216,31 +3216,35 @@ begin
         AddLinkedReference(winterDecalRef, 'WorkshopStackedItemParentKEYWORD [KYWD:001C5EDD]', linkedRef);
 end;
 
-function GetHighestPossibleOverrideForFile(r: IwbElement; PluginHere: IwbFile): IwbElement;
+function GetHighestPossibleOverrideForFile(r: IwbElement; inputFile: IwbFile): IwbElement;
 {
     Gets the highest possible override desired for the given reference and plugin.
 }
 var
-    i: integer;
-    PluginHereFileName: string;
+    i, iNumOverrides: integer;
+    PluginHereFileName, overrideFileName: string;
     o, masterRecord: IwbElement;
-    PluginThere: IwbFile;
+    f: IwbFile;
 begin
-    PluginHereFileName := GetFileName(PluginHere);
+    PluginHereFileName := GetFileName(inputFile);
     if SameText(PluginHereFileName, SeasonsPatchFileName) then begin
         Result := WinningOverride(r);
         Exit;
     end;
     masterRecord := MasterOrSelf(r);
-    for i := Pred(OverrideCount(masterRecord)) downto 0 do begin
-        o := OverrideByIndex(masterRecord, i);
-        PluginThere := RefMastersDeterminePlugin(o, PluginHere);
-        if SameText(GetFileName(PluginThere), PluginHereFileName) then begin
-            Result := o;
-            Exit;
+    iNumOverrides := OverrideCount(masterRecord);
+    if iNumOverrides > 0 then begin
+        for i := Pred(iNumOverrides) downto 0 do begin
+            o := OverrideByIndex(masterRecord, i);
+            f := GetFile(o);
+            overrideFileName := GetFileName(f);
+            if (slMasterableMasters.IndexOf(overrideFileName) <> -1) then begin
+                Result := o;
+                Exit;
+            end;
         end;
+        //AddMessage('Failed to find the best override: Falling back to winning override for' + #9 + RecordFormIdFileId(r) + #9 + PluginHereFileName);
     end;
-    AddMessage('Error finding best override: Falling back to winning override for' + #9 + RecordFormIdFileId(r) + #9 + PluginHereFileName);
     Result := WinningOverride(r);
 end;
 
@@ -3781,7 +3785,7 @@ var
     snowStatic, nCell, snowRef, base: IwbElement;
 begin
     Result := 0;
-    bLandscapeSnowExists := False;
+    bLandscapeSnowExists := True;
     unitsX := cellX * 4096;
     unitsY := cellY * 4096;
     editorIdSnowNif := wrldEdid + '_' + IntToStr(cellX) + '_' + IntToStr(cellY);
@@ -3790,15 +3794,6 @@ begin
     snowLodModel0 := 'LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_0.nif';
     snowLodModel1 := 'LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_1.nif';
     snowLodModel2 := 'LOD\LandscapeSnow\' + editorIdSnowNif + '_lod_2.nif';
-
-    if bCreateLandscapeSnowMeshes then begin
-        folder := wbScriptsPath + 'Seasons\output\Meshes\';
-        if FileExists(folder + snowModel) then bLandscapeSnowExists := True;
-    end else begin
-        // folder := 'Meshes\';
-        // if ResourceExists(folder + snowModel) then
-        bLandscapeSnowExists := True;
-    end;
 
     if bLandscapeSnowExists then snowStatic := GetOrCreateStat(snowModel, snowLodModel0, snowLodModel1, snowLodModel2, editorIdSnowNif);
 
@@ -3812,8 +3807,8 @@ begin
         joLand.Free;
     end;
 
-    PluginHere := RefMastersDeterminePlugin(MasterOrSelf(rWrld), SeasonsMainFile);
-    PluginHere := RefMastersDeterminePlugin(MasterOrSelf(rCell), PluginHere);
+    PluginHere := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rWrld, SeasonsMainFile), SeasonsMainFile);
+    PluginHere := RefMastersDeterminePlugin(GetHighestPossibleOverrideForFile(rCell, PluginHere), PluginHere);
 
     snowStaticFormid := IntToHex(GetLoadOrderFormID(snowStatic), 8);
 
@@ -3860,7 +3855,8 @@ begin
     if joMasterBaseObjects.O['STAT'].Contains(lowercaseModel) then begin
         recordid := joMasterBaseObjects.O['STAT'].O[lowercaseModel].S['RecordID'];
         AddMessage(recordid);
-        Result := GetRecordFromFormIdFileId(recordid);
+        newStatic := GetRecordFromFormIdFileId(recordid);
+        Result := newStatic;
         Exit;
     end;
     newStatic := Add(statGroup, 'STAT', True);
@@ -3872,9 +3868,9 @@ begin
     if ((lod0 = '') and (lod1 = '') and (lod2 = '')) then Exit;
     newStaticMNAM := Add(newStatic, 'MNAM', True);
     if ElementExists(newStaticMNAM, 'Level 0') then begin
-        SetElementNativeValues(n, 'MNAM\Level 0', lod0);
-        SetElementNativeValues(n, 'MNAM\Level 1', lod1);
-        SetElementNativeValues(n, 'MNAM\Level 2', lod2);
+        SetElementNativeValues(newStaticMNAM, 'Level 0', lod0);
+        SetElementNativeValues(newStaticMNAM, 'Level 1', lod1);
+        SetElementNativeValues(newStaticMNAM, 'Level 2', lod2);
     end
     else begin
         SetElementEditValues(newStaticMNAM, 'LOD #0 (Level 0)\Mesh', lod0);
