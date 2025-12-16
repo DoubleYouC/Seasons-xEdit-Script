@@ -588,14 +588,22 @@ begin
 
         mnRules := TPopupMenu.Create(frm);
         lvWinterDecalRules.PopupMenu := mnRules;
+
         MenuItem := TMenuItem.Create(mnRules);
         MenuItem.Caption := 'Add';
         MenuItem.OnClick := WinterDecalMenuAddClick;
         mnRules.Items.Add(MenuItem);
+
+        MenuItem := TMenuItem.Create(mnRules);
+        MenuItem.Caption := 'Batch Add Rules';
+        MenuItem.OnClick := WinterDecalMenuBatchClick;
+        mnRules.Items.Add(MenuItem);
+
         MenuItem := TMenuItem.Create(mnRules);
         MenuItem.Caption := 'Edit';
         MenuItem.OnClick := WinterDecalMenuEditClick;
         mnRules.Items.Add(MenuItem);
+
         MenuItem := TMenuItem.Create(mnRules);
         MenuItem.Caption := 'Delete';
         MenuItem.OnClick := WinterDecalMenuDeleteClick;
@@ -658,11 +666,100 @@ begin
     btnCancel.Left := btnOK.Left + btnOK.Width + 8;
 end;
 
+procedure WinterDecalMenuBatchClick(Sender: TObject);
+var
+    frm: TForm;
+    btnOK, btnCancel: TButton;
+    memoForms: TRichEdit;
+    cbInstruction: TComboBox;
+    pnl: TPanel;
+    i: integer;
+begin
+    frm := TForm.Create(nil);
+    try
+        frm.Caption := 'Batch Add Rules';
+        frm.Width := 600;
+        frm.Height := 180;
+        frm.Position := poMainFormCenter;
+        frm.BorderStyle := bsDialog;
+        frm.KeyPreview := True;
+        frm.OnKeyDown := FormKeyDown;
+
+        memoForms := TRichEdit.Create(frm);
+        memoForms.Parent := frm;
+        memoForms.Name := 'memoForms';
+        memoForms.Left := 12;
+        memoForms.Top := 12;
+        memoForms.Height := 500;
+        memoForms.Width := 550;
+        memoForms.ScrollBars := ssVertical;
+        memoForms.ReadOnly := False;
+        memoForms.Enabled := True;
+        memoForms.Lines.Text := 'Try editing this text...';
+
+
+        cbInstruction := TComboBox.Create(frm);
+        cbInstruction.Parent := frm;
+        cbInstruction.Name := 'cbInstruction';
+        cbInstruction.Left := 120;
+        cbInstruction.Top := 12 + memoForms.Top + memoForms.Height;
+        cbInstruction.Width := frm.Width - 150;
+        cbInstruction.Style := csDropDown;
+        CreateLabel(frm, 16, cbInstruction.Top + 4, 'Instruction');
+
+        btnOk := TButton.Create(frm);
+        btnOk.Parent := frm;
+        btnOk.Name := 'OK';
+        btnOk.Caption := 'OK';
+        btnOk.ModalResult := mrOk;
+        btnOk.Top := cbInstruction.Top + (2 * cbInstruction.Height);
+
+        btnCancel := TButton.Create(frm);
+        btnCancel.Parent := frm;
+        btnCancel.Name := 'Cancel';
+        btnCancel.Caption := 'Cancel';
+        btnCancel.ModalResult := mrCancel;
+        btnCancel.Top := btnOk.Top;
+
+        btnOk.Left := frm.Width - btnOk.Width - btnCancel.Width - 32;
+        btnCancel.Left := btnOk.Left + btnOk.Width + 8;
+
+        pnl := TPanel.Create(frm);
+        pnl.Parent := frm;
+        pnl.Left := 10;
+        pnl.Top := btnOk.Top - 12;
+        pnl.Width := frm.Width - 32;
+        pnl.Height := 2;
+
+        frm.Height := btnOk.Top + (3 * btnOk.Height);
+        frm.ScaleBy(uiScale, 100);
+        frm.Font.Size := 8;
+
+        cbInstruction.Items.Add('add');
+        cbInstruction.Items.Add('remove');
+        cbInstruction.Items.Add('IgnoreLandAlterations');
+        cbInstruction.ItemIndex := 0;
+
+        if frm.ShowModal <> mrOk then Exit;
+
+        for i := 0 to memoForms.Lines.Count do begin
+            AddMessage(memoForms.Lines[i]);
+        end;
+
+        // bUserWinterDecalRulesChanged := True;
+
+        // lvWinterDecalRules.Items.Count := joWinterDecalRules.Count;
+        // lvWinterDecalRules.Refresh;
+    finally
+        frm.Free;
+    end;
+end;
+
 function EditWinterDecalRuleForm(var key, base, instruction: string): boolean;
 var
     frmRule: TForm;
     pnl: TPanel;
-    btnOk, btnCancel, btnReferences: TButton;
+    btnOk, btnCancel: TButton;
     cbBase, cbRefKey, cbInstruction: TComboBox;
 begin
     Result := False;
