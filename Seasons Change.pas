@@ -2101,7 +2101,7 @@ begin
                 if bSeasonsMaster then begin
                     model := LowerCase('meshes\' + GetElementEditValues(r, 'Model\MODL'));
                     joMasterBaseObjects.O['STAT'].O[model].S['RecordID'] := recordid;
-                    AddMessage('STAT' + #9  + model + #9 + 'RecordID' + #9 + recordid);
+                    //AddMessage('STAT' + #9  + model + #9 + 'RecordID' + #9 + recordid);
                     continue;
                 end;
                 if ReferencedByCount(r) = 0 then continue;
@@ -2118,7 +2118,7 @@ begin
                 if bSeasonsMaster then begin
                     edid := GetElementEditValues(r, 'EDID');
                     joMasterBaseObjects.O['SCOL'].O[edid].S['RecordID'] := recordid;
-                    AddMessage('SCOL' + #9  + edid + #9 + 'RecordID' + #9 + recordid);
+                    //AddMessage('SCOL' + #9  + edid + #9 + 'RecordID' + #9 + recordid);
                     continue;
                 end;
                 if ReferencedByCount(r) = 0 then continue;
@@ -2134,7 +2134,7 @@ begin
                 if bSeasonsMaster then begin
                     edid := GetElementEditValues(r, 'EDID');
                     joMasterBaseObjects.O['FURN'].O[edid].S['RecordID'] := recordid;
-                    AddMessage('FURN' + #9  + edid + #9 + 'RecordID' + #9 + recordid);
+                    //AddMessage('FURN' + #9  + edid + #9 + 'RecordID' + #9 + recordid);
                     continue;
                 end;
                 if ReferencedByCount(r) = 0 then continue;
@@ -2151,7 +2151,7 @@ begin
                 if bSeasonsMaster then begin
                     edid := GetElementEditValues(r, 'EDID');
                     joMasterBaseObjects.O['ACTI'].O[edid].S['RecordID'] := recordid;
-                    AddMessage('ACTI' + #9  + edid + #9 + 'RecordID' + #9 + recordid);
+                    //AddMessage('ACTI' + #9  + edid + #9 + 'RecordID' + #9 + recordid);
                     continue;
                 end;
                 if ReferencedByCount(r) = 0 then continue;
@@ -2168,7 +2168,7 @@ begin
                 if bSeasonsMaster then begin
                     edid := GetElementEditValues(r, 'EDID');
                     joMasterBaseObjects.O['MSTT'].O[edid].S['RecordID'] := recordid;
-                    AddMessage('MSTT' + #9  + edid + #9 + 'RecordID' + #9 + recordid);
+                    //AddMessage('MSTT' + #9  + edid + #9 + 'RecordID' + #9 + recordid);
                     continue;
                 end;
                 if ReferencedByCount(r) = 0 then continue;
@@ -2982,7 +2982,7 @@ var
     cellSCOL, parts, part, onam, placements, placement: IwbElement;
 begin
     Result := nil;
-    AddMessage('SCOL' + #9 + cellSCOLEditorID);
+    //AddMessage('SCOL' + #9 + cellSCOLEditorID);
     if joMasterBaseObjects.O['SCOL'].Contains(cellSCOLEditorID) then begin
         cellSCOL := GetRecordFromFormIdFileId(joMasterBaseObjects.O['SCOL'].O[cellSCOLEditorID].S['RecordID']);
         if not bTestMode then begin
@@ -3856,7 +3856,7 @@ var
     newStatic, newStaticModel, newStaticMNAM: IwbElement;
 begin
     lowercaseModel := LowerCase(model);
-    AddMessage('STAT' + #9 + lowercaseModel);
+    //AddMessage('STAT' + #9 + lowercaseModel);
     if joMasterBaseObjects.O['STAT'].Contains(lowercaseModel) then begin
         recordid := joMasterBaseObjects.O['STAT'].O[lowercaseModel].S['RecordID'];
         AddMessage(recordid);
