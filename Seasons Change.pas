@@ -2765,6 +2765,7 @@ begin
     for i := Pred(ReferencedByCount(base)) downto 0 do begin
         r := ReferencedByIndex(base, i);
         if Signature(r) = 'FLST' then begin
+            if not IsWinningOverride(r) then continue;
             formlistRecordId := RecordFormIdFileId(r);
             formlist := WinningOverride(GetRecordFromFormIdFileId(formlistRecordId));
             PluginHere := RefMastersDeterminePlugin(formlist, SeasonsMainFile);
