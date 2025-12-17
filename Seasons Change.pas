@@ -668,13 +668,21 @@ end;
 
 procedure WinterDecalMenuBatchClick(Sender: TObject);
 var
-    frm: TForm;
+    frm, previousForm: TForm;
     btnOK, btnCancel: TButton;
     memoForms: TRichEdit;
     cbInstruction: TComboBox;
     pnl: TPanel;
+    MenuItem: TMenuItem;
+    lvWinterDecalRules: TListView;
+
     i: integer;
+    instruction: string;
 begin
+    MenuItem := TMenuItem(Sender);
+    previousForm := TForm(MenuItem.Owner.Owner);
+    lvWinterDecalRules := TListView(previousForm.FindComponent('ListView'));
+
     frm := TForm.Create(nil);
     try
         frm.Caption := 'Batch Add Rules';
@@ -742,16 +750,64 @@ begin
 
         if frm.ShowModal <> mrOk then Exit;
 
+        instruction := cbInstruction.Text;
         for i := 0 to memoForms.Lines.Count do begin
-            AddMessage(memoForms.Lines[i]);
+            AddRuleForLine(memoForms.Lines[i], instruction);
         end;
 
-        // bUserWinterDecalRulesChanged := True;
+        bUserWinterDecalRulesChanged := True;
 
-        // lvWinterDecalRules.Items.Count := joWinterDecalRules.Count;
-        // lvWinterDecalRules.Refresh;
+        lvWinterDecalRules.Items.Count := joWinterDecalRules.Count;
+        lvWinterDecalRules.Refresh;
     finally
         frm.Free;
+    end;
+end;
+
+procedure AddRuleForLine(line, instruction: string);
+var
+    bReferenceFound: boolean;
+    formid: cardinal;
+    fileName, fileFormId, refKey, baseRecordId: string;
+
+    f: IwbFile;
+    base, r: IwbElement;
+begin
+    if not Assigned(line) then Exit;
+    if not Assigned(instruction) then Exit;
+    if ContainsText(line, ':') then begin
+        r := GetRecordFromFormIdFileId(line);
+        refKey := line;
+        if (Assigned(r) and (Pos(Signature(r),'REFR,TXST,STAT,SCOL,FURN,ACTI') <> 0))
+            then bReferenceFound := True;
+    end
+    else if IsValidHex(line) then begin
+        formid := StrToInt('$' + line);
+        f := GetFileFromLoadOrderFormID(formid);
+        if Assigned(f) then begin
+            fileName := GetFileName(f);
+            fileFormId := IntToHex(LoadOrderFormIDtoFileFormID(f, line), 8);
+            refKey := fileFormId + ':' + fileName;
+            r := GetRecordFromFormIdFileId(refKey);
+            if (Assigned(r) and (Pos(Signature(r),'REFR,TXST,STAT,SCOL,FURN,ACTI') <> 0))
+                then bReferenceFound := True;
+        end;
+    end;
+
+    if bReferenceFound then begin
+        if Signature(r) = 'REFR' then begin
+            base := LinksTo(ElementByPath(r, 'NAME'));
+            baseRecordId := RecordFormIdFileId(base);
+        end else baseRecordId := refKey;
+
+        joWinterDecalRules.O[refKey].S['Base ID'] := baseRecordId;
+        joWinterDecalRules.O[refKey].S['Instruction'] := instruction;
+
+        joUserWinterDecalRules.O[refKey].S['Base ID'] := baseRecordId;
+        joUserWinterDecalRules.O[refKey].S['Instruction'] := instruction;
+        AddMessage('Added rule: ' + #9 + refKey + #9 + instruction);
+    end else begin
+        ShowMessage(refKey + ' is not a valid reference. It will be skipped.');
     end;
 end;
 
