@@ -2279,6 +2279,23 @@ begin
                 tlBasesThatAlterLand.Add(r);
             end;
 
+            g := GroupBySignature(f, 'CONT');
+            for j := 0 to Pred(ElementCount(g)) do begin
+                r := ElementByIndex(g, j);
+                if not IsWinningOverride(r) then continue;
+                recordid := RecordFormIdFileId(r);
+                if bSeasonsMaster then begin
+                    edid := GetElementEditValues(r, 'EDID');
+                    joMasterBaseObjects.O['CONT'].O[edid].S['RecordID'] := recordid;
+                    //AddMessage('FURN' + #9  + edid + #9 + 'RecordID' + #9 + recordid);
+                    continue;
+                end;
+                if ReferencedByCount(r) = 0 then continue;
+                tlFurnActiMstt.Add(r);
+                if not joAlterLandRules.Contains(recordid) then continue;
+                tlBasesThatAlterLand.Add(r);
+            end;
+
             g := GroupBySignature(f, 'FURN');
             for j := 0 to Pred(ElementCount(g)) do begin
                 r := ElementByIndex(g, j);
