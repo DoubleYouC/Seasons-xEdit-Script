@@ -200,11 +200,11 @@ begin
     if bCreateWinterDecals then begin
         CreateWinterReplacements;
         CreateWinterDecals;
-        if bUseCellSCOLs then ProcessOneBigSCOL;
-        AddMastersForCells;
-        ProcessReferences;
-        ProcessFormlists;
     end;
+    if bUseCellSCOLs then ProcessOneBigSCOL;
+    AddMastersForCells;
+    ProcessReferences;
+    ProcessFormlists;
 end;
 
 // ----------------------------------------------------
@@ -3987,7 +3987,7 @@ begin
 
     joPlacedReferences.O[wrldEdid].O[cellX].O[cellY].A['New References'].Add(
         'landscapeSnow' + '|' + GetFileName(PluginHere) + '|' + snowStaticFormid + '|' +
-        IntToStr(unitsX + 2048) + '|' + IntToStr(unitsY + 2048) + '|' + IntToStr(landOffsetZ + 16) + '|' +
+        IntToStr(unitsX + 2048) + '|' + IntToStr(unitsY + 2048) + '|' + IntToStr(landOffsetZ + 1) + '|' +
         '0' + '|' + '0' + '|' + '0' + '|' +
         '1' + '|' + 'False' + '|' +
         '' + '|' + ''
@@ -4212,7 +4212,7 @@ begin
                             column := (column2 + 1)/2;
                             point6 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
 
-                            newVz := ((point1 + point2 + point5 + point6)/4 + (point3 + point4 + point5 + point6)/4 + point5 + point6)/4;
+                            newVz := ComputeInBetweenVertexHeight(ComputeInBetweenVertexHeight(point1, point2, point5, point6), point5, ComputeInBetweenVertexHeight(point3, point4, point5, point6), point6);
                         end else begin
                             //both row2 and column are odd
                             row := (row2 - 1)/2;
@@ -4290,7 +4290,8 @@ end;
 
 function ComputeInBetweenVertexHeight(point1, point2, point3, point4: integer): integer;
 begin
-    Result := (point1 + point2 + point3 + point4)/4;
+    Result := Max((point1 + point3)/2, (point2 + point4)/2);
+    //Result := (point1 + point2 + point3 + point4)/4;
 end;
 
 function CreateLandscapeHeights(land, rCell, rWrld: IwbElement; wrldEdid: string): boolean;
