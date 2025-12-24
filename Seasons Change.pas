@@ -4357,7 +4357,7 @@ begin
                 if landValue <> 0 then iFlat := 0; //If at least one land height is not 0, we will not mark this cell not flat.
                 if bHasWater and (landValueScaled < cellWaterHeightFloat) then begin
                     //If the land height is below water, we need to lower it more so the snow does not poke above the water.
-                    AddLandAlteration(joLandAlteration, row, column, -32);
+                    AddLandAlteration(joLandAlteration, row, column, -16);
                 end else begin
                     iHeightAlwaysBelowWater := 0; //If at least one land height is above water, we will not mark this cell as always below water.
                 end;
