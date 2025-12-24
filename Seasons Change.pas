@@ -517,6 +517,8 @@ begin
         MessageDlg('No land height data exists for this cell.', mtInformation, [mbOk], 0);
         Exit;
     end;
+    EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow');
+    EnsureDirectoryExists(wbScriptsPath + 'Seasons\output\Meshes\LOD\LandscapeSnow');
     CreateLandscapeSnow(wrldEdid, cellX, cellY);
     AddMessage('Generated snow mesh for cell: ' + wrldEdid + ' ' + IntToStr(cellX) + ' ' + IntToStr(cellY));
 end;
