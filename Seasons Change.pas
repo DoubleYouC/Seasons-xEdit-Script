@@ -4066,7 +4066,7 @@ function CreateLandscapeSnow(wrldEdid: string; cellX, cellY: integer): integer;
 var
     bVertexIsOutsideCell, bNeighborExists: boolean;
     i, nifFile, row2, column2, row, column, vertexCount, newCellX, newCellY, landOffsetZ, newlandOffsetZ,
-    point1, point2, point3, point4, cellOffsetDifference, newVz: integer;
+    point1, point2, point3, point4, point5, point6, cellOffsetDifference, newVz: integer;
     editorIdSnowNif, fileName, snowNifFile, xyz, vx, vy, vz, newVzStr, fileNameLand, nx, ny, nz: string;
 
     tsXYZ, tsNormals: TStrings;
@@ -4184,26 +4184,53 @@ begin
                     end else begin
                         // If odd, this row/column does not exist. This will only happen to the full model for the in-between vertices.
                         // Get the average of 4 points around the vertex to set the new height.
+                        if IsEven(row2) then begin
+                            //row2 is even and column is odd
+                            row := (row2 - 2)/2;
+                            column := (column2 - 1)/2;
+                            point1 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
 
-                        row := (row2 - 1)/2;
-                        column := (column2 - 1)/2;
-                        point1 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            row := (row2 - 2)/2;
+                            column := (column2 + 1)/2;
+                            point2 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
 
-                        row := (row2 - 1)/2;
-                        column := (column2 + 1)/2;
-                        point2 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            row := (row2 + 2)/2;
+                            column := (column2 + 1)/2;
+                            point3 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
 
-                        row := (row2 + 1)/2;
-                        column := (column2 + 1)/2;
-                        point3 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            row := (row2 + 2)/2;
+                            column := (column2 - 1)/2;
+                            point4 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
 
-                        row := (row2 + 1)/2;
-                        column := (column2 - 1)/2;
-                        point4 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            row := row2/2;
+                            column := (column2 - 1)/2;
+                            point5 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
 
-                        //maxPoint := Max(Max(point1, point2), Max(point3, point4));
-                        //newVz := (point1 + point2 + point3 + point4 + maxPoint)/5; //We add the max point again to help even out the average a bit more
-                        newVz := ComputeInBetweenVertexHeight(point1, point2, point3, point4);
+                            row := row2/2;
+                            column := (column2 + 1)/2;
+                            point6 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+
+                            newVz := ((point1 + point2 + point5 + point6)/4 + (point3 + point4 + point5 + point6)/4 + point5 + point6)/4;
+                        end else begin
+                            //both row2 and column are odd
+                            row := (row2 - 1)/2;
+                            column := (column2 - 1)/2;
+                            point1 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+
+                            row := (row2 - 1)/2;
+                            column := (column2 + 1)/2;
+                            point2 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+
+                            row := (row2 + 1)/2;
+                            column := (column2 + 1)/2;
+                            point3 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+
+                            row := (row2 + 1)/2;
+                            column := (column2 - 1)/2;
+                            point4 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+
+                            newVz := ComputeInBetweenVertexHeight(point1, point2, point3, point4);
+                        end;
                     end;
 
                     //We have z offsets built in for the LOD.
