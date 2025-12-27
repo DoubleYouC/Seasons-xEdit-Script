@@ -187,7 +187,7 @@ begin
         AlterLandHeightsForTheseBases;
         MakeLandJsons(joLandscapeHeights, 'LandHeights');
         MakeLandJsons(joLandscapeHeightsAltered, 'LandHeightsAltered');
-        ApplyAlterations;
+        //ApplyAlterations;
         FixLandscapeSeams;
     end;
     ProcessLandRecords;
@@ -4066,13 +4066,14 @@ function CreateLandscapeSnow(wrldEdid: string; cellX, cellY: integer): integer;
       Integer indicating success (1) or failure (0).
 }
 var
-    bVertexIsOutsideCell, bNeighborExists: boolean;
+    bVertexIsOutsideCell, bNeighborExists, bHasVertexColors, bAlphaVC: boolean;
     i, nifFile, row2, column2, row, column, vertexCount, newCellX, newCellY, landOffsetZ, newlandOffsetZ,
-    point1, point2, point3, point4, point5, point6, cellOffsetDifference, newVz: integer;
-    editorIdSnowNif, fileName, snowNifFile, xyz, vx, vy, vz, newVzStr, fileNameLand, nx, ny, nz: string;
+    point1, point2, point3, point4, point5, point6, cellOffsetDifference, newVz, alteration,
+    alter1, alter2, alter3, alter4, alter5, alter6: integer;
+    editorIdSnowNif, fileName, snowNifFile, xyz, vx, vy, vz, newVzStr, fileNameLand, nx, ny, nz, vertex_colors, hexAlt: string;
 
     tsXYZ, tsNormals: TStrings;
-    joLand, joNeighbor: TJsonObject;
+    joLand, joNeighbor, joAltered: TJsonObject;
 
     vertexData, vertex: TdfElement;
     block: TwbNifBlock;
@@ -4083,14 +4084,18 @@ begin
 
     // Cache lookup results
     joLand := TJsonObject.Create;
+    joAltered := TJsonObject.Create;
     try
-        joLand.LoadFromFile(wbScriptsPath + 'Seasons\LandHeights\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json');
+        joLand.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsPreAlteration\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json');
+        joAltered.LoadFromFile(wbScriptsPath + 'Seasons\LandHeightsAltered\' + wrldEdid + '\x' + IntToStr(cellX) + 'y' + IntToStr(cellY) + '.json');
+        if (joAltered.Count > 0) then bHasVertexColors := True else bHasVertexColors := False;
+
         landOffsetZ := joLand.S['offset'];
 
         for nifFile := 0 to 3 do begin
             case nifFile of
                 0: begin //Create full model
-                    fileName := wbScriptsPath + 'Seasons\LandscapeSnow.nif';
+                    if bHasVertexColors then fileName := wbScriptsPath + 'Seasons\LandscapeSnow.nif' else fileName := wbScriptsPath + 'Seasons\LandscapeSnow_NO_VERTEX_COLORS.nif';
                     snowNifFile := wbScriptsPath + 'Seasons\output\Meshes\LandscapeSnow\' + editorIdSnowNif + '.nif';
                 end;
                 1: begin //Create lod model
@@ -4116,9 +4121,11 @@ begin
 
                 // Process vertices in batches
                 for i := 0 to Pred(vertexCount) do begin
+                    bAlphaVC := False;
                     bVertexIsOutsideCell := false;
                     vertex := vertexData[i];
                     xyz := vertex.EditValues['Vertex'];
+                    vertex_colors := vertex.EditValues['Vertex Colors'];
                     tsXYZ := SplitString(xyz, ' ');
                     vx := tsXYZ[0];
                     vy := tsXYZ[1];
@@ -4180,8 +4187,40 @@ begin
                         end
                         else if ((row = 0) or (row = 32) or (column = 0) or (column = 32)) then begin  //protects borders
                             newVz := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            if bHasVertexColors then alteration := GetLandAlteration(joAltered, row, column, 0);
+                            if bHasVertexColors then if alteration < 0 then bAlphaVC := True;
                         end else begin // in case we want to change to some kind of average or max of the multiple surrounding points later... may be useful for lod or some level of smoothing
                             newVz := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            if bHasVertexColors then begin
+                                alteration := GetLandAlteration(joAltered, row, column, 0);
+                                //we will blend between surrounding points.
+                                row := row2/2;
+                                column := (column2 + 2)/2;
+                                alter1 := GetLandAlteration(joAltered, row, column, 0);
+
+                                row := row2/2;
+                                column := (column2 - 2)/2;
+                                alter2 := GetLandAlteration(joAltered, row, column, 0);
+
+                                row := (row2 + 2)/2;
+                                column := column2/2;
+                                alter3 := GetLandAlteration(joAltered, row, column, 0);
+
+                                row := (row2 - 2)/2;
+                                column := column2/2;
+                                alter4 := GetLandAlteration(joAltered, row, column, 0);
+
+                                row := (row2 - 2)/2;
+                                column := (column2 - 2)/2;
+                                alter5 := GetLandAlteration(joAltered, row, column, 0);
+
+                                row := (row2 + 2)/2;
+                                column := (column2 + 2)/2;
+                                alter6 := GetLandAlteration(joAltered, row, column, 0);
+
+                                alteration := Round((alter1 + alter2 + alter3 + alter4 + alter5 + alter6 + alteration)/7);
+                                if alteration < 0 then bAlphaVC := True;
+                            end;
                         end;
                     end else begin
                         // If odd, this row/column does not exist. This will only happen to the full model for the in-between vertices.
@@ -4191,26 +4230,42 @@ begin
                             row := (row2 - 2)/2;
                             column := (column2 - 1)/2;
                             point1 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            if bHasVertexColors then alter1 := GetLandAlteration(joAltered, row, column, 0);
 
                             row := (row2 - 2)/2;
                             column := (column2 + 1)/2;
                             point2 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            if bHasVertexColors then alter2 := GetLandAlteration(joAltered, row, column, 0);
 
                             row := (row2 + 2)/2;
                             column := (column2 + 1)/2;
                             point3 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            if bHasVertexColors then alter3 := GetLandAlteration(joAltered, row, column, 0);
 
                             row := (row2 + 2)/2;
                             column := (column2 - 1)/2;
                             point4 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            if bHasVertexColors then alter4 := GetLandAlteration(joAltered, row, column, 0);
 
                             row := row2/2;
                             column := (column2 - 1)/2;
                             point5 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            if bHasVertexColors then alter5 := GetLandAlteration(joAltered, row, column, 0);
 
                             row := row2/2;
                             column := (column2 + 1)/2;
                             point6 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            if bHasVertexColors then alter6 := GetLandAlteration(joAltered, row, column, 0);
+
+                            if bHasVertexColors then begin
+                                if alter1 < 0 then bAlphaVC := True;
+                                if alter2 < 0 then bAlphaVC := True;
+                                if alter3 < 0 then bAlphaVC := True;
+                                if alter4 < 0 then bAlphaVC := True;
+                                if alter5 < 0 then bAlphaVC := True;
+                                if alter6 < 0 then bAlphaVC := True;
+                                if bAlphaVC then alteration := Round((alter1 + alter2 + alter3 + alter4 + alter5 + alter6)/6);
+                            end;
 
                             newVz := ComputeInBetweenVertexHeight(ComputeInBetweenVertexHeight(point1, point2, point5, point6), point5, ComputeInBetweenVertexHeight(point3, point4, point5, point6), point6);
                         end else begin
@@ -4218,18 +4273,30 @@ begin
                             row := (row2 - 1)/2;
                             column := (column2 - 1)/2;
                             point1 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            if bHasVertexColors then alter1 := GetLandAlteration(joAltered, row, column, 0);
 
                             row := (row2 - 1)/2;
                             column := (column2 + 1)/2;
                             point2 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            if bHasVertexColors then alter2 := GetLandAlteration(joAltered, row, column, 0);
 
                             row := (row2 + 1)/2;
                             column := (column2 + 1)/2;
                             point3 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            if bHasVertexColors then alter3 := GetLandAlteration(joAltered, row, column, 0);
 
                             row := (row2 + 1)/2;
                             column := (column2 - 1)/2;
                             point4 := joLand.A[row].S[column] * SCALE_FACTOR_TERRAIN;
+                            if bHasVertexColors then alter4 := GetLandAlteration(joAltered, row, column, 0);
+
+                            if bHasVertexColors then begin
+                                if alter1 < 0 then bAlphaVC := True;
+                                if alter2 < 0 then bAlphaVC := True;
+                                if alter3 < 0 then bAlphaVC := True;
+                                if alter4 < 0 then bAlphaVC := True;
+                                if bAlphaVC then alteration := Round((alter1 + alter2 + alter3 + alter4)/4);
+                            end;
 
                             newVz := ComputeInBetweenVertexHeight(point1, point2, point3, point4);
                         end;
@@ -4248,6 +4315,12 @@ begin
                         else newVzStr := FloatToStr(newVz + 672);
                     end;
                     vertex.EditValues['Vertex'] := vx + ' ' + vy + ' ' + newVzStr;
+                    if bHasVertexColors and bAlphaVC then begin
+                        if (alteration < -16) then alteration := -16;
+                        //if (alteration = -16) then alteration := RandBetween(-16, -12);
+                        hexAlt := IntToHex(Min(Round((1 + alteration/16) * 100), 100), 2);
+                        vertex.EditValues['Vertex Colors'] := '#FFFFFF' + hexAlt;
+                    end;
                 end;
                 if nifFile < 2 then begin
                     block.UpdateNormals;
@@ -4284,6 +4357,7 @@ begin
         end;
     finally
         joLand.Free;
+        joAltered.Free;
     end;
     Result := 1;
 end;
@@ -5700,6 +5774,12 @@ function StrToBool(str: string): boolean;
 begin
     if (LowerCase(str) = 'true') or (str = '1') then Result := True else Result := False;
 end;
+
+function RandBetween(Low, High: Integer): Integer;
+begin
+    Result := Low + Random(High - Low + 1);
+end;
+
 
 
 end.
